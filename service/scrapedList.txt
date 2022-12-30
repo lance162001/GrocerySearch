@@ -1,0 +1,2 @@
+WholeScraped.txt
+TraderScraped.txt
