@@ -63,13 +63,16 @@ def get_whole_foods():
 
         price = p.find(class_="w-pie--prices")
         d["name"] = p.find(class_="w-cms--font-body__sans-bold").text
-        d['brand'] = p.find(class_="w-cms--font-disclaimer").text
-        print(f"###BRAND#### {d['brand']}")
+        brand = p.find_all(class_="w-cms--font-disclaimer")
+        if len(brand) == 1:
+            d['brand'] = "N/A"
+        else:
+            d['brand'] = brand[1].text
 
         
-        origprice = price.find(class_="regular_price has_sale")
+        origprice = price.find(class_="regular_price")
         if origprice == None:
-            continue
+            d["origprice"] = "N/A"
         else:
             d["origprice"] = origprice.text
         
@@ -80,9 +83,10 @@ def get_whole_foods():
             d["saleprice"] = "N/A"
         primeprice = price.find(class_="prime_price prime_incremental")
         if primeprice != None:
-            d["primeprice"]=primeprice.text[18:]
+            d["primeprice"] = primeprice.text[18:]
         else:
             d["primeprice"] = "N/A"
+
         img = p.find("img")
         if img == None:
             img = p.find(class_=" ls-is-cached lazyloaded")
@@ -91,19 +95,19 @@ def get_whole_foods():
 
         products.append(d)
         print(d)
-    f=open("WholeScraped.txt","w+")
     for product in products:
         print(f"Adding product #{products.index(product)+1}/{len(products)}")
-        s =  f"{product['name']} | {product['origprice']} | {product['saleprice']} | {product['primeprice']} | {product['img']}\n"
-        f.write(s)
+        
         size = "N/A"
         if "/" in product['origprice']:
-            size = "per "+product['origprice'].split("/")[1]
+            size = "per " + product['origprice'].split("/")[-1] # almost always lb        
         else:
-            for i in ["lb","oz","gram"]:
-                if i in product['name'] and "," in product['name']:
-                    size = product['name'].split(",")[-1]
-                    break
+            for i in ["lb", "oz"," gram ","ml"]:
+                if " " + i in product['name'] or " "+i+" " in product['name'] or " "+i+"s " in product['name'] or " "+i+")" in product['name']:
+                     size = product['name'].split(",")[-1]
+                     break
+        if product['name'][0:1] == "PB" and product['brand'] == "Renpure":
+            size = product['name'][-5]
         p = sess.query(Product).filter(Product.name == product['name'], Product.brand == product['brand']).first()
         if p != None:
             print(f"Existing product with name = \"{product['name']}\" found")
@@ -112,10 +116,10 @@ def get_whole_foods():
                 sale_price = p.sale_price,
                 member_price = p.member_price,
                 size = p.size,
-                timestamp = p.last_updated
+                timestamp = p.last_updated,
+                product_id = p.id
             )
             if not (p.base_price == product['origprice'] and p.sale_price == product['saleprice'] and p.member_price == product['primeprice'] ):
-                p.price_history.append(pricePoint)
                 p.base_price = product['origprice']
                 p.sale_price = product['saleprice']
                 p.member_price = product['primeprice']
@@ -127,7 +131,7 @@ def get_whole_foods():
                 print(f"Existing product with name = \"{product['name']}\" has same prices, ignoring")
 
         else:
-            newP = Product(
+            sess.add(Product(
                 name = product['name'],
                 brand = product['brand'],
                 size = size,
@@ -137,11 +141,8 @@ def get_whole_foods():
                 picture_url = product['img'],
                 store_id = 0,
                 active = True,
-            )
-            sess.add(newP)
+            ))
             sess.commit()
-    f.close()
-
 
 # TRADER JOES
 def get_trader_joes():
@@ -211,8 +212,8 @@ start_time = time.time()
 get_whole_foods()
 whole_foods_time = time.time()
 print(f"Whole foods scraped, took {whole_foods_time-start_time} seconds")
-get_trader_joes()
-print(f"Whole foods scraped, took {time.time()-whole_foods_time} seconds")
+#get_trader_joes()
+#print(f"Whole foods scraped, took {time.time()-whole_foods_time} seconds")
 end_time = time.time()
 print(f"Scraping complete, total time elapsed={end_time-start_time}")
 
