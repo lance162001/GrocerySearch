@@ -4,11 +4,12 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 import time
 import re
+from datetime import datetime
 
 
 from models.base import Base, engine
 from sqlalchemy.orm import Session
-from models import Product, PricePoint
+from models import Product, PricePoint, Store
 
 sess = Session(engine)
 
@@ -18,23 +19,39 @@ options.headless = False #should be true for server
 
 browser = webdriver.Firefox(options=options)
 
+def get_store(zipcode,company):
+    store = sess.query(Store).filter(Store.zipcode == zipcode, Store.company == company).first()
+    if store:
+        sid = store.id
+    else:
+        store = Store( 
+            company=company,
+            address="TODO",
+            zipcode=zipcode)
+        sess.add(store)
+        sess.commit()
+        sess.refresh(store)
+        sid = store.id
+    return sid,store
 
-
+HADLEY_ZIP_CODE =  '01035'
 # WHOLE FOODS 
-# !!TODO!! Get product size (and maybe other metadata?) by nutritional info text
-def get_whole_foods():
+# TODO Get product size (and maybe other metadata?) by nutritional info text
+def get_whole_foods(zipcode):
     
+    sid,store = get_store(zipcode,"Whole Foods")
+
     entranceURL = "https://www.wholefoodsmarket.com/products/all-products?featured=on-sale"
     browser.get(entranceURL)
     time.sleep(3)
 
     try: 
-        hadleybox = browser.find_element(By.ID,"pie-store-finder-modal-search-field")
+        storebox = browser.find_element(By.ID,"pie-store-finder-modal-search-field")
     except:
         browser.get(entranceURL)
         time.sleep(2)
-        hadleybox = browser.find_element(By.ID,"pie-store-finder-modal-search-field")
-    hadleybox.send_keys("Hadley")
+        storebox = browser.find_element(By.ID,"pie-store-finder-modal-search-field")
+    storebox.send_keys(zipcode)
 
     time.sleep(3)
 
@@ -44,15 +61,13 @@ def get_whole_foods():
 
     findmoreXPATH="/html/body/div[1]/main/div[2]/div[5]/div[3]/button"
 
-    more=True
-    while more:
+    while True:
         try:
             browser.find_element(By.XPATH,findmoreXPATH).click()
             time.sleep(1)
         except:
-            more=False
+            break
 
-    time.sleep(3)
     html = browser.page_source
     soup = BeautifulSoup(html, 'html.parser')
 
@@ -111,20 +126,23 @@ def get_whole_foods():
         p = sess.query(Product).filter(Product.name == product['name'], Product.brand == product['brand']).first()
         if p != None:
             print(f"Existing product with name = \"{product['name']}\" found")
-            pricePoint = PricePoint(
-                base_price = p.base_price,
-                sale_price = p.sale_price,
-                member_price = p.member_price,
-                size = p.size,
-                timestamp = p.last_updated,
-                product_id = p.id
-            )
+            
             if not (p.base_price == product['origprice'] and p.sale_price == product['saleprice'] and p.member_price == product['primeprice'] ):
                 p.base_price = product['origprice']
                 p.sale_price = product['saleprice']
                 p.member_price = product['primeprice']
                 p.size = size
-                p.active = True
+
+                pricePoint = PricePoint(
+                    base_price = p.base_price,
+                    sale_price = p.sale_price,
+                    member_price = p.member_price,
+                    size = p.size,
+                    timestamp = p.last_updated,
+                    product_id = p.id
+                )
+                sess.add(pricePoint)
+
                 sess.merge(p)
                 sess.commit()
             else:
@@ -139,18 +157,38 @@ def get_whole_foods():
                 sale_price = product['saleprice'],
                 member_price = product['primeprice'],
                 picture_url = product['img'],
-                store_id = 0,
-                active = True,
+                store_id = sid,
             ))
             sess.commit()
-
+    store.last_updated = datetime.now()
+    sess.merge(store)
+    sess.commit()
 # TRADER JOES
-def get_trader_joes():
+def get_trader_joes(zipcode):
+    sid,store = get_store(zipcode,"Trader Joes")
     startPoint = 'https://www.traderjoes.com/home/products/category/food-8'
+
+    myStoreButton = "/html/body/div/div[1]/div[1]/div[2]/div[1]/div/div[1]/div[1]/div/header/div[1]/div[1]/div[1]/div/div[1]/div/div[1]/div[1]/div[2]/a"
+    searchStoreArea = "/html/body/div/div[1]/div[1]/div/div[1]/div/div[1]/div[1]/div/header/div[1]/div[1]/div[1]/div/div[1]/div/div[1]/form/div[1]/div[1]/input"
+    searchButton = "/html/body/div/div[1]/div[1]/div/div[1]/div/div[1]/div[1]/div/header/div[1]/div[1]/div[1]/div/div[1]/div/div[1]/form/div[1]/div[2]/div/button"
+    setStoreButton = "/html/body/div/div[1]/div[1]/div/div[1]/div/div[1]/div[1]/div/header/div[1]/div[1]/div[1]/div/div[1]/div/div[1]/form/div[2]/div/div[1]/div[2]/button"
+
+
+
     xPathArrow = "/html/body/div/div[1]/div[1]/div/div[1]/div/div[2]/main/div/div/div/div[1]/div/div/div[1]/div[2]/section/div/button[2]"
     xPathProducts = "/html/body/div[1]/div[1]/div[1]/div/div[1]/div/div[2]/main/div/div/div/div[1]/div/div/div[1]/div[2]/section/ul"
     browser.get(startPoint)
     time.sleep(4)
+
+    # setting current store to closest from zip code requested
+    browser.find_element(By.XPATH,myStoreButton).click
+    browser.find_element(By.XPATH,myStoreButton).click
+
+    print("clicked!")
+    time.sleep(10)
+    browser.find_element(By.XPATH,searchStoreArea).send_keys(zipcode)
+    browser.find_element(By.XPATH,searchButton).click()
+    browser.find_element(By.XPATH,setStoreButton).click()
     
     #accepting cookies since it blocks the arrow
     try:
@@ -170,7 +208,6 @@ def get_trader_joes():
             time.sleep(2)
             pages.append(browser.find_element(By.XPATH,xPathProducts).get_attribute('innerHTML'))
     
-    f=open("TraderScraped.txt","w+")
     products = []
     for page in pages:
         soup = BeautifulSoup(page,'html.parser')
@@ -179,41 +216,63 @@ def get_trader_joes():
         for p in rawProducts:
             d = {}
             
-            d["img"] = "traderjoes.com" + p.find("img")["src"]
+            img = "traderjoes.com" + p.find("img")["src"]
 
-            d["price"] = p.find(class_="ProductPrice_productPrice__wrapper__20hep").text.replace('\n','')
-            if overflow == "":
-                d["name"] = p.find(class_="ProductCard_card__title__text__uiWLe").text.replace('\n','')
-            else:
-                d["name"] = overflow + p.find(class_="ProductCard_card__title__text__uiWLe").text.replace('\n','')
-                overflow = ""
-
-            if d["price"] == "":
-                overflow = d["name"]
-                continue
+            price = p.find(class_="ProductPrice_productPrice__wrapper__20hep").text.replace('\n','')
+            price,size = price.split("/")
+            # if overflow == "":
+            #     d["name"] = p.find(class_="ProductCard_card__title__text__uiWLe").text.replace('\n','')
+            # else:
+            #     d["name"] = overflow + p.find(class_="ProductCard_card__title__text__uiWLe").text.replace('\n','')
+            #     overflow = ""
+            name = p.find(class_="ProductCard_card__title__text__uiWLe").text.replace('\n','')
+            brand = p.find(class_="ProductCard_card__category__Hh3rT").text.replace('\n','')
+            # if price == "":
+            #     overflow = d["name"]
+            #     continue
             
-            products.append(d)
 
-            s = f"{d['name']} | {d['price']} | {d['img']}\n"
-
-            f.write(s)
-            sess.add(Product(
-                name = product['name'],
-                base_price = product['price'],
-                sale_price = product['price'],
-                member_price = product['price'],
-                picture_url = product['img'],
-                store_id = 1
-            ))
+            p = sess.query(Product).filter(Product.store_id == sid, Product.name == name, Product.brand == brand).first()
+            if p:
+                print(f"Existing product with name = \"{product['name']}\" found")
+               
+                if p.base_price != price or p.size != size:
+                    pricePoint = PricePoint(
+                        base_price = p.base_price,
+                        sale_price = p.sale_price,
+                        member_price = p.member_price,
+                        size = p.size,
+                        timestamp = p.last_updated,
+                        product_id = p.id
+                    )
+                    p.base_price = price
+                    p.size = size
+                    sess.add(pricePoint)
+                    sess.merge(p)
+                    sess.commit()
+                else:
+                    print(f"Existing product with name = \"{product['name']}\" has same prices, ignoring")
+            else:
+                sess.add(Product(
+                    name = name,
+                    brand = brand,
+                    size = size,
+                    base_price = price,
+                    sale_price = "N/A",
+                    member_price = "N/A",
+                    picture_url = img,
+                    store_id = sid,
+                ))
+                sess.commit()
+    store.last_updated = datetime.now()
+    sess.merge(store)
     sess.commit()
-    f.close()
-
 start_time = time.time()
-get_whole_foods()
+# get_whole_foods(HADLEY_ZIP_CODE)
 whole_foods_time = time.time()
-print(f"Whole foods scraped, took {whole_foods_time-start_time} seconds")
-#get_trader_joes()
-#print(f"Whole foods scraped, took {time.time()-whole_foods_time} seconds")
+# print(f"Whole foods scraped, took {whole_foods_time-start_time} seconds")
+get_trader_joes(HADLEY_ZIP_CODE)
+print(f"Trader Joes Scraped, took {time.time()-whole_foods_time} seconds")
 end_time = time.time()
 print(f"Scraping complete, total time elapsed={end_time-start_time}")
 

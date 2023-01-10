@@ -24,5 +24,7 @@ async def root():
     return {"message": "Welcome to this grocery thing"}
 
 from .products import product_router
+from .stores import store_router
 
 router.include_router(product_router)
+router.include_router(store_router)

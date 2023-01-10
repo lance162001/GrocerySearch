@@ -25,7 +25,6 @@ class Product(BaseModel):
     base_price: str
     size: str
     picture_url: str
-    active: bool
 
     class Config:
         orm_mode = True # lets pydantic convert SQLAlchemy object <-> JSON
