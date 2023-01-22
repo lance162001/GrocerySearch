@@ -26,6 +26,3 @@ async def get_store(sid: int, sess: Session=Depends(get_db)):
         return store
     else:
         raise HTTPException(404, detail=f"Store with id {id} not found")
-        
-
-

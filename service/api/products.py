@@ -19,6 +19,8 @@ product_router = APIRouter()
 async def get_all_products(sess: Session=Depends(get_db)):
     return sess.query(models.Product).all()
 
-@product_router.get("/products/store/{sid}")
-async def get_products_from_store(sid: int, sess: Session=Depends(get_db)):
-    return sess.query(models.Product).filter(models.Product.store == sid).all()
+
+
+@product_router.get("/products/{keyword}", response_model=List[schemas.Product])
+async def search_for_products(keyword: str, sess: Session=Depends(get_db)):
+    return sess.query(models.Product).filter( keyword in models.Product.name ).all()
