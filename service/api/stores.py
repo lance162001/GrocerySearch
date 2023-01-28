@@ -31,7 +31,7 @@ async def get_store(sid: int, sess: Session=Depends(get_db)):
     else:
         raise HTTPException(404, detail=f"Store with id {id} not found")
 
-@store_router.get("/stores/{zipcode}", response_model=schemas.Store)
+@store_router.get("/stores/{zipcode}", response_model=List[schemas.Store])
 async def get_stores_by_zipcode(zipcode: str, background_tasks: BackgroundTasks, sess: Session=Depends(get_db)):
     key = "nYA0zVQY9dkfDrn6x9TvUaamjelpmGyeed1lEpoBLzAYi3NseTZBu20n8mL6WKuc"
     route = f"https://www.zipcodeapi.com/rest/{key}/radius.json/{zipcode}/5/miles?minimal"
@@ -48,4 +48,6 @@ async def get_stores_by_zipcode(zipcode: str, background_tasks: BackgroundTasks,
                 closest_stores.append(sess.query(models.Store).filter(models.Product.company == brand).first())
         return closest_stores
     else:
+        for s in stores:
+            print(s.zipcode)
         return stores

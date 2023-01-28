@@ -48,6 +48,7 @@ def get_store(zipcode,company):
     return store
 
 def get_location(zipcode):
+    print(f"Getting Location {zipcode}")
     stores = []
     for brand in ["Whole Foods","Trader Joes"]:
         stores.append(get_store(zipcode,brand))
