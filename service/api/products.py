@@ -21,6 +21,6 @@ async def get_all_products(sess: Session=Depends(get_db)):
 
 
 
-@product_router.get("/products/{keyword}", response_model=List[schemas.Product])
+@product_router.get("/products/{zip/{keyword}", response_model=List[schemas.Product])
 async def search_for_products(keyword: str, sess: Session=Depends(get_db)):
     return sess.query(models.Product).filter( keyword in models.Product.name ).all()

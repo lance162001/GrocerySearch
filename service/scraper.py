@@ -12,9 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, wait, as_completed
 
 sess = Session(engine)
 options = Options()
-options.headless = False #should be true for server
-browser = webdriver.Firefox(options=options)
-browser.implicitly_wait(10)
+options.headless = True #should be true for server
 
 try:
     debug_mode=bool(int(sys.argv[1]))
@@ -26,23 +24,20 @@ def log(msg):
     if debug_mode:
         print(f"###LOG###\n{msg}\n#########")
 
-def update_all_stores():
-    stores = sess.query(Store).all()
+def update_stores(stores):
     for store in stores:
         if store.company == "Whole Foods":
-            #get_whole_foods(store)
-            pass
+            get_whole_foods(store)
         elif store.company == "Trader Joes":
             get_trader_joes(store)
-        print(f"{store.company} from zipcode {store.zipcode} updated at {datetime.now()}")
+        log(f"{store.company} from zipcode {store.zipcode} updated at {datetime.now()}")
+
 
 
 
 def get_store(zipcode,company):
     store = sess.query(Store).filter(Store.zipcode == zipcode, Store.company == company).first()
-    if store:
-        sid = store.id
-    else:
+    if not store:
         store = Store( 
             company=company,
             address="TODO",
@@ -50,10 +45,18 @@ def get_store(zipcode,company):
         sess.add(store)
         sess.commit()
         sess.refresh(store)
-        sid = store.id
-    return sid,store
+    return store
+
+def get_location(zipcode):
+    stores = []
+    for brand in ["Whole Foods","Trader Joes"]:
+        stores.append(get_store(zipcode,brand))
+    update_stores(stores)
+
+
 
 HADLEY_ZIP_CODE =  '01035'
+WORKERS = 4
 # WHOLE FOODS 
 # TODO Get product size (and maybe other metadata?) by nutritional info text
 def get_whole_foods(store):
@@ -68,7 +71,7 @@ def get_whole_foods(store):
     
 
     def get_category(category):
-        print(f"{category} is beginning browser")
+        log(f"{category} is beginning browser")
         b = webdriver.Firefox(options=options)
         b.implicitly_wait(10)
         try:
@@ -85,7 +88,7 @@ def get_whole_foods(store):
             time.sleep(2)
             b.find_element(By.XPATH,clickerXPATH).click()
 
-        print(f"{category} is beginning search")
+        log(f"{category} is beginning search")
         while True:
             try:
                 b.find_element(By.XPATH,findmoreXPATH).click()
@@ -98,7 +101,7 @@ def get_whole_foods(store):
         return BeautifulSoup(html, 'html.parser').find_all(class_="w-pie--product-tile")
     rawProducts = []
     categories = ["produce","dairy-eggs","meat","prepared-foods","pantry-essentials","breads-rolls-bakery","desserts","frozen-foods","snacks-chips-salsas-dips","seafood","beverages"]
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ThreadPoolExecutor(max_workers=WORKERS) as executor:
         future_to_data = {executor.submit(get_category, category): category for category in categories}
         for future in as_completed(future_to_data):
             category = future_to_data[future]
@@ -168,7 +171,7 @@ def get_whole_foods(store):
                      break
         if product['name'][0:1] == "PB" and product['brand'] == "Renpure":
             size = product['name'][-5]
-        p = sess.query(Product).filter(Product.name == product['name'], Product.brand == product['brand']).first()
+        p = sess.query(Product).filter(Product.store_id == sid, Product.name == product['name'], Product.brand == product['brand']).first()
         if p != None:
             print(f"Existing product with name = \"{product['name']}\" found")
             
@@ -244,7 +247,8 @@ def get_trader_joes_2(store):
 
 # TRADER JOES
 def get_trader_joes(store):
-    #sid,store = get_store(zipcode,"Trader Joes")
+    browser = webdriver.Firefox(options=options)
+    browser.implicitly_wait(10)
     sid,zipcode = store.id,store.zipcode
     startPoint = 'https://www.traderjoes.com/home/products/category/food-8'
     myStoreButton = "/html/body/div/div[1]/div[1]/div[2]/div[1]/div/div[1]/div[1]/div/header/div[1]/div[1]/div[1]/div/div[1]/div/div[1]/div[1]/div[2]/a"
@@ -333,21 +337,7 @@ def get_trader_joes(store):
     store.last_updated = datetime.now()
     sess.merge(store)
     sess.commit()
-    if __name__ != "__main__":
-        browser.close()
-if __name__ == "__main__":
-    update_all_stores()
-
-    #get_trader_joes_2(sess.query(Store).filter(Store.company == "Trader Joes").first())
-
-    # start_time = time.time()
-    # get_whole_foods(HADLEY_ZIP_CODE)
-    # whole_foods_time = time.time()
-    # print(f"Whole foods scraped, took {whole_foods_time-start_time} seconds")
-    # get_trader_joes(HADLEY_ZIP_CODE)
-    # print(f"Trader Joes Scraped, took {time.time()-whole_foods_time} seconds")
-    # end_time = time.time()
-    # print(f"Scraping complete, total time elapsed={end_time-start_time}")
-
-    # input("-----\nenter to close\n-----\n")
     browser.close()
+
+if __name__ == "__main__":
+    update_stores(stores = sess.query(Store).all())
