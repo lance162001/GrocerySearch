@@ -35,7 +35,7 @@ async def get_store(sid: int, sess: Session=Depends(get_db)):
 async def get_stores_by_zipcode(zipcode: str, background_tasks: BackgroundTasks, sess: Session=Depends(get_db)):
     key = "nYA0zVQY9dkfDrn6x9TvUaamjelpmGyeed1lEpoBLzAYi3NseTZBu20n8mL6WKuc"
     route = f"https://www.zipcodeapi.com/rest/{key}/radius.json/{zipcode}/5/miles?minimal"
-    stores = sess.query(models.Store).filter(models.Product.zipcode == zipcode).all()
+    stores = sess.query(models.Store).filter(models.Store.zipcode == zipcode).all()
     if stores == None:
         r = requests.get(route)
         if r.status_code == 200:

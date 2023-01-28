@@ -17,7 +17,7 @@ options.headless = True #should be true for server
 try:
     debug_mode=bool(int(sys.argv[1]))
 except:
-    pass
+    debug_mode = False
 else:
     print("DEBUG MODE ACTIVE")
 def log(msg):
