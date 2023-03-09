@@ -21,11 +21,11 @@ store_router = APIRouter()
 
 @store_router.get("/stores", response_model=List[schemas.Store])
 async def get_all_stores(sess: Session=Depends(get_db)):
-    return sess.query(models.Store).all()
+    return sess.query(models.Store.).all()
 
-@store_router.get("/store_with_products/{sid}", response_model=schemas.StoreWithProducts)
-async def get_store(sid: int, sess: Session=Depends(get_db)):
-    store = sess.query(models.StoreWithProducts).get(sid)
+@store_router.get("/stores_by_id", response_model=List[schemas.Store])
+async def get_store(sid: List[int], sess: Session=Depends(get_db)):
+    store = sess.query(models.Store).get(sid)
     if store:
         return store
     else:
@@ -34,7 +34,7 @@ async def get_store(sid: int, sess: Session=Depends(get_db)):
 
 @store_router.get("/stores/{zipcode}", response_model=List[schemas.Store])
 async def get_stores_by_zipcode(zipcode: str, sess: Session=Depends(get_db)):
-    stores = sess.query(models.Store).filter(models.Store.zipcode == zipcode).all()
+    stores = sess.query.with_entities(models.Store.id, models.Store.brand, models.Store.address, models.Store.zipcode).filter(models.Store.zipcode == zipcode).all()
     if stores == None:
         key = "nYA0zVQY9dkfDrn6x9TvUaamjelpmGyeed1lEpoBLzAYi3NseTZBu20n8mL6WKuc"
         route = f"https://www.zipcodeapi.com/rest/{key}/radius.json/{zipcode}/5/miles?minimal"
