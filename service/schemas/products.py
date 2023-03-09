@@ -8,7 +8,7 @@ class PricePoint(BaseModel):
     sale_price: str
     member_price: str
     size: str
-    timestamp: datetime
+    last_updated: datetime
 
     class Config:
         orm_mode = True # lets pydantic convert SQLAlchemy object <-> JSON
