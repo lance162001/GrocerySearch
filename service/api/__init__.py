@@ -25,6 +25,8 @@ async def root():
 
 from .products import product_router
 from .stores import store_router
+from .users import user_router
 
 router.include_router(product_router)
 router.include_router(store_router)
+router.include_router(user_router)
