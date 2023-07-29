@@ -31,8 +31,8 @@ async def get_product(id: int, sess: Session=Depends(get_db)):
     else:
         raise HTTPException(404, detail=f"Product with id {id} not found")
 
-@product_router.get("/products", response_model=List[schemas.Product])
-async def get_products(ids: List[int], sess: Session=Depends(get_db)):
+@product_router.get("/products/multiple", response_model=List[schemas.Product])
+async def get_products_by_ids(ids: List[int], sess: Session=Depends(get_db)):
     p = []
     q = Session.query(models.Product)
     for id in ids:
@@ -120,19 +120,24 @@ async def get_tag(id: int, sess: Session=Depends(get_db)):
     else:
         raise HTTPException(404, detail=f"Tag with id {id} not found")
 
-@product_router.put("products/tag/{id}", status_code=200)
-async def update_tag(id: int, item: schemas.Tag, Session = Depends(get_db)):
-    t = sess.query(models.Tag).get(id)
-    if t == None:
-        raise HTTPException(404, detail=f"Tag with id {id} not found")
-    Session.delete(t)
-    newT = models.Tag(
-        name = item.name
-    )
-    Session.add(newT)
-    Session.commit()
-    Session.refresh(newT)
-    return newT
+@product_router.get("/products/tag", response_model=schemas.Tag)
+async def get_all_tags(id: int, sess: Session=Depends(get_db)):
+    t = sess.query(models.Tag).all()
+    return t
+
+# @product_router.put("products/tag/{id}", status_code=200)
+# async def update_tag(id: int, item: schemas.Tag, Session = Depends(get_db)):
+#     t = sess.query(models.Tag).get(id)
+#     if t == None:
+#         raise HTTPException(404, detail=f"Tag with id {id} not found")
+#     Session.delete(t)
+#     newT = models.Tag(
+#         name = item.name
+#     )
+#     Session.add(newT)
+#     Session.commit()
+#     Session.refresh(newT)
+#     return newT
 
 # @product_router.post("/products/tag/instance")
 # async def post_tag_instance(item: schemas.Tag_Instance, Session = Depends(get_db)):

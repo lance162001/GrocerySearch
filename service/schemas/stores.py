@@ -21,6 +21,8 @@ class Company(BaseModel):
 	id: Optional[int]
 	logo_url: str
 	name: str
+	class Config:
+		orm_mode = True # lets pydantic convert SQLAlchemy object <-> JSON
 
 class Store(BaseModel):
 	id: Optional[int]
