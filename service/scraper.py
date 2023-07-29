@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 from models.base import Base, engine
 from sqlalchemy.orm import Session
-from models import Product, Product_Instance, PricePoint, Store, Tag, Tag_Instance
+from models import Product, Product_Instance, PricePoint, Store, Tag, Tag_Instance, Company
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, wait, as_completed
@@ -16,97 +16,257 @@ sess = Session(engine)
 
 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36'}
 
-
+import os
 from urllib.request import Request, urlopen
 import json
 import ast
 doing_it_with_selenium = False
 
-tags = sess.query(Tag).all()
-stores = sess.query(Store).all()
+# add in batches. all products, then instances, then pricepoints? 
+categories = ["produce","dairy-eggs","meat","prepared-foods","pantry-essentials","breads-rolls-bakery","desserts","frozen-foods","snacks-chips-salsas-dips","seafood","beverages"]
+diet_types = ["organic", "vegan", "kosher", "gluten free", "dairy free", "vegetarian"]
+tags = {}
 
+def setup():
+    wf = Company(logo_url=None, name="Whole Foods")
+    joes = Company(logo_url=None, name="Trader Joes")
+    test_wf = Store(company_id=1, scraper_id=10413, address=None, zipcode='02482')
+    test_joes = Store(company_id=2, scraper_id=509, address=None, zipcode='02482')
+    count = 1
+    for t in categories:
+        tags[t] = count
+        count+=1
+        sess.add(Tag(name=t))
+    for t in diet_types:
+        tags[t] = count
+        count+=1
+        sess.add(Tag(name=t))
+    sess.add(Tag(name="local"))
+    tags['local'] = count
+    sess.add_all([wf,test_wf,joes,test_joes])
+    sess.commit()
+    return sess.query(Store).all()
 
-
-
-def whole_foods(store_id, zipcode):
-    offset = 0
-    limit = 60
-    url = f"https://www.wholefoodsmarket.com/api/products/category/[leafCategory]?leafCategory=all-products&store={zipcode}&limit=60&offset="
-    raw_products = []
-
-    while True:
-        try:
-            req = Request(url+str(offset))
-            req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36')
-            response = urlopen(req)
-            b = response.read()
-            j = json.loads(b)
-            print(j)
-            results = j['results']
-            print(results)
-        except:
-            break
-        for i in range(60):
-            raw_products.append(results[i])
-        offset += limit
-        time.sleep(1)
-    print(raw_products[0])
-    localTID = filter(lambda t: t.name == 'Local', tags)[0]
-    for raw in raw_products:
-        size = "N/A"
-        if "/" in raw['regularPrice']:
-            size = "per " + raw['regularPrice'].split("/")[-1] # almost always lb        
-        else:
-            for i in ["lb", "oz"," gram ","ml"]:
+def whole_foods(store_id, store_code):
+    names = []
+    for category in categories:
+        offset = 0
+        limit = 60
+        url = f"https://www.wholefoodsmarket.com/api/products/category/[leafCategory]?leafCategory={category}&store={store_code}&limit=60&offset="
+        raw_products = []
+        while True:
+            try:
+                req = Request(url+str(offset))
+                req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36')
+                response = urlopen(req)
+                results = json.loads(response.read())['results']
+            except:
+                break
+            if results == []:
+                break
+            for i in results:
+                if i['name'] in names:
+                    print(f"{i['name']} is already in raw products???")
+                else:
+                    names.append(i['name'])
+                    raw_products.append(i)
+            print(offset)
+            offset += limit
+        for raw in raw_products:
+            size = "N/A"
+            # if "/" in raw['regularPrice']:
+            #     size = "per " + raw['regularPrice'].split("/")[-1] # almost always lb        
+            # else:
+            for i in [ "fl oz", "lb", "oz"," gram ","ml"]:
                 if " " + i in raw['name'] or " "+i+" " in raw['name'] or " "+i+"s " in raw['name'] or " "+i+")" in raw['name']:
                     size = raw['name'].split(",")[-1]
-                    raw['name'] = raw['name'][0:len(product['raw'])-len(size)-2]
+                    raw['name'] = raw['name'][0:len(raw['name'])-len(size)-1].strip()
                     break
-        if raw['name'][0:1] == "PB" and raw['brand'] == "Renpure":
-            size = raw['name'][-5]
-        if sess.query(Product).filter(Product.name == raw['name']).first() == None:
-            # tags = []
-            # if raw['isLocal']:
-            #     t = Tag_Instance(
-            #         tag_id = localTID
-            #     )
-            #     sess.add(t)
-            prod = Product(
-                name = raw['name'],
-                brand = raw['brand'],
-                picture_url = raw['imageThumbnail'],
-                tags = []
+            if raw['name'][0:1] == "PB" and raw['brand'] == "Renpure":
+                size = raw['name'][-5]
+            prod = sess.query(Product).filter(Product.name == raw['name']).first()
+            if prod == None:
+                try: 
+                    raw['brand'] = raw['brand'].title()
+                except:
+                    raw['brand'] = None
+                try: 
+                    x = raw['imageThumbnail']
+                except:
+                    raw['imageThumbnail'] = None
+                prod = Product(
+                    company_id = 1,
+                    name = raw['name'].title(),
+                    brand = raw['brand'],
+                    picture_url = raw['imageThumbnail'],
+                    tags = []
+                )
+                sess.add(prod)
+                sess.flush()
+                if raw['isLocal']:
+                    t = Tag_Instance(
+                        product_id = prod.id,
+                        tag_id = tags['local']
+                    )
+                    sess.add(t)
+                sess.add(Tag_Instance(
+                    product_id = prod.id,
+                    tag_id = tags[category]
+                ))
+            inst = sess.query(Product_Instance).filter(Product_Instance.store_id == store_id, Product_Instance.product_id == prod.id).first()
+            if inst == None:
+                inst = Product_Instance(
+                    store_id = store_id,
+                    product_id = prod.id
+                )
+                sess.add(inst)
+                sess.flush()
+            try:
+                x = raw['salePrice']
+            except:
+                raw['salePrice'] = None
+            try:
+                x = raw['incrementalSalePrice']
+            except:
+                raw['incrementalSalePrice'] = None
+            pricepoint = PricePoint(
+                base_price = raw['regularPrice'],
+                sale_price = raw['salePrice'],
+                member_price = raw['incrementalSalePrice'],
+                size = size,
+                instance_id = inst.id)
+            sess.add(pricepoint)
+        sess.commit()
+
+
+h = {
+    'Host': 'www.traderjoes.com',
+    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0',
+    'Referer': 'https://www.traderjoes.com/home/products/category/food-8',
+    'Origin': 'https://www.traderjoes.com',
+    'Connection': 'keep-alive',
+    'Cookie': 'affinity="ebb0141da8e53aa0"; AMCV_B5B4708F5F4CE8D80A495ED9%40AdobeOrg=-2121179033%7CMCIDTS%7C19567%7CMCMID%7C59202760330854573354314556646638726566%7CMCOPTOUT-1690581920s%7CNONE%7CvVersion%7C5.3.0; AMCVS_B5B4708F5F4CE8D80A495ED9%40AdobeOrg=1',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'no-cors',
+    'Sec-Fetch-Site': 'same-origin',
+    'DNT': 1,
+    'Sec-GPC': 1,
+}
+def trader_joes(store_id, store_code):
+    url = "https://www.traderjoes.com/api/graphql"
+    main_body = {
+        "operationName": "SearchProducts",
+        "query": "query SearchProducts($categoryId: String, $currentPage: Int, $pageSize: Int, $characteristics: [String], $storeCode: String = \""+str(store_code)+"\", $availability: String = \"1\", $published: String = \"1\") {\n  products(\n    filter: {store_code: {eq: $storeCode}, published: {eq: $published}, availability: {match: $availability}, category_id: {eq: $categoryId}, item_characteristics: {in: $characteristics}}\n    sort: {popularity: DESC}\n    currentPage: $currentPage\n    pageSize: $pageSize\n  ) {\n    items {\n      sku\n      item_title\n      category_hierarchy {\n        id\n        name\n        __typename\n      }\n      primary_image\n      primary_image_meta {\n        url\n        metadata\n        __typename\n      }\n      sales_size\n      sales_uom_description\n      price_range {\n        minimum_price {\n          final_price {\n            currency\n            value\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      retail_price\n      fun_tags\n      item_characteristics\n      __typename\n    }\n    total_count\n    pageInfo: page_info {\n      currentPage: current_page\n      totalPages: total_pages\n      __typename\n    }\n    aggregations {\n      attribute_code\n      label\n      count\n      options {\n        label\n        value\n        count\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
+        "variables": {
+            "availability": "1",
+            "categoryId": 8,
+            "characteristics": [],
+            "currentPage": 0,
+            "pageSize": 100,
+            "published": "1",
+            "storeCode": str(store_code)
+        }
+    }
+
+    
+    json_bytes = json.dumps(main_body).encode('utf-8')
+    h['Content-Length'] = len(json_bytes)
+    raw_products = []
+    while True:
+        try:
+            req = Request(url, json_bytes, h)
+            response = urlopen(req)
+            results = json.loads(response.read())['data']['products']['items']
+        except:
+            break
+        if results == []:
+            break
+        for i in results:
+            raw_products.append(i)
+        print(f"{main_body['variables']['currentPage']} : {len(results)}")
+        main_body['variables']['currentPage'] += 1
+        json_bytes = json.dumps(main_body).encode('utf-8')
+    for raw in raw_products:
+        name = raw['item_title']
+        p = sess.query(Product).filter(Product.name == name, Product.company_id == 2).first()
+        if p == None:
+            p = Product(
+                brand = "Trader Joes",
+                name = name,
+                company_id = 2,
+                picture_url = f"traderjoes.com{raw['primary_image']}",
             )
-            sess.add(prod)
+            sess.add(p)
             sess.flush()
-        if sess.query(Product_Instance).filter(Product_Instance.store_id == store_id and Product_Instance.product_name == raw['name']).first() == None:
+            t = []
+            if raw['item_characteristics'] != None:
+                for i in raw['item_characteristics']:
+                    if i in tags.keys():
+                        sess.add(Tag_Instance(
+                            product_id = p.id,
+                            tag_id = tags[i]
+                        ))
+        inst = sess.query(Product_Instance).filter(Product_Instance.store_id == store_id, Product_Instance.product_id == p.id).first()
+        if inst == None:
             inst = Product_Instance(
                 store_id = store_id,
-                product_id = prod.id
+                product_id = p.id
             )
             sess.add(inst)
             sess.flush()
-        try:
-            x = raw['salePrice']
-        except:
-            raw['salePrice'] = None
-            raw['incrementalSalePrice'] = None
-
-        sess.add(PricePoint(
-            base_price = raw['regularPrice'],
-            sale_price = raw['salePrice'],
-            member_price = raw['incrementalSalePrice'],
-            size = size,
+        pricepoint = PricePoint(
+            base_price = raw['retail_price'],
+            sale_price = None,
+            member_price = None,
+            size = f"{raw['sales_size']} {raw['sales_uom_description']}",
             instance_id = inst.id
-        ))
+        )
+        sess.add(pricepoint)
     sess.commit()
+            
 
 
+
+def get_joes_store(zipcode):
+    store_search_url = "https://alphaapi.brandify.com/rest/locatorsearch"
+    store_search_body = {
+        "request": {
+            "appkey": "8BC3433A-60FC-11E3-991D-B2EE0C70A832",
+            "formdata": {
+            "geoip": false,
+            "dataview": "store_default",
+            "limit": 4,
+            "geolocs": {
+                "geoloc": [
+                {
+                    "addressline": "02481",
+                    "country": "US",
+                    "latitude": "",
+                    "longitude": ""
+                }
+                ]
+            },
+            "searchradius": "500",
+            "where": {
+                "warehouse": {
+                "distinctfrom": "1"
+                }
+            },
+            "false": "0"
+            }
+        }
+        }
+
+stores = sess.query(Store).all()
+if stores == []:
+    stores = setup()
 for store in stores:
     if store.company_id == 1:
-        whole_foods(store.id, store.zipcode)
+        whole_foods(store.id, store.scraper_id)
     elif store.company_id == 2:
-        pass #trader joes
+        trader_joes(store.id, store.scraper_id)
+
+
 
 
 if doing_it_with_selenium: 

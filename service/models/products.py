@@ -15,8 +15,8 @@ class PricePoint(Base, BaseModel):
 
 class Product(Base,BaseModel):
     __tablename__ = 'products'
-    name = Column(String(50))
-    brand = Column(String(50))
+    name = Column(String(100))
+    brand = Column(String(100))
     company_id = Column(Integer, ForeignKey("companies.id"))
     picture_url = Column(String(255))
     tags = relationship('Tag_Instance', back_populates='product')
