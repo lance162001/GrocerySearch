@@ -1,28 +1,28 @@
-from bs4 import BeautifulSoup 
+# Old Selenium Scraping Dependencies 
+#####################################
+# from bs4 import BeautifulSoup 
 # from selenium.webdriver.firefox.options import Options
 # from selenium import webdriver
 # from selenium.webdriver.common.by import By
-import time
-from datetime import datetime
+# import time
+# from datetime import datetime
+
+# import sys
+# import time
+# from concurrent.futures import ThreadPoolExecutor, wait, as_completed
+
 from models.base import Base, engine
 from sqlalchemy.orm import Session
 from models import Product, Product_Instance, PricePoint, Store, Tag, Tag_Instance, Company
-import sys
-import time
-from concurrent.futures import ThreadPoolExecutor, wait, as_completed
-
-sess = Session(engine)
-
-
-headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36'}
-
-import os
 from urllib.request import Request, urlopen
 import json
-import ast
+
+sess = Session(engine)
+headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36'}
+
+
 doing_it_with_selenium = False
 
-# add in batches. all products, then instances, then pricepoints? 
 categories = ["produce","dairy-eggs","meat","prepared-foods","pantry-essentials","breads-rolls-bakery","desserts","frozen-foods","snacks-chips-salsas-dips","seafood","beverages"]
 diet_types = ["organic", "vegan", "kosher", "gluten free", "dairy free", "vegetarian"]
 tags = {}
@@ -30,8 +30,8 @@ tags = {}
 def setup():
     wf = Company(logo_url=None, name="Whole Foods")
     joes = Company(logo_url=None, name="Trader Joes")
-    test_wf = Store(company_id=1, scraper_id=10413, address=None, zipcode='02482')
-    test_joes = Store(company_id=2, scraper_id=509, address=None, zipcode='02482')
+    test_wf = Store(company_id=1, scraper_id=10413, address="442 Washington St, Wellesley MA", zipcode='02482')
+    test_joes = Store(company_id=2, scraper_id=509, address="958 Highland Ave, Needham MA", zipcode='02494')
     count = 1
     for t in categories:
         tags[t] = count
@@ -139,19 +139,7 @@ def whole_foods(store_id, store_code):
         sess.commit()
 
 
-h = {
-    'Host': 'www.traderjoes.com',
-    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0',
-    'Referer': 'https://www.traderjoes.com/home/products/category/food-8',
-    'Origin': 'https://www.traderjoes.com',
-    'Connection': 'keep-alive',
-    'Cookie': 'affinity="ebb0141da8e53aa0"; AMCV_B5B4708F5F4CE8D80A495ED9%40AdobeOrg=-2121179033%7CMCIDTS%7C19567%7CMCMID%7C59202760330854573354314556646638726566%7CMCOPTOUT-1690581920s%7CNONE%7CvVersion%7C5.3.0; AMCVS_B5B4708F5F4CE8D80A495ED9%40AdobeOrg=1',
-    'Sec-Fetch-Dest': 'empty',
-    'Sec-Fetch-Mode': 'no-cors',
-    'Sec-Fetch-Site': 'same-origin',
-    'DNT': 1,
-    'Sec-GPC': 1,
-}
+
 def trader_joes(store_id, store_code):
     url = "https://www.traderjoes.com/api/graphql"
     main_body = {
@@ -167,14 +155,11 @@ def trader_joes(store_id, store_code):
             "storeCode": str(store_code)
         }
     }
-
-    
     json_bytes = json.dumps(main_body).encode('utf-8')
-    h['Content-Length'] = len(json_bytes)
     raw_products = []
     while True:
         try:
-            req = Request(url, json_bytes, h)
+            req = Request(url, json_bytes, headers)
             response = urlopen(req)
             results = json.loads(response.read())['data']['products']['items']
         except:
@@ -201,10 +186,10 @@ def trader_joes(store_id, store_code):
             t = []
             if raw['item_characteristics'] != None:
                 for i in raw['item_characteristics']:
-                    if i in tags.keys():
+                    if i.lower() in tags.keys():
                         sess.add(Tag_Instance(
                             product_id = p.id,
-                            tag_id = tags[i]
+                            tag_id = tags[i.lower()]
                         ))
         inst = sess.query(Product_Instance).filter(Product_Instance.store_id == store_id, Product_Instance.product_id == p.id).first()
         if inst == None:
@@ -223,8 +208,6 @@ def trader_joes(store_id, store_code):
         )
         sess.add(pricepoint)
     sess.commit()
-            
-
 
 
 def get_joes_store(zipcode):

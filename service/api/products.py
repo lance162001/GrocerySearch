@@ -24,7 +24,7 @@ async def get_all_product_instances(sess: Session=Depends(get_db)):
     return sess.query(models.Product_Instance).all()
 
 @product_router.get("/products/{id}", response_model=schemas.Product)
-async def get_product(sess: Session=Depends(get_db)):
+async def get_product(id: int, sess: Session=Depends(get_db)):
     p = sess.query(models.Product).get(id)
     if p:
         return p
