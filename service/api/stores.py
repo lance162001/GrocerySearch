@@ -16,8 +16,19 @@ import datetime
 import requests
 from fastapi.exceptions import HTTPException
 
+from fastapi_pagination import Page, add_pagination#, paginate
+from fastapi_pagination.ext.sqlalchemy import paginate
+
+
+from difflib import SequenceMatcher
+
+from sqlalchemy import select, desc
+
 #scraper.debug_mode = True
 store_router = APIRouter()
+
+def similar(a, b):
+    return SequenceMatcher(None, a.lower(), b.lower()).real_quick_ratio()
 
 @store_router.get("/stores", response_model=List[schemas.Store])
 async def get_all_stores(sess: Session=Depends(get_db)):
@@ -71,3 +82,25 @@ async def get_all_companies(sess: Session=Depends(get_db)):
     out = sess.query(models.Company).all()
     print("------\n",out[0],"\n------")
     return out
+
+# now add search and filtering by tags
+@store_router.post("/stores/full_products", response_model=Page[schemas.Product_Details] )
+async def get_full_products(ids: List[int], tags: List[str] | None = [], search: str | None = "", sess: Session=Depends(get_db)):
+    if search == "":
+        return paginate(sess,
+        select(models.Product,models.Product_Instance)
+        .where(
+            models.Product.id == models.Product_Instance.product_id, 
+            models.Product_Instance.store_id.in_(ids),
+            )
+        )
+    return paginate(sess,
+        select(models.Product,models.Product_Instance)
+        .where(
+            models.Product.id == models.Product_Instance.product_id, 
+            models.Product_Instance.store_id.in_(ids),
+            models.Product.name.like(f"%{search}%")
+        )
+    )
+
+add_pagination(store_router)

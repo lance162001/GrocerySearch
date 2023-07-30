@@ -130,3 +130,20 @@ dmypy.json
 
 # DB
 app.db
+
+# VENV
+service/pyvenv.cfg
+service/bin/activate
+service/bin/activate.csh
+service/bin/activate.fish
+service/bin/Activate.ps1
+service/bin/pip
+service/bin/pip3
+service/bin/pip3.11
+service/bin/python
+service/bin/python3
+service/bin/python3.11
+service/lib64
+service/bin/uvicorn
+service/include/site/python3.11/greenlet/greenlet.h
+service/bin/normalizer

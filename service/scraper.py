@@ -243,6 +243,9 @@ def get_joes_store(zipcode):
 stores = sess.query(Store).all()
 if stores == []:
     stores = setup()
+else:
+    for t in sess.query(Tag).all():
+        tags[t.name] = t.id
 for store in stores:
     if store.company_id == 1:
         whole_foods(store.id, store.scraper_id)
