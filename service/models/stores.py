@@ -14,6 +14,8 @@ from datetime import datetime
 class Store(Base, BaseModel):
     __tablename__ = 'stores'
     address = Column(String(50))
+    town = Column(String(50))
+    state = Column(String(25))
     zipcode = Column(String(5))
     company_id = Column(Integer, ForeignKey("companies.id"))
     scraper_id = Column(Integer)

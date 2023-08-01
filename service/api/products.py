@@ -44,16 +44,16 @@ async def get_products_by_ids(ids: List[int], sess: Session=Depends(get_db)):
         raise HTTPException(404, detail=f"Product with id {id} not found")
     return p
 
-@product_router.get("/products/tag/{id}", response_model=schemas.Tag)
-async def get_tag(id: int, sess: Session=Depends(get_db)):
-    t = sess.query(models.Tag).get(id)
-    if t:
-        return t
-    else:
-        raise HTTPException(404, detail=f"Tag with id {id} not found")
+# @product_router.get("/products/tag/{id}", response_model=schemas.Tag)
+# async def get_tag(id: int, sess: Session=Depends(get_db)):
+#     t = sess.query(models.Tag).get(id)
+#     if t:
+#         return t
+#     else:
+#         raise HTTPException(404, detail=f"Tag with id {id} not found")
 
 @product_router.get("/products/tag", response_model=schemas.Tag)
-async def get_all_tags(id: int, sess: Session=Depends(get_db)):
+async def get_all_tags(sess: Session=Depends(get_db)):
     t = sess.query(models.Tag).all()
     return t
 

@@ -4,7 +4,7 @@ Data is served over [FastAPI](https://fastapi.tiangolo.com/), an ASGI framework 
 ## Installation
 Activate the VENV with 
 ```bash
-source/activate
+source bin/activate
 ```
 
 We're currently using `requirements.txt` for saving and locking our dependencies.
