@@ -16,14 +16,14 @@ import datetime
 import requests
 from fastapi.exceptions import HTTPException
 
-from fastapi_pagination import Page, add_pagination, paginate
-#from fastapi_pagination.ext.sqlalchemy import paginate
+from fastapi_pagination import Page, add_pagination#, paginate
+from fastapi_pagination.ext.sqlalchemy import paginate
 
 
 from difflib import SequenceMatcher
 import Levenshtein
 
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, or_
 
 #scraper.debug_mode = True
 store_router = APIRouter()
@@ -35,14 +35,6 @@ def similar(a, b):
 async def get_all_stores(sess: Session=Depends(get_db)):
     return sess.query(models.Store).all()
 
-# @store_router.get("/stores/{id}", response_model=schemas.Store)
-# async def get_store(id: int, sess: Session=Depends(get_db)):
-#     store = sess.query(models.Store).get(id)
-#     if store:
-#         return store
-#     else:
-#         raise HTTPException(404, detail=f"Store with id {id} not found")
-
 @store_router.get("/stores/{id}/products", response_model=List[schemas.Product_Instance])
 async def get_products_from_store(id: int, sess: Session=Depends(get_db)):
     product_instances = sess.query(models.Product_Instance).filter(store_id==id).all()
@@ -50,19 +42,31 @@ async def get_products_from_store(id: int, sess: Session=Depends(get_db)):
         raise HTTPException(404, detail=f"Product from store with id {id} not found")
     return product_instances
 
-@store_router.get("/stores/{search}", response_model=Page[schemas.Store])
-async def store_search(search: str, sess: Session=Depends(get_db)):
-    def sim(a):
-        return max(similar(a.address,search),similar(a.zipcode,search))
-    q = sess.query(models.Store)
-    if len(search) == 5 and search.isalnum:
-        stores = q.filter(models.Store.zipcode == zipcode).all()
-    elif search == "":
-        stores = q.all()
+@store_router.get("/stores/search", response_model=Page[schemas.Store])
+async def store_search(search: str | None = "", sess: Session=Depends(get_db)):
+    # def sim(a):
+    #     return max(similar(a.address,search),similar(a.zipcode,search))
+    # q = sess.query(models.Store)
+    # if len(search) == 5 and search.isalnum:
+    #     stores = q.filter(models.Store.zipcode == zipcode).all()
+    # elif search == "":
+    #     stores = q.all()
+    # else:
+    #     stores = q.all()
+    #     stores.sort(key=sim,reverse=True)
+    # return paginate(stores)
+    if search == "":
+        return paginate(sess, select(models.Store))
     else:
-        stores = q.all()
-        stores.sort(key=sim,reverse=True)
-    return paginate(stores)
+        return paginate(sess, select(models.Store)
+            .where(
+                or_(models.Store.address.like(f"%{search}%"),
+                    models.Store.zipcode.like(f"%{search}%"),
+                    models.Store.state.like(f"%{search}%"),
+                    models.Store.town.like(f"%{search}%"),
+                )
+            )
+        )
         
 
 @store_router.get("/company/{id}", response_model=schemas.Company)
@@ -78,25 +82,30 @@ async def get_all_companies(sess: Session=Depends(get_db)):
     out = sess.query(models.Company).all()
     return out
 
-# now add search and filtering by tags
 @store_router.post("/stores/product_search", response_model=Page[schemas.Product_Details] )
-async def full_product_search(ids: List[int], tags: List[str] | None = [], search: str | None = "", sess: Session=Depends(get_db)):
+async def full_product_search(ids: List[int], tags: List[int] | None = [], search: str | None = "", sess: Session=Depends(get_db)):
     s = select(models.Product, models.Product_Instance).where(
-        models.Product.id == models.Product_Instance.product_id, 
-        models.Product_Instance.store_id.in_(ids))
-    def sim(a):
-        return similar(a.Product.name,search)
-    rows = sess.execute(s).all()
-    out = []
-    if tags != []:
-        for r in rows:
-            if tags in r.Product.tags:
-                out.append(r)
-    else:
-        out = rows
-    if search != "":
-        out.sort(key=sim,reverse=True)
-    return paginate(out)
+        models.Product.id == models.Product_Instance.product_id).where(
+        models.Product_Instance.store_id.in_(ids) ).where(
+        models.Product.name.like(f"%{search}%")
+        )
+    for i in tags:
+        s = s.where(models.Product.tags.any(models.Tag_Instance.tag_id == i))
+
+    return paginate(sess,s)
+    # def sim(a):
+    #     return similar(a.Product.name,search)
+    # rows = sess.execute(s).all()
+    # out = []
+    # if tags != []:
+    #     for r in rows:
+    #         if tags in r.Product.tags:
+    #             out.append(r)
+    # else:
+    # out = rows
+    # if search != "":
+    #     out.sort(key=sim,reverse=True)
+    # return paginate(out)
     # if search == "":
     #     return paginate(sess,
     #     select(models.Product,models.Product_Instance)
@@ -105,13 +114,6 @@ async def full_product_search(ids: List[int], tags: List[str] | None = [], searc
     #         models.Product_Instance.store_id.in_(ids),
     #         )
     #     )
-    # return paginate(sess,
-    #     select(models.Product,models.Product_Instance)
-    #     .where(
-    #         models.Product.id == models.Product_Instance.product_id, 
-    #         models.Product_Instance.store_id.in_(ids),
-    #         models.Product.name.like(f"%{search}%")
-    #     )
-    # )
+
 
 add_pagination(store_router)

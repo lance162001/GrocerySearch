@@ -20,7 +20,7 @@ class Product(Base,BaseModel):
     company_id = Column(Integer, ForeignKey("companies.id"))
     picture_url = Column(String(255))
     tags = relationship('Tag_Instance', back_populates='product')
-
+    
 class Product_Instance(Base, BaseModel):
     __tablename__ = 'product_instances'
     store_id = Column(Integer, ForeignKey("stores.id"))

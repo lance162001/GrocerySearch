@@ -28,10 +28,10 @@ diet_types = ["organic", "vegan", "kosher", "gluten free", "dairy free", "vegeta
 tags = {}
 
 def setup():
-    wf = Company(logo_url=None, name="Whole Foods")
-    joes = Company(logo_url=None, name="Trader Joes")
-    test_wf = Store(company_id=1, scraper_id=10413, address="442 Washington St, Wellesley MA", zipcode='02482')
-    test_joes = Store(company_id=2, scraper_id=509, address="958 Highland Ave, Needham MA", zipcode='02494')
+    wf = Company(logo_url="https://external-content.duckduckgo.com/iu/?u=http%3A%2F%2Fwww.sott.net%2Fimage%2Fimage%2Fs5%2F102602%2Ffull%2Fwholefoods.png&f=1&nofb=1&ipt=21419f3cd82d823842c0297318a102a87ac9b6b801dd2417cc5661c32591fbc4&ipo=images", name="Whole Foods")
+    joes = Company(logo_url="https://logos-world.net/wp-content/uploads/2022/02/Trader-Joes-Emblem.png", name="Trader Joes")
+    test_wf = Store(company_id=1, scraper_id=10413, address="442 Washington St", zipcode='02482', town='Wellesley', state='Massachusetts')
+    test_joes = Store(company_id=2, scraper_id=509, address="958 Highland Ave", zipcode='02494', town='Needham', state='Massachusetts')
     count = 1
     for t in categories:
         tags[t] = count
@@ -89,11 +89,11 @@ def whole_foods(store_id, store_code):
                 try: 
                     raw['brand'] = raw['brand'].title()
                 except:
-                    raw['brand'] = None
+                    raw['brand'] = "Whole Foods Market"
                 try: 
                     x = raw['imageThumbnail']
                 except:
-                    raw['imageThumbnail'] = None
+                    raw['imageThumbnail'] = "https://external-content.duckduckgo.com/iu/?u=http%3A%2F%2Fwww.sott.net%2Fimage%2Fimage%2Fs5%2F102602%2Ffull%2Fwholefoods.png&f=1&nofb=1&ipt=21419f3cd82d823842c0297318a102a87ac9b6b801dd2417cc5661c32591fbc4&ipo=images"
                 prod = Product(
                     company_id = 1,
                     name = raw['name'].title(),
