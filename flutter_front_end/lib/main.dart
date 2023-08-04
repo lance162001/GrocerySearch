@@ -10,10 +10,6 @@ dynamic extractPage(Map<String, dynamic> json) {
   return json['items'];
 }
 
-// Future<List<Product>> compileProductFutures(List<Future<List<Product>>> l) async {
-//   return await Future.wait(l).then((value) => value.fold());
-// }
-
 Future<List<Product>> fetchProducts(List<int> storeIds,
     {String search = "",
     List<Tag> tags = const [],
@@ -22,9 +18,9 @@ Future<List<Product>> fetchProducts(List<int> storeIds,
   final String uri;
   if (search != "") {
     uri =
-        'http://localhost:23451/stores/product_search?search=$search&page=$page&size=$size';
+        'http://asktheinter.net:23451/stores/product_search?search=$search&page=$page&size=$size';
   } else {
-    uri = 'http://localhost:23451/stores/product_search?page=$page&size=$size';
+    uri = 'http://asktheinter.net:23451/stores/product_search?page=$page&size=$size';
   }
 
   final headers = {HttpHeaders.contentTypeHeader: 'application/json'};
@@ -51,8 +47,8 @@ Future<List<Product>> fetchProducts(List<int> storeIds,
 Future<List<Store>> fetchStores(String search,
     {int page = 1, int size = 4}) async {
   final uri = search == ""
-      ? 'http://localhost:23451/stores/search?page=$page&size=$size'
-      : 'http://localhost:23451/stores/search?search=$search&page=$page&size=$size';
+      ? 'http://asktheinter.net:23451/stores/search?page=$page&size=$size'
+      : 'http://asktheinter.net:23451/stores/search?search=$search&page=$page&size=$size';
 
   final headers = {HttpHeaders.contentTypeHeader: 'application/json'};
   final response = await http.get(Uri.parse(uri), headers: headers);
@@ -67,7 +63,7 @@ Future<List<Store>> fetchStores(String search,
 }
 
 Future<List<Tag>> fetchTags() async {
-  final uri = Uri.http('localhost:23451', '/products/tags');
+  final uri = Uri.http('asktheinter.net:23451', '/products/tags');
   final headers = {HttpHeaders.contentTypeHeader: 'application/json'};
   final response = await http.get(uri, headers: headers);
   if (response.statusCode == 200) {
@@ -81,7 +77,7 @@ Future<List<Tag>> fetchTags() async {
 }
 
 Future<List<Company>> fetchCompanies() async {
-  final uri = Uri.http('localhost:23451', '/company');
+  final uri = Uri.http('asktheinter.net:23451', '/company');
   final headers = {HttpHeaders.contentTypeHeader: 'application/json'};
   final response = await http.get(uri, headers: headers);
   if (response.statusCode == 200) {
@@ -569,7 +565,7 @@ class _CheckOutState extends State<CheckOut> {
                               ]),
                               Expanded(
                                 child: SizedBox(
-                                  width: 200,
+                                  width: 180,
                                   child: ListView(
                                       scrollDirection: Axis.vertical,
                                       shrinkWrap: true,
@@ -602,7 +598,7 @@ class _CheckOutState extends State<CheckOut> {
               child: Row(
                   children: widget.stores
                       .map((s) => SizedBox(
-                            width: 200,
+                            width: 180,
                             child: ListView(
                                 scrollDirection: Axis.vertical,
                                 shrinkWrap: true,
@@ -698,7 +694,7 @@ class _SearchPageState extends State<SearchPage> {
                       icon: const Icon(Icons.clear),
                       onPressed: () {
                         searchFieldController.clear();
-                        widget.products = fetchProducts(storeIds);
+                        widget.products = fetchProducts(storeIds, tags: widget.tags);
                         setState(() => 1);
                       },
                     ),
@@ -722,24 +718,29 @@ class _SearchPageState extends State<SearchPage> {
                                   style:
                                       TextStyle(fontWeight: FontWeight.bold)),
                               SizedBox(height: 5),
-                              Wrap(
-                                  spacing: 5.0,
-                                  children: widget.tags
-                                      .map((tag) => FilterChip(
-                                          label: Text(tag.name),
-                                          selected:
-                                              widget.userTags.contains(tag),
-                                          onSelected: (bool selected) {
-                                            widget.setTags(tag);
-                                            widget.products = fetchProducts(
-                                              storeIds,
-                                              search: searchTerm,
-                                              tags: widget.userTags,
-                                            );
-                                            setState(() => 1);
-                                          }))
-                                      .toList()
-                                      .cast<Widget>()),
+                              SizedBox(
+                                height: 175,
+                                child: SingleChildScrollView(
+                                  child: Wrap(
+                                      spacing: 5.0,
+                                      children: widget.tags
+                                          .map((tag) => FilterChip(
+                                              label: Text(tag.name),
+                                              selected:
+                                                  widget.userTags.contains(tag),
+                                              onSelected: (bool selected) {
+                                                widget.setTags(tag);
+                                                widget.products = fetchProducts(
+                                                  storeIds,
+                                                  search: searchTerm,
+                                                  tags: widget.userTags,
+                                                );
+                                                setState(() => 1);
+                                              }))
+                                          .toList()
+                                          .cast<Widget>()),
+                                ),
+                              ),
                             ],
                           ),
                         );
