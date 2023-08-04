@@ -4,10 +4,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:fl_chart/fl_chart.dart';
+import 'chart.dart';
 
 dynamic extractPage(Map<String, dynamic> json) {
   return json['items'];
 }
+
+// Future<List<Product>> compileProductFutures(List<Future<List<Product>>> l) async {
+//   return await Future.wait(l).then((value) => value.fold());
+// }
 
 Future<List<Product>> fetchProducts(List<int> storeIds,
     {String search = "",
@@ -307,28 +312,18 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   late Future<List<Store>> stores;
   List<Tag> tags = [];
-  // late Future<List<Company>> companies;
-  // List<Company> companies = [
-  //   Company(
-  //       id: 1,
-  //       name: "Whole Foods",
-  //       logoUrl:
-  //           "https://external-content.duckduckgo.com/iu/?u=http%3A%2F%2Fcdn2.thelineofbestfit.com%2Fmedia%2F2013%2F08%2Fwhole-foods-logo.png&f=1&nofb=1&ipt=0c8e87c4626f259464ef9df05e119efce140f958aca5f51b07a040aeaa208739&ipo=images"),
-  //   Company(
-  //       id: 2,
-  //       name: "Trader Joes",
-  //       logoUrl:
-  //           "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fwww.cityofredlands.org%2Fsites%2Fmain%2Ffiles%2Fimagecache%2Flightbox%2Fmain-images%2Ftrader_joes_logo-removebg-preview.png&f=1&nofb=1&ipt=254e1fc23e39cde3a17e2605723792e1609da040b3baea00502eaa54a2b0ee42&ipo=images")
-  // ];
   List<Company> companies = [];
   List<Store> userStores = [];
   late Future<List<Product>> products;
   List<Product> cart = [];
+  List<Product> cartFinished = [];
   List<Tag> userTags = [];
   void setTags(Tag tag) => setState(
       () => userTags.contains(tag) ? userTags.remove(tag) : userTags.add(tag));
 
   void setCart(List<Product> newCart) => setState(() => cart = newCart);
+  void setCartFinished(List<Product> newCartFinished) =>
+      setState(() => cartFinished = newCartFinished);
   void setStore(Store store) => setState(() => userStores.contains(store)
       ? userStores.remove(store)
       : userStores.add(store));
@@ -346,6 +341,7 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       initialRoute: '/',
       routes: {
+        '/chart': (context) => BarChartSample4(),
         '/': (context) => Dashboard(
             companies: companies,
             tags: tags,
@@ -353,8 +349,11 @@ class _MyAppState extends State<MyApp> {
             stores: stores,
             userStores: userStores,
             userTags: userTags,
+            cart: cart,
+            cartFinished: cartFinished,
             setStore: setStore,
-            setCart: setCart),
+            setCart: setCart,
+            setCartFinished: setCartFinished),
       },
       debugShowCheckedModeBanner: false,
       title: 'GrocerySearch testing',
@@ -375,7 +374,10 @@ class Dashboard extends StatefulWidget {
     required this.userTags,
     required this.setStore,
     required this.setCart,
+    required this.setCartFinished,
     required this.setTags,
+    required this.cart,
+    required this.cartFinished,
   }) : super(key: key);
 
   final List<Company> companies;
@@ -385,7 +387,10 @@ class Dashboard extends StatefulWidget {
   List<Tag> userTags;
   final Function setStore;
   final Function setCart;
+  final Function setCartFinished;
   final Function setTags;
+  final List<Product> cart;
+  final List<Product> cartFinished;
 
   @override
   State<Dashboard> createState() => _DashboardState();
@@ -431,67 +436,62 @@ class _DashboardState extends State<Dashboard> {
           children: [
             Column(
               children: [
-                SizedBox(
-                  height: 500,
-                  child: FutureBuilder<List<Store>>(
-                      future: widget.stores,
-                      builder: (context, snapshot) {
-                        if (snapshot.hasData) {
-                          List<Store> stores =
-                              snapshot.data! + widget.userStores;
+                FutureBuilder<List<Store>>(
+                    future: widget.stores,
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData) {
+                        List<Store> stores = snapshot.data! + widget.userStores;
 
-                          stores = stores.toSet().toList();
-                          return GridView.builder(
-                            itemCount: stores.length,
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2),
-                            shrinkWrap: true,
-                            primary: false,
-                            padding: const EdgeInsets.all(20),
-                            itemBuilder: (context, index) {
-                              Store store = stores[index];
-                              return Card(
-                                semanticContainer: true,
-                                color: widget.userStores.contains(store)
-                                    ? Colors.blue[800]
-                                    : Colors.blue,
-                                clipBehavior: Clip.hardEdge,
-                                child: InkWell(
-                                    splashColor: Colors.blue.withAlpha(30),
-                                    onTap: () {
-                                      widget.setStore(store);
-                                    },
-                                    child: Column(children: [
-                                      widget.companies.isNotEmpty
-                                          ? Image(
-                                              width: 100,
-                                              height: 100,
-                                              image: NetworkImage(widget
-                                                  .companies[
-                                                      store.companyId - 1]
-                                                  .logoUrl))
-                                          : Text(""),
-                                      Text(store.town,
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold)),
-                                      Text(store.state,
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold)),
-                                      Text(store.address,
-                                          style: TextStyle(
-                                              fontStyle: FontStyle.italic)),
-                                    ])),
-                              );
-                            },
-                          );
-                        } else if (snapshot.hasError) {
-                          return Text('${snapshot.error}');
-                        }
-                        return CircularProgressIndicator();
-                      }),
-                ),
-                SizedBox(height: 50),
+                        stores = stores.toSet().toList();
+                        return GridView.builder(
+                          itemCount: stores.length,
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2),
+                          shrinkWrap: true,
+                          primary: false,
+                          padding: const EdgeInsets.all(20),
+                          itemBuilder: (context, index) {
+                            Store store = stores[index];
+                            return Card(
+                              semanticContainer: true,
+                              color: widget.userStores.contains(store)
+                                  ? Colors.blue[800]
+                                  : Colors.blue,
+                              clipBehavior: Clip.hardEdge,
+                              child: InkWell(
+                                  splashColor: Colors.blue.withAlpha(30),
+                                  onTap: () {
+                                    widget.setStore(store);
+                                  },
+                                  child: Column(children: [
+                                    widget.companies.isNotEmpty
+                                        ? Image(
+                                            width: 100,
+                                            height: 100,
+                                            image: NetworkImage(widget
+                                                .companies[store.companyId - 1]
+                                                .logoUrl))
+                                        : Text(""),
+                                    Text(store.town,
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold)),
+                                    Text(store.state,
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold)),
+                                    Text(store.address,
+                                        style: TextStyle(
+                                            fontStyle: FontStyle.italic)),
+                                  ])),
+                            );
+                          },
+                        );
+                      } else if (snapshot.hasError) {
+                        return Text('${snapshot.error}');
+                      }
+                      return CircularProgressIndicator();
+                    }),
+                SizedBox(height: 20),
                 widget.userStores.isEmpty
                     ? OutlinedButton(
                         onPressed: () => {}, child: Text("Confirm Stores"))
@@ -506,8 +506,11 @@ class _DashboardState extends State<Dashboard> {
                                           stores: widget.userStores,
                                           userTags: widget.userTags,
                                           setTags: widget.setTags,
-                                          cart: [],
-                                          setCart: widget.setCart)))
+                                          cart: widget.cart,
+                                          cartFinished: widget.cartFinished,
+                                          setCart: widget.setCart,
+                                          setCartFinished:
+                                              widget.setCartFinished)))
                             },
                         child: Text("Confirm Stores"))
               ],
@@ -523,11 +526,19 @@ class CheckOut extends StatefulWidget {
   CheckOut({
     Key? key,
     required this.cart,
+    required this.cartFinished,
+    required this.stores,
     required this.setCart,
+    required this.setCartFinished,
+    required this.companies,
   }) : super(key: key);
 
   final Function setCart;
-  final List<Product> cart;
+  final Function setCartFinished;
+  List<Product> cartFinished;
+  List<Product> cart;
+  final List<Store> stores;
+  final List<Company> companies;
 
   @override
   State<CheckOut> createState() => _CheckOutState();
@@ -536,8 +547,87 @@ class CheckOut extends StatefulWidget {
 class _CheckOutState extends State<CheckOut> {
   @override
   Widget build(BuildContext context) {
-    // TODO: implement build
-    throw UnimplementedError();
+    return Scaffold(
+        appBar: AppBar(
+          title: Text("Checkout"),
+        ),
+        body: Column(
+          children: [
+            Text("To Do:", style: TextStyle(fontWeight: FontWeight.bold)),
+            Expanded(
+              child: Row(
+                  children: widget.stores
+                      .map((s) => Column(
+                            children: [
+                              Row(children: [
+                                Text(s.town),
+                                Image(
+                                    width: 75,
+                                    height: 50,
+                                    image: NetworkImage(widget
+                                        .companies[s.companyId - 1].logoUrl))
+                              ]),
+                              Expanded(
+                                child: SizedBox(
+                                  width: 200,
+                                  child: ListView(
+                                      scrollDirection: Axis.vertical,
+                                      shrinkWrap: true,
+                                      padding: const EdgeInsets.all(1),
+                                      children: widget.cart
+                                          .where((p) => p.storeId == s.id)
+                                          .map((p) => Card(
+                                              color: Colors.white,
+                                              clipBehavior: Clip.hardEdge,
+                                              child: InkWell(
+                                                  onTap: () {
+                                                      widget.cart.remove(p);
+                                                      widget.cartFinished.add(p);
+                                                      widget.setCart(widget.cart);
+                                                      widget.setCartFinished(
+                                                          widget.cartFinished);                                                    
+                                                  },
+                                                  child: ProductBox(p: p))))
+                                          .toList()
+                                          .cast<Widget>()),
+                                ),
+                              ),
+                            ],
+                          ))
+                      .toList()),
+            ),
+            SizedBox(height: 35),
+            Text("Done:", style: TextStyle(fontWeight: FontWeight.bold)),
+            Expanded(
+              child: Row(
+                  children: widget.stores
+                      .map((s) => SizedBox(
+                            width: 200,
+                            child: ListView(
+                                scrollDirection: Axis.vertical,
+                                shrinkWrap: true,
+                                padding: const EdgeInsets.all(1),
+                                children: widget.cartFinished
+                                    .where((p) => p.storeId == s.id)
+                                    .map((p) => Card(
+                                        color: Colors.white,
+                                        clipBehavior: Clip.hardEdge,
+                                        child: InkWell(
+                                            onTap: () {
+                                                widget.cart.add(p);
+                                                widget.cartFinished.remove(p);
+                                                widget.setCart(widget.cart);
+                                                widget.setCartFinished(
+                                                    widget.cartFinished);
+                                            },
+                                            child: ProductBox(p: p))))
+                                    .toList()
+                                    .cast<Widget>()),
+                          ))
+                      .toList()),
+            ),
+          ],
+        ));
   }
 }
 
@@ -549,15 +639,19 @@ class SearchPage extends StatefulWidget {
     required this.companies,
     required this.tags,
     required this.cart,
+    required this.cartFinished,
     required this.setCart,
+    required this.setCartFinished,
     required this.setTags,
   }) : super(key: key);
 
   final List<Company> companies;
   final List<Tag> tags;
   final Function setCart;
+  final Function setCartFinished;
   final Function setTags;
   final List<Product> cart;
+  final List<Product> cartFinished;
   final List<Store> stores;
   Future<List<Product>>? products;
   List<Tag> userTags = [];
@@ -651,7 +745,23 @@ class _SearchPageState extends State<SearchPage> {
                         );
                       })
                 },
-              )
+              ),
+              IconButton(
+                  icon: Icon(Icons.shopping_cart_checkout),
+                  iconSize: 32,
+                  onPressed: () => {
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => CheckOut(
+                                      companies: widget.companies,
+                                      stores: widget.stores,
+                                      cart: widget.cart,
+                                      cartFinished: widget.cartFinished,
+                                      setCart: widget.setCart,
+                                      setCartFinished: widget.setCartFinished,
+                                    )))
+                      })
             ]),
         body: Row(
             children: widget.stores
@@ -664,7 +774,7 @@ class _SearchPageState extends State<SearchPage> {
                                   style:
                                       TextStyle(fontWeight: FontWeight.bold)),
                               Image(
-                                  width: 50,
+                                  width: 70,
                                   height: 50,
                                   image: NetworkImage(widget
                                       .companies[store.companyId - 1].logoUrl))
@@ -691,14 +801,12 @@ class _SearchPageState extends State<SearchPage> {
                                                   splashColor:
                                                       Colors.blue.withAlpha(30),
                                                   onTap: () {
-                                                    setState(() {
                                                       widget.cart.contains(p)
                                                           ? widget.cart
                                                               .remove(p)
                                                           : widget.cart.add(p);
-                                                      // widget
-                                                      //     .setCart(widget.cart);
-                                                    });
+                                                      widget
+                                                          .setCart(widget.cart);
                                                   },
                                                   onLongPress: () {
                                                     showModalBottomSheet<void>(
@@ -771,16 +879,14 @@ class _SearchPageState extends State<SearchPage> {
                                                                 ElevatedButton(
                                                                   onPressed:
                                                                       () => {
-                                                                    widget.cart
-                                                                            .contains(
-                                                                                p)
+                                                                    setState(() => widget.cart.contains(p)
                                                                         ? widget
                                                                             .cart
                                                                             .remove(
                                                                                 p)
                                                                         : widget
                                                                             .cart
-                                                                            .add(p),
+                                                                            .add(p)),
                                                                     Navigator.pop(
                                                                         context)
                                                                   },
@@ -808,74 +914,7 @@ class _SearchPageState extends State<SearchPage> {
                                                           );
                                                         });
                                                   },
-                                                  child: SizedBox(
-                                                      height: 71,
-                                                      child: Column(
-                                                          crossAxisAlignment:
-                                                              CrossAxisAlignment
-                                                                  .start,
-                                                          children: [
-                                                            SizedBox(
-                                                                height: 34,
-                                                                child: Text(
-                                                                    p.name,
-                                                                    maxLines:
-                                                                        2)),
-                                                            Row(children: [
-                                                              Image.network(
-                                                                  p.pictureUrl[
-                                                                              0] ==
-                                                                          "h"
-                                                                      ? p.pictureUrl
-                                                                      : "https://${p.pictureUrl}",
-                                                                  width: 20,
-                                                                  height: 20),
-                                                              Text(p.size ==
-                                                                      "N/A"
-                                                                  ? ""
-                                                                  : p.size),
-                                                            ]),
-                                                            Row(children: [
-                                                              Text(
-                                                                  p.memberPrice ==
-                                                                          p
-                                                                              .salePrice
-                                                                      ? p
-                                                                          .basePrice
-                                                                      : "${p.basePrice} ",
-                                                                  style: TextStyle(
-                                                                      fontWeight: p.memberPrice == p.salePrice
-                                                                          ? FontWeight
-                                                                              .bold
-                                                                          : FontWeight
-                                                                              .normal)),
-                                                              Text(
-                                                                  p.salePrice ==
-                                                                          "N/A"
-                                                                      ? ""
-                                                                      : "${p.salePrice} ",
-                                                                  style: TextStyle(
-                                                                      fontWeight: p.memberPrice ==
-                                                                              "N/A"
-                                                                          ? FontWeight
-                                                                              .bold
-                                                                          : FontWeight
-                                                                              .normal,
-                                                                      fontStyle:
-                                                                          FontStyle
-                                                                              .italic)),
-                                                              Text(
-                                                                  p.memberPrice ==
-                                                                          "N/A"
-                                                                      ? ""
-                                                                      : p
-                                                                          .memberPrice,
-                                                                  style: TextStyle(
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .bold)),
-                                                            ])
-                                                          ])),
+                                                  child: ProductBox(p: p),
                                                 ),
                                               ))
                                           .toList()
@@ -893,5 +932,43 @@ class _SearchPageState extends State<SearchPage> {
                     ))
                 .toList()
                 .cast<Widget>()));
+  }
+}
+
+class ProductBox extends StatelessWidget {
+  const ProductBox({super.key, required this.p});
+
+  final Product p;
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+        height: 71,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(height: 34, child: Text(p.name, maxLines: 2)),
+          Row(children: [
+            Image.network(
+                p.pictureUrl[0] == "h"
+                    ? p.pictureUrl
+                    : "https://${p.pictureUrl}",
+                width: 20,
+                height: 20),
+            Text(p.size == "N/A" ? "" : p.size),
+          ]),
+          Row(children: [
+            Text(p.memberPrice == p.salePrice ? p.basePrice : "${p.basePrice} ",
+                style: TextStyle(
+                    fontWeight: p.memberPrice == p.salePrice
+                        ? FontWeight.bold
+                        : FontWeight.normal)),
+            Text(p.salePrice == "N/A" ? "" : "${p.salePrice} ",
+                style: TextStyle(
+                    fontWeight: p.memberPrice == "N/A"
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    fontStyle: FontStyle.italic)),
+            Text(p.memberPrice == "N/A" ? "" : p.memberPrice,
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ])
+        ]));
   }
 }

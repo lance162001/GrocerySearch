@@ -98,7 +98,7 @@ async def full_product_search(ids: List[int], tags: List[int] | None = [], searc
     # rows = sess.execute(s).all()
     # out = []
     # if tags != []:
-    #     for r in rows:
+    #     for r in rows:   
     #         if tags in r.Product.tags:
     #             out.append(r)
     # else:
