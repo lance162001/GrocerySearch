@@ -5,6 +5,7 @@ from typing import List
 from fastapi import APIRouter, Depends
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session, load_only
+from sqlalchemy.sql.expression import func
 
 from . import get_db
 
@@ -88,10 +89,10 @@ async def full_product_search(ids: List[int], tags: List[int] | None = [], searc
         models.Product.id == models.Product_Instance.product_id).where(
         models.Product_Instance.store_id.in_(ids) ).where(
         models.Product.name.like(f"%{search}%")
-        )
+    )
     for i in tags:
         s = s.where(models.Product.tags.any(models.Tag_Instance.tag_id == i))
-
+    s = s.order_by(func.length(models.Product.name))
     return paginate(sess,s)
     # def sim(a):
     #     return similar(a.Product.name,search)

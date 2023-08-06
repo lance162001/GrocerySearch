@@ -10,6 +10,11 @@ dynamic extractPage(Map<String, dynamic> json) {
   return json['items'];
 }
 
+bool testing = true;
+
+String hostname = testing ? 'localhost' : 'asktheinter.net';
+String port = '23451';
+
 Future<List<Product>> fetchProducts(List<int> storeIds,
     {String search = "",
     List<Tag> tags = const [],
@@ -18,9 +23,9 @@ Future<List<Product>> fetchProducts(List<int> storeIds,
   final String uri;
   if (search != "") {
     uri =
-        'http://asktheinter.net:23451/stores/product_search?search=$search&page=$page&size=$size';
+        'http://$hostname:$port/stores/product_search?search=$search&page=$page&size=$size';
   } else {
-    uri = 'http://asktheinter.net:23451/stores/product_search?page=$page&size=$size';
+    uri = 'http://$hostname:$port/stores/product_search?page=$page&size=$size';
   }
 
   final headers = {HttpHeaders.contentTypeHeader: 'application/json'};
@@ -47,8 +52,8 @@ Future<List<Product>> fetchProducts(List<int> storeIds,
 Future<List<Store>> fetchStores(String search,
     {int page = 1, int size = 4}) async {
   final uri = search == ""
-      ? 'http://asktheinter.net:23451/stores/search?page=$page&size=$size'
-      : 'http://asktheinter.net:23451/stores/search?search=$search&page=$page&size=$size';
+      ? 'http://$hostname:$port/stores/search?page=$page&size=$size'
+      : 'http://$hostname:$port/stores/search?search=$search&page=$page&size=$size';
 
   final headers = {HttpHeaders.contentTypeHeader: 'application/json'};
   final response = await http.get(Uri.parse(uri), headers: headers);
@@ -63,7 +68,7 @@ Future<List<Store>> fetchStores(String search,
 }
 
 Future<List<Tag>> fetchTags() async {
-  final uri = Uri.http('asktheinter.net:23451', '/products/tags');
+  final uri = Uri.http('$hostname:$port', '/products/tags');
   final headers = {HttpHeaders.contentTypeHeader: 'application/json'};
   final response = await http.get(uri, headers: headers);
   if (response.statusCode == 200) {
@@ -77,7 +82,7 @@ Future<List<Tag>> fetchTags() async {
 }
 
 Future<List<Company>> fetchCompanies() async {
-  final uri = Uri.http('asktheinter.net:23451', '/company');
+  final uri = Uri.http('$hostname:$port', '/company');
   final headers = {HttpHeaders.contentTypeHeader: 'application/json'};
   final response = await http.get(uri, headers: headers);
   if (response.statusCode == 200) {
@@ -206,11 +211,11 @@ class Product {
 
   @override
   bool operator ==(Object other) {
-    return (other is Product) && (other.id == id);
+    return (other is Product) && (other.id == id) && (other.storeId == storeId);
   }
 
   @override
-  int get hashCode => id;
+  int get hashCode => int.parse("$id$storeId");
 
   Product({
     required this.id,
@@ -294,6 +299,25 @@ class Store {
   }
 }
 
+// From https://coflutter.com/flutter-check-if-the-listview-reaches-the-top-or-the-bottom/
+void setupScrollListener(
+    {required ScrollController scrollController,
+    Function? onAtTop,
+    Function? onAtBottom}) {
+  scrollController.addListener(() {
+    if (scrollController.position.atEdge) {
+      // Reach the top of the list
+      if (scrollController.position.pixels == 0) {
+        onAtTop?.call();
+      }
+      // Reach the bottom of the list
+      else {
+        onAtBottom?.call();
+      }
+    }
+  });
+}
+
 void main() {
   runApp(MyApp());
 }
@@ -327,8 +351,8 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    fetchTags().then((t) => tags = t);
-    fetchCompanies().then((value) => companies = value);
+    fetchTags().then((t) => setState(() => tags = t));
+    fetchCompanies().then((value) => setState(() => companies = value));
     stores = fetchStores("");
   }
 
@@ -407,7 +431,7 @@ class _DashboardState extends State<Dashboard> {
           decoration: BoxDecoration(
               color: Colors.white, borderRadius: BorderRadius.circular(5)),
           child: TextFormField(
-            keyboardType: TextInputType.number,
+            keyboardType: TextInputType.text,
             onChanged: (text) => {
               setState(() {
                 widget.stores = fetchStores(text);
@@ -452,8 +476,8 @@ class _DashboardState extends State<Dashboard> {
                             return Card(
                               semanticContainer: true,
                               color: widget.userStores.contains(store)
-                                  ? Colors.blue[800]
-                                  : Colors.blue,
+                                  ? Colors.lightBlue
+                                  : const Color.fromARGB(255, 144, 220, 255),
                               clipBehavior: Clip.hardEdge,
                               child: InkWell(
                                   splashColor: Colors.blue.withAlpha(30),
@@ -493,20 +517,19 @@ class _DashboardState extends State<Dashboard> {
                         onPressed: () => {}, child: Text("Confirm Stores"))
                     : ElevatedButton(
                         onPressed: () => {
-                              Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) => SearchPage(
-                                          companies: widget.companies,
-                                          tags: widget.tags,
-                                          stores: widget.userStores,
-                                          userTags: widget.userTags,
-                                          setTags: widget.setTags,
-                                          cart: widget.cart,
-                                          cartFinished: widget.cartFinished,
-                                          setCart: widget.setCart,
-                                          setCartFinished:
-                                              widget.setCartFinished)))
+                              Navigator.push(context,
+                                  MaterialPageRoute(builder: (context) {
+                                return SearchPage(
+                                    companies: widget.companies,
+                                    tags: widget.tags,
+                                    stores: widget.userStores,
+                                    userTags: widget.userTags,
+                                    setTags: widget.setTags,
+                                    cart: widget.cart,
+                                    cartFinished: widget.cartFinished,
+                                    setCart: widget.setCart,
+                                    setCartFinished: widget.setCartFinished);
+                              }))
                             },
                         child: Text("Confirm Stores"))
               ],
@@ -551,12 +574,17 @@ class _CheckOutState extends State<CheckOut> {
           children: [
             Text("To Do:", style: TextStyle(fontWeight: FontWeight.bold)),
             Expanded(
-              child: Row(
+              child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.all(1),
                   children: widget.stores
                       .map((s) => Column(
                             children: [
                               Row(children: [
-                                Text(s.town),
+                                Text(s.town,
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold)),
                                 Image(
                                     width: 75,
                                     height: 50,
@@ -577,11 +605,11 @@ class _CheckOutState extends State<CheckOut> {
                                               clipBehavior: Clip.hardEdge,
                                               child: InkWell(
                                                   onTap: () {
-                                                      widget.cart.remove(p);
-                                                      widget.cartFinished.add(p);
-                                                      widget.setCart(widget.cart);
-                                                      widget.setCartFinished(
-                                                          widget.cartFinished);                                                    
+                                                    widget.cart.remove(p);
+                                                    widget.cartFinished.add(p);
+                                                    widget.setCart(widget.cart);
+                                                    widget.setCartFinished(
+                                                        widget.cartFinished);
                                                   },
                                                   child: ProductBox(p: p))))
                                           .toList()
@@ -595,30 +623,50 @@ class _CheckOutState extends State<CheckOut> {
             SizedBox(height: 35),
             Text("Done:", style: TextStyle(fontWeight: FontWeight.bold)),
             Expanded(
-              child: Row(
+              child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.all(1),
                   children: widget.stores
-                      .map((s) => SizedBox(
-                            width: 180,
-                            child: ListView(
-                                scrollDirection: Axis.vertical,
-                                shrinkWrap: true,
-                                padding: const EdgeInsets.all(1),
-                                children: widget.cartFinished
-                                    .where((p) => p.storeId == s.id)
-                                    .map((p) => Card(
-                                        color: Colors.white,
-                                        clipBehavior: Clip.hardEdge,
-                                        child: InkWell(
-                                            onTap: () {
-                                                widget.cart.add(p);
-                                                widget.cartFinished.remove(p);
-                                                widget.setCart(widget.cart);
-                                                widget.setCartFinished(
-                                                    widget.cartFinished);
-                                            },
-                                            child: ProductBox(p: p))))
-                                    .toList()
-                                    .cast<Widget>()),
+                      .map((s) => Column(
+                            children: [
+                              Row(children: [
+                                Text(s.town,
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold)),
+                                Image(
+                                    width: 75,
+                                    height: 50,
+                                    image: NetworkImage(widget
+                                        .companies[s.companyId - 1].logoUrl))
+                              ]),
+                              Expanded(
+                                child: SizedBox(
+                                  width: 180,
+                                  child: ListView(
+                                      scrollDirection: Axis.vertical,
+                                      shrinkWrap: true,
+                                      padding: const EdgeInsets.all(1),
+                                      children: widget.cartFinished
+                                          .where((p) => p.storeId == s.id)
+                                          .map((p) => Card(
+                                              color: Colors.white,
+                                              clipBehavior: Clip.hardEdge,
+                                              child: InkWell(
+                                                  onTap: () {
+                                                    widget.cart.add(p);
+                                                    widget.cartFinished
+                                                        .remove(p);
+                                                    widget.setCart(widget.cart);
+                                                    widget.setCartFinished(
+                                                        widget.cartFinished);
+                                                  },
+                                                  child: ProductBox(p: p))))
+                                          .toList()
+                                          .cast<Widget>()),
+                                ),
+                              ),
+                            ],
                           ))
                       .toList()),
             ),
@@ -659,6 +707,7 @@ class SearchPage extends StatefulWidget {
 class _SearchPageState extends State<SearchPage> {
   late Product selectedProduct;
   String searchTerm = "";
+  final ScrollController scrollController = ScrollController();
   final TextEditingController searchFieldController = TextEditingController();
 
   @override
@@ -670,6 +719,8 @@ class _SearchPageState extends State<SearchPage> {
   @override
   Widget build(BuildContext context) {
     List<int> storeIds = widget.stores.map((s) => s.id).toList();
+    setupScrollListener(scrollController: scrollController, onAtTop:() => 1, onAtBottom: () => widget.products );
+
     return Scaffold(
         appBar: AppBar(
             title: Container(
@@ -694,7 +745,9 @@ class _SearchPageState extends State<SearchPage> {
                       icon: const Icon(Icons.clear),
                       onPressed: () {
                         searchFieldController.clear();
-                        widget.products = fetchProducts(storeIds, tags: widget.tags);
+                        searchTerm = "";
+                        widget.products =
+                            fetchProducts(storeIds, tags: widget.tags);
                         setState(() => 1);
                       },
                     ),
@@ -764,175 +817,115 @@ class _SearchPageState extends State<SearchPage> {
                                     )))
                       })
             ]),
-        body: Row(
-            children: widget.stores
-                .map((store) => Expanded(
-                      child: Column(
-                        children: [
-                          Row(
+        body: FutureBuilder<List<Product>>(
+            future: widget.products,
+            builder: (context, snapshot) {
+              if (snapshot.hasData) {
+                List<Product> products = snapshot.data!;
+                return ListView.builder(
+                    itemCount: products.length,
+                    scrollDirection: Axis.vertical,
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.all(1),
+                    itemBuilder: (context, index) {
+                      Product p = products[index];
+                      return Card(
+                        color: widget.cart.contains(p)
+                            ? Colors.lightBlue[100]
+                            : Colors.white,
+                        clipBehavior: Clip.hardEdge,
+                        child: InkWell(
+                          splashColor: Colors.blue.withAlpha(30),
+                          onTap: () {
+                            widget.cart.contains(p)
+                                ? widget.cart.remove(p)
+                                : widget.cart.add(p);
+                            widget.setCart(widget.cart);
+                          },
+                          onLongPress: () {
+                            showModalBottomSheet<void>(
+                                context: context,
+                                builder: (BuildContext context) {
+                                  return SizedBox(
+                                    height: 225,
+                                    child: Column(
+                                      children: [
+                                        Text("${p.name}\nPrice History",
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold)),
+                                        SizedBox(
+                                          width: 200,
+                                          height: 100,
+                                          child: BarChart(
+                                            BarChartData(),
+                                            swapAnimationCurve: Curves.linear,
+                                            swapAnimationDuration:
+                                                Duration(milliseconds: 150),
+                                          ),
+                                        ),
+                                        SizedBox(height: 12),
+                                        ElevatedButton(
+                                          onPressed: () => {
+                                            setState(() =>
+                                                widget.cart.contains(p)
+                                                    ? widget.cart.remove(p)
+                                                    : widget.cart.add(p)),
+                                            Navigator.pop(context)
+                                          },
+                                          child: Column(
+                                            children: [
+                                              Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: widget.cart
+                                                          .contains(p)
+                                                      ? [
+                                                          Text(
+                                                              "Remove from Cart?"),
+                                                          Icon(Icons
+                                                              .remove_shopping_cart)
+                                                        ]
+                                                      : [
+                                                          Text("Add To Cart?"),
+                                                          Icon(Icons
+                                                              .add_shopping_cart)
+                                                        ]),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                });
+                          },
+                          child: Row(
                             children: [
-                              Text(store.town,
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold)),
-                              Image(
-                                  width: 70,
-                                  height: 50,
-                                  image: NetworkImage(widget
-                                      .companies[store.companyId - 1].logoUrl))
+                              Expanded(child: ProductBox(p: p)),
+                              Align(
+                                  alignment: Alignment.centerRight,
+                                  child: StoreRow(
+                                      store: widget.stores
+                                          .firstWhere((s) => s.id == p.storeId),
+                                      logoUrl: widget
+                                          .companies[widget.stores
+                                                  .firstWhere(
+                                                      (s) => s.id == p.storeId)
+                                                  .companyId -
+                                              1]
+                                          .logoUrl)),
                             ],
                           ),
-                          Expanded(
-                            child: FutureBuilder<List<Product>>(
-                              future: widget.products,
-                              builder: (context, snapshot) {
-                                if (snapshot.hasData) {
-                                  return ListView(
-                                      scrollDirection: Axis.vertical,
-                                      shrinkWrap: true,
-                                      padding: const EdgeInsets.all(1),
-                                      children: snapshot.data!
-                                          .where((product) =>
-                                              product.storeId == store.id)
-                                          .map((p) => Card(
-                                                color: widget.cart.contains(p)
-                                                    ? Colors.lightBlue[100]
-                                                    : Colors.white,
-                                                clipBehavior: Clip.hardEdge,
-                                                child: InkWell(
-                                                  splashColor:
-                                                      Colors.blue.withAlpha(30),
-                                                  onTap: () {
-                                                      widget.cart.contains(p)
-                                                          ? widget.cart
-                                                              .remove(p)
-                                                          : widget.cart.add(p);
-                                                      widget
-                                                          .setCart(widget.cart);
-                                                  },
-                                                  onLongPress: () {
-                                                    showModalBottomSheet<void>(
-                                                        context: context,
-                                                        builder: (BuildContext
-                                                            context) {
-                                                          return SizedBox(
-                                                            height: 225,
-                                                            child: Column(
-                                                              children: [
-                                                                Text(
-                                                                    "${p.name}\nPrice History",
-                                                                    style: TextStyle(
-                                                                        fontWeight:
-                                                                            FontWeight.bold)),
-                                                                SizedBox(
-                                                                  width: 200,
-                                                                  height: 100,
-                                                                  child:
-                                                                      BarChart(
-                                                                    BarChartData(),
-                                                                    swapAnimationCurve:
-                                                                        Curves
-                                                                            .linear,
-                                                                    swapAnimationDuration:
-                                                                        Duration(
-                                                                            milliseconds:
-                                                                                150),
-                                                                    // data: List<Map>.from(selectedProduct
-                                                                    //         .priceHistory
-                                                                    //         .map((p) => p
-                                                                    //             .toObject())
-                                                                    //         .toList()
-                                                                    //         .cast<
-                                                                    //             Map>()) +
-                                                                    //     [
-                                                                    //       selectedProduct
-                                                                    //           .toPricePoint()
-                                                                    //           .toObject()
-                                                                    //     ],
-                                                                    // variables: {
-                                                                    //   'timestamp':
-                                                                    //       Variable(
-                                                                    //     accessor: (Map
-                                                                    //             map) =>
-                                                                    //         map['timestamp']
-                                                                    //             as String,
-                                                                    //   ),
-                                                                    //   'lowestPrice':
-                                                                    //       Variable(
-                                                                    //     accessor: (Map
-                                                                    //             map) =>
-                                                                    //         map['lowestPrice']
-                                                                    //             as num,
-                                                                    //   ),
-                                                                    // },
-                                                                    // elements: [
-                                                                    //   IntervalElement()
-                                                                    // ],
-                                                                    // axes: [
-                                                                    //   Defaults
-                                                                    //       .horizontalAxis,
-                                                                    //   Defaults
-                                                                    //       .verticalAxis,
-                                                                    // ],
-                                                                  ),
-                                                                ),
-                                                                SizedBox(
-                                                                    height: 12),
-                                                                ElevatedButton(
-                                                                  onPressed:
-                                                                      () => {
-                                                                    setState(() => widget.cart.contains(p)
-                                                                        ? widget
-                                                                            .cart
-                                                                            .remove(
-                                                                                p)
-                                                                        : widget
-                                                                            .cart
-                                                                            .add(p)),
-                                                                    Navigator.pop(
-                                                                        context)
-                                                                  },
-                                                                  child: Column(
-                                                                    children: [
-                                                                      Row(
-                                                                          mainAxisAlignment: MainAxisAlignment
-                                                                              .center,
-                                                                          mainAxisSize: MainAxisSize
-                                                                              .min,
-                                                                          children: widget.cart.contains(p)
-                                                                              ? [
-                                                                                  Text("Remove from Cart?"),
-                                                                                  Icon(Icons.remove_shopping_cart)
-                                                                                ]
-                                                                              : [
-                                                                                  Text("Add To Cart?"),
-                                                                                  Icon(Icons.add_shopping_cart)
-                                                                                ]),
-                                                                    ],
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          );
-                                                        });
-                                                  },
-                                                  child: ProductBox(p: p),
-                                                ),
-                                              ))
-                                          .toList()
-                                          .cast<Widget>());
-                                } else if (snapshot.hasError) {
-                                  return Text('${snapshot.error}');
-                                } else {
-                                  return CircularProgressIndicator();
-                                }
-                              },
-                            ),
-                          )
-                        ],
-                      ),
-                    ))
-                .toList()
-                .cast<Widget>()));
+                        ),
+                      );
+                    });
+              } else if (snapshot.hasError) {
+                return Text('${snapshot.error}');
+              } else {
+                return CircularProgressIndicator();
+              }
+            }));
   }
 }
 
@@ -945,7 +938,9 @@ class ProductBox extends StatelessWidget {
     return SizedBox(
         height: 71,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(height: 34, child: Text(p.name, maxLines: 2)),
+          SizedBox(
+              height: 34,
+              child: Text(testing ? "${p.name} ${p.id}" : p.name, maxLines: 2)),
           Row(children: [
             Image.network(
                 p.pictureUrl[0] == "h"
@@ -971,5 +966,21 @@ class ProductBox extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.bold)),
           ])
         ]));
+  }
+}
+
+class StoreRow extends StatelessWidget {
+  const StoreRow({super.key, required this.store, required this.logoUrl});
+
+  final Store store;
+  final String logoUrl;
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(store.town, style: TextStyle(fontWeight: FontWeight.bold)),
+        Image(width: 70, height: 50, image: NetworkImage(logoUrl))
+      ],
+    );
   }
 }

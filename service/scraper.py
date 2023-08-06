@@ -16,40 +16,46 @@ from sqlalchemy.orm import Session
 from models import Product, Product_Instance, PricePoint, Store, Tag, Tag_Instance, Company
 from urllib.request import Request, urlopen
 import json
+import re
 
 sess = Session(engine)
 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36'}
 
-
 doing_it_with_selenium = False
 
-categories = ["produce","dairy-eggs","meat","prepared-foods","pantry-essentials","breads-rolls-bakery","desserts","frozen-foods","snacks-chips-salsas-dips","seafood","beverages"]
+wf_categories = ["produce","dairy-eggs","meat","prepared-foods","pantry-essentials","breads-rolls-bakery","desserts","frozen-foods","snacks-chips-salsas-dips","seafood","beverages"]
+tj_categories = ["Fresh Fruit and Veggies","Dairy & Eggs","Meat, Seafood & Plant-based","For the Pantry","Bakery","Candies & Cookies", "From The Freezer", ["Chips, Crackers & Crunchy Bites", "Nuts, Dried Fruits, Seeds", "Bars, Jerky &... Surprises"]]
+categories = ["product", "dairy-eggs", "meat", "prepared-foods", "pantry", "bakery", "desserts", "frozen", "snacks", "seafood", "beverages"]
 diet_types = ["organic", "vegan", "kosher", "gluten free", "dairy free", "vegetarian"]
 tags = {}
 
 def setup():
-    wf = Company(logo_url="https://external-content.duckduckgo.com/iu/?u=http%3A%2F%2Fwww.sott.net%2Fimage%2Fimage%2Fs5%2F102602%2Ffull%2Fwholefoods.png&f=1&nofb=1&ipt=21419f3cd82d823842c0297318a102a87ac9b6b801dd2417cc5661c32591fbc4&ipo=images", name="Whole Foods")
-    joes = Company(logo_url="https://logos-world.net/wp-content/uploads/2022/02/Trader-Joes-Emblem.png", name="Trader Joes")
-    test_wf = Store(company_id=1, scraper_id=10413, address="442 Washington St", zipcode='02482', town='Wellesley', state='Massachusetts')
-    test_joes = Store(company_id=2, scraper_id=509, address="958 Highland Ave", zipcode='02494', town='Needham', state='Massachusetts')
+    toAdd = []
+    toAdd.append(Company(logo_url="https://external-content.duckduckgo.com/iu/?u=http%3A%2F%2Fwww.sott.net%2Fimage%2Fimage%2Fs5%2F102602%2Ffull%2Fwholefoods.png&f=1&nofb=1&ipt=21419f3cd82d823842c0297318a102a87ac9b6b801dd2417cc5661c32591fbc4&ipo=images", name="Whole Foods"))
+    toAdd.append(Company(logo_url="https://logos-world.net/wp-content/uploads/2022/02/Trader-Joes-Emblem.png", name="Trader Joes"))
+    toAdd.append(Store(company_id=1, scraper_id=10413, address="442 Washington St", zipcode='02482', town='Wellesley', state='Massachusetts'))
+    toAdd.append(Store(company_id=2, scraper_id=509, address="958 Highland Ave", zipcode='02494', town='Needham', state='Massachusetts'))
+    toAdd.append(Store(company_id=1, scraper_id=10319, address="300 Legacy Pl", zipcode="02026", town="Dedham", state="Massachusetts"))
+    toAdd.append(Store(company_id=2, scraper_id=512, address="375 Russell St", zipcode='01035', town='Hadley', state='Massachusetts'))
+
     count = 1
     for t in categories:
         tags[t] = count
         count+=1
-        sess.add(Tag(name=t))
+        toAdd.append(Tag(name=t))
     for t in diet_types:
         tags[t] = count
         count+=1
-        sess.add(Tag(name=t))
-    sess.add(Tag(name="local"))
+        toAdd.append(Tag(name=t))
+    toAdd.append(Tag(name="local"))
     tags['local'] = count
-    sess.add_all([wf,test_wf,joes,test_joes])
+    sess.add_all(toAdd)
     sess.commit()
     return sess.query(Store).all()
 
 def whole_foods(store_id, store_code):
     names = []
-    for category in categories:
+    for category in wf_categories:
         offset = 0
         limit = 60
         url = f"https://www.wholefoodsmarket.com/api/products/category/[leafCategory]?leafCategory={category}&store={store_code}&limit=60&offset="
@@ -77,10 +83,18 @@ def whole_foods(store_id, store_code):
             # if "/" in raw['regularPrice']:
             #     size = "per " + raw['regularPrice'].split("/")[-1] # almost always lb        
             # else:
+            n = raw['name'].lower()
             for i in [ "fl oz", "lb", "oz"," gram ","ml"]:
-                if " " + i in raw['name'] or " "+i+" " in raw['name'] or " "+i+"s " in raw['name'] or " "+i+")" in raw['name']:
-                    size = raw['name'].split(",")[-1]
+                if " " + i in n or " "+i+" " in n or " "+i+"s " in n or " "+i+")" or (i in n and "m"+i not in n):   
+                    unitIndex = max(0,n.find(i)-2)
+                    aroundUnit = n[unitIndex:unitIndex+len(i)+3]
+                    num = re.findall("\d+\.*\d+", aroundUnit)
+                    if num == []:
+                        break
+                    size = f"{num[0]} {i}"
                     raw['name'] = raw['name'][0:len(raw['name'])-len(size)-1].strip()
+                    if len(raw['name']) < 4:
+                        raw['name'] = n
                     break
             if raw['name'][0:1] == "PB" and raw['brand'] == "Renpure":
                 size = raw['name'][-5]
@@ -103,6 +117,12 @@ def whole_foods(store_id, store_code):
                 )
                 sess.add(prod)
                 sess.flush()
+                for i in diet_types:
+                    if i in n:
+                        sess.add(Tag_Instance(
+                            product_id = prod.id,
+                            tag_id = tags[i]
+                        ))
                 if raw['isLocal']:
                     t = Tag_Instance(
                         product_id = prod.id,
@@ -111,7 +131,7 @@ def whole_foods(store_id, store_code):
                     sess.add(t)
                 sess.add(Tag_Instance(
                     product_id = prod.id,
-                    tag_id = tags[category]
+                    tag_id = tags[categories[wf_categories.index(category)]]
                 ))
             inst = sess.query(Product_Instance).filter(Product_Instance.store_id == store_id, Product_Instance.product_id == prod.id).first()
             if inst == None:
@@ -137,8 +157,6 @@ def whole_foods(store_id, store_code):
                 instance_id = inst.id)
             sess.add(pricepoint)
         sess.commit()
-
-
 
 def trader_joes(store_id, store_code):
     url = "https://www.traderjoes.com/api/graphql"
@@ -187,10 +205,26 @@ def trader_joes(store_id, store_code):
             if raw['item_characteristics'] != None:
                 for i in raw['item_characteristics']:
                     if i.lower() in tags.keys():
-                        sess.add(Tag_Instance(
+                        t.append(Tag_Instance(
                             product_id = p.id,
                             tag_id = tags[i.lower()]
                         ))
+            ch = raw['category_hierarchy'][2]['name']
+            for index, category in enumerate(tj_categories):
+                if len(category) < 5:
+                    for c in category:
+                        if ch == c:
+                            t.append(Tag_Instance(
+                                product_id = p.id,
+                                tag_id = tags[categories[index]]
+                            ))
+                else:
+                    if ch == category:
+                        t.append(Tag_Instance(
+                            product_id = p.id,
+                            tag_id = tags[categories[index]]
+                        ))
+            sess.add_all(t)
         inst = sess.query(Product_Instance).filter(Product_Instance.store_id == store_id, Product_Instance.product_id == p.id).first()
         if inst == None:
             inst = Product_Instance(
@@ -210,19 +244,19 @@ def trader_joes(store_id, store_code):
     sess.commit()
 
 
-def get_joes_store(zipcode):
-    store_search_url = "https://alphaapi.brandify.com/rest/locatorsearch"
-    store_search_body = {
+def get_joes_store(stores,searchterm):
+    url = "https://alphaapi.brandify.com/rest/locatorsearch"
+    body = {
         "request": {
             "appkey": "8BC3433A-60FC-11E3-991D-B2EE0C70A832",
             "formdata": {
             "geoip": false,
             "dataview": "store_default",
-            "limit": 4,
+            "limit": 1,
             "geolocs": {
                 "geoloc": [
                 {
-                    "addressline": "02481",
+                    "addressline": searchterm,
                     "country": "US",
                     "latitude": "",
                     "longitude": ""
@@ -239,6 +273,24 @@ def get_joes_store(zipcode):
             }
         }
         }
+    json_bytes = json.dumps(body).encode('utf-8')
+    req = Request(url, json_bytes, headers)
+    response = urlopen(req)
+    results = json.loads(response.read())['collection'][0]
+    store = Store(
+        company_id = 2,
+        scraper_id = results['clientkey'],
+        address = results['address1'],
+        state = results['state'],
+        town = results['town'],
+        zipcode = results['postalcode']
+    )
+    for s in stores:
+        if s.scraper_id == store.scraper_id:
+            return 0
+    sess.add(store)
+    sess.commit()
+    return 1
 
 stores = sess.query(Store).all()
 if stores == []:
@@ -343,9 +395,9 @@ if doing_it_with_selenium:
             b.quit()
             return BeautifulSoup(html, 'html.parser').find_all(class_="w-pie--product-tile")
         rawProducts = []
-        categories = ["produce","dairy-eggs","meat","prepared-foods","pantry-essentials","breads-rolls-bakery","desserts","frozen-foods","snacks-chips-salsas-dips","seafood","beverages"]
+        wf_categories = ["produce","dairy-eggs","meat","prepared-foods","pantry-essentials","breads-rolls-bakery","desserts","frozen-foods","snacks-chips-salsas-dips","seafood","beverages"]
         with ThreadPoolExecutor(max_workers=WORKERS) as executor:
-            future_to_data = {executor.submit(get_category, category): category for category in categories}
+            future_to_data = {executor.submit(get_category, category): category for category in wf_categories}
             for future in as_completed(future_to_data):
                 category = future_to_data[future]
 
