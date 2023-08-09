@@ -10,12 +10,12 @@ dynamic extractPage(Map<String, dynamic> json) {
   return json['items'];
 }
 
-bool testing = true;
+bool local = false;
 
 String addr = 'localhost';
 String port = '23451';
 
-String hostname = testing ? addr : 'asktheinter.net';
+String hostname = local ? addr : 'asktheinter.net';
 
 Future<List<Product>> fetchProducts(List<int> storeIds,
     {String search = "",
@@ -849,22 +849,27 @@ class _SearchPageState extends State<SearchPage> {
                       })
                 },
               ),
-              IconButton(
-                  icon: Icon(Icons.shopping_cart_checkout),
-                  iconSize: 32,
-                  onPressed: () => {
-                        Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => CheckOut(
-                                      companies: widget.companies,
-                                      stores: widget.stores,
-                                      cart: widget.cart,
-                                      cartFinished: widget.cartFinished,
-                                      setCart: widget.setCart,
-                                      setCartFinished: widget.setCartFinished,
-                                    )))
-                      })
+              Row(
+                children: [
+                  Text(widget.cart.length.toString()),
+                  IconButton(
+                      icon: Icon(Icons.shopping_cart_checkout),
+                      iconSize: 32,
+                      onPressed: () => {
+                            Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) => CheckOut(
+                                          companies: widget.companies,
+                                          stores: widget.stores,
+                                          cart: widget.cart,
+                                          cartFinished: widget.cartFinished,
+                                          setCart: widget.setCart,
+                                          setCartFinished: widget.setCartFinished,
+                                        )))
+                          }),
+                ],
+              )
             ]),
         body: FutureBuilder<List<Product>>(
             future: widget.products,
@@ -1056,7 +1061,7 @@ class StoreRow extends StatelessWidget {
             children: [
               Text(store.town,
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              Image(width: 45, height: 30, image: NetworkImage(logoUrl))
+              Image(width: 30 , height: 30, image: NetworkImage(logoUrl))
             ],
           ),
         ],
