@@ -9,7 +9,7 @@
 
 # import sys
 # import time
-# from concurrent.futures import ThreadPoolExecutor, wait, as_completed
+from concurrent.futures import ThreadPoolExecutor, wait, as_completed
 
 from models.base import Base, engine
 from sqlalchemy.orm import Session
@@ -25,7 +25,7 @@ doing_it_with_selenium = False
 
 wf_categories = ["produce","dairy-eggs","meat","prepared-foods","pantry-essentials","breads-rolls-bakery","desserts","frozen-foods","snacks-chips-salsas-dips","seafood","beverages"]
 tj_categories = ["Fresh Fruit and Veggies","Dairy & Eggs","Meat, Seafood & Plant-based","For the Pantry","Bakery","Candies & Cookies", "From The Freezer", ["Chips, Crackers & Crunchy Bites", "Nuts, Dried Fruits, Seeds", "Bars, Jerky &... Surprises"]]
-categories = ["product", "dairy-eggs", "meat", "prepared-foods", "pantry", "bakery", "desserts", "frozen", "snacks", "seafood", "beverages"]
+categories = ["produce", "dairy-eggs", "meat", "prepared-foods", "pantry", "bakery", "desserts", "frozen", "snacks", "seafood", "beverages"]
 diet_types = ["organic", "vegan", "kosher", "gluten free", "dairy free", "vegetarian"]
 tags = {}
 
@@ -37,6 +37,7 @@ def setup():
     toAdd.append(Store(company_id=2, scraper_id=509, address="958 Highland Ave", zipcode='02494', town='Needham', state='Massachusetts'))
     toAdd.append(Store(company_id=1, scraper_id=10319, address="300 Legacy Pl", zipcode="02026", town="Dedham", state="Massachusetts"))
     toAdd.append(Store(company_id=2, scraper_id=512, address="375 Russell St", zipcode='01035', town='Hadley', state='Massachusetts'))
+    toAdd.append(Store(company_id=1, scraper_id=10156, address="575 Worcester Rd", zipcode='01701', town='Framingham', state='Massachusetts'))
 
     count = 1
     for t in categories:
@@ -54,7 +55,7 @@ def setup():
     return sess.query(Store).all()
 
 def whole_foods(store_id, store_code):
-    names = []
+    slugs = []
     for category in wf_categories:
         offset = 0
         limit = 60
@@ -71,10 +72,8 @@ def whole_foods(store_id, store_code):
             if results == []:
                 break
             for i in results:
-                if i['name'] in names:
-                    print(f"{i['name']} is already in raw products???")
-                else:
-                    names.append(i['name'])
+                if i['slug'] not in slugs:
+                    slugs.append(i['slug'])
                     raw_products.append(i)
             print(offset)
             offset += limit
@@ -84,15 +83,22 @@ def whole_foods(store_id, store_code):
             #     size = "per " + raw['regularPrice'].split("/")[-1] # almost always lb        
             # else:
             n = raw['name'].lower()
-            for i in [ "fl oz", "lb", "oz"," gram ","ml"]:
-                if " " + i in n or " "+i+" " in n or " "+i+"s " in n or " "+i+")" or (i in n and "m"+i not in n):   
-                    unitIndex = max(0,n.find(i)-2)
-                    aroundUnit = n[unitIndex:unitIndex+len(i)+3]
-                    num = re.findall("\d+\.*\d+", aroundUnit)
-                    if num == []:
+            for i in [ "fl oz", "lb", "oz"," gram ","ml", "pound"]:
+                if i in n:
+                    unitIndex = max(0,n.find(i)-4)
+                    aroundUnit = n[unitIndex:unitIndex+len(i)+4]
+                    num = re.findall("(\d+(\.\d+)?)|(\.\d+)", aroundUnit)
+                    if num == [] or num[0][0] == "":
                         break
-                    size = f"{num[0]} {i}"
-                    raw['name'] = raw['name'][0:len(raw['name'])-len(size)-1].strip()
+                    size = f"{num[0][0]} {i}"
+                    raw['name'] = "".join(raw['name'].split(size))
+                    l = raw['name'].split(",")
+                    if len(l) > 1:
+                        del l[-1]
+                        raw['name'] = "".join(l)
+
+
+
                     if len(raw['name']) < 4:
                         raw['name'] = n
                     break
@@ -292,18 +298,42 @@ def get_joes_store(stores,searchterm):
     sess.commit()
     return 1
 
+def get_any(stores):
+    for s in stores:
+        if s.company_id == 1:
+            whole_foods(s.id, s.scraper_id)
+        if s.company_id == 2:
+            trader_joes(s.id, s.scraper_id)
+
 stores = sess.query(Store).all()
 if stores == []:
     stores = setup()
 else:
     for t in sess.query(Tag).all():
         tags[t.name] = t.id
-for store in stores:
-    if store.company_id == 1:
-        whole_foods(store.id, store.scraper_id)
-    elif store.company_id == 2:
-        trader_joes(store.id, store.scraper_id)
 
+get_any(stores)
+
+# seperated_stores = [[],[]]
+# for store in stores:
+#     if store.company_id == 1:
+#         seperated_stores[0].append(store)
+#     elif store.company_id == 2:
+#         seperated_stores[1].append(store)
+
+# WORKERS = 2
+# print(seperated_stores)
+# with ThreadPoolExecutor(max_workers=WORKERS) as executor:
+#     future_to_data = {executor.submit(get_any, s): s for s in seperated_stores}
+#     for future in as_completed(future_to_data):
+#         l = future_to_data[future]
+#         try:
+#             data = future.result()
+#             print(data)
+#         except Exception as exc:
+#             print('%r generated an exception: %s' % (l, exc))
+#         else:
+#             print(f"{l[0].company_id} worked!")
 
 
 
