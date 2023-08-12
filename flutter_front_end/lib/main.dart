@@ -11,7 +11,7 @@ dynamic extractPage(Map<String, dynamic> json) {
   return json['items'];
 }
 
-bool local = true;
+bool local = false;
 
 String addr = 'localhost';
 String port = '23451';
