@@ -33,7 +33,6 @@ class Product(BaseModel):
 	class Config:
 		orm_mode = True
 
-
 class Product_Instance(BaseModel):
 	store_id: int
 	price_points: List[PricePoint] = []

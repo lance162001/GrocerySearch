@@ -33,6 +33,6 @@ class Tag(Base,BaseModel):
 
 class Tag_Instance(Base, BaseModel):
     __tablename__ = 'tag_instances'
-    product_id = Column(Integer, ForeignKey('products.id'))
+    product_id = Column(Integer, ForeignKey('products.id'), index=True)
     product = relationship("Product", back_populates='tags')
     tag_id = Column(Integer, ForeignKey("tags.id"))

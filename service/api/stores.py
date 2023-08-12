@@ -87,7 +87,9 @@ async def get_all_companies(sess: Session=Depends(get_db)):
 async def full_product_search(ids: List[int], tags: List[int] | None = [], search: str | None = "", sess: Session=Depends(get_db)):
     s = select(models.Product, models.Product_Instance).where(
         models.Product.id == models.Product_Instance.product_id).where(
-        models.Product_Instance.store_id.in_(ids) ).where(
+        models.Product_Instance.store_id.in_(ids) )
+    if search != "":
+        s = s.where(
         models.Product.name.like(f"%{search}%")
     )
     for i in tags:

@@ -3,6 +3,7 @@ import 'dart:core';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'chart.dart';
 
@@ -10,7 +11,7 @@ dynamic extractPage(Map<String, dynamic> json) {
   return json['items'];
 }
 
-bool local = false;
+bool local = true;
 
 String addr = 'localhost';
 String port = '23451';
@@ -41,11 +42,11 @@ Future<List<Product>> fetchProducts(List<int> storeIds,
     // If the server did return a 200 OK response,
     // then parse the JSON.
     return [
+      ...toAdd,
       ...extractPage(jsonDecode(response.body))
           .map((j) => Product.fromJson(j))
           .toList()
-          .cast<Product>(),
-      ...toAdd
+          .cast<Product>()
     ];
   } else {
     print(response.body);
@@ -343,6 +344,13 @@ Widget getNotification(List<PricePoint> pricepoints) {
   return icon;
 }
 
+Widget getImage(String url, double width, double height) {
+  return CachedNetworkImage(
+      imageUrl: url[0] == "h" ? url : "https://$url",
+      width: width,
+      height: height);
+}
+
 void main() {
   runApp(MyApp());
 }
@@ -363,6 +371,7 @@ class _MyAppState extends State<MyApp> {
   List<Product> cart = [];
   List<Product> cartFinished = [];
   List<Tag> userTags = [];
+  String searchTerm = "";
   void setTags(Tag tag) => setState(
       () => userTags.contains(tag) ? userTags.remove(tag) : userTags.add(tag));
 
@@ -372,6 +381,7 @@ class _MyAppState extends State<MyApp> {
   void setStore(Store store) => setState(() => userStores.contains(store)
       ? userStores.remove(store)
       : userStores.add(store));
+  void setSearchTerm(String term) => setState(() => searchTerm = term);
 
   @override
   void initState() {
@@ -388,17 +398,20 @@ class _MyAppState extends State<MyApp> {
       routes: {
         '/chart': (context) => BarChartSample4(),
         '/': (context) => Dashboard(
-            companies: companies,
-            tags: tags,
-            setTags: setTags,
-            stores: stores,
-            userStores: userStores,
-            userTags: userTags,
-            cart: cart,
-            cartFinished: cartFinished,
-            setStore: setStore,
-            setCart: setCart,
-            setCartFinished: setCartFinished),
+              companies: companies,
+              tags: tags,
+              setTags: setTags,
+              stores: stores,
+              userStores: userStores,
+              userTags: userTags,
+              cart: cart,
+              cartFinished: cartFinished,
+              setStore: setStore,
+              setCart: setCart,
+              setCartFinished: setCartFinished,
+              searchTerm: searchTerm,
+              setSearchTerm: setSearchTerm,
+            )
       },
       debugShowCheckedModeBanner: false,
       title: 'GrocerySearch testing',
@@ -417,6 +430,8 @@ class Dashboard extends StatefulWidget {
     required this.stores,
     required this.userStores,
     required this.userTags,
+    required this.searchTerm,
+    required this.setSearchTerm,
     required this.setStore,
     required this.setCart,
     required this.setCartFinished,
@@ -436,6 +451,8 @@ class Dashboard extends StatefulWidget {
   final Function setTags;
   final List<Product> cart;
   final List<Product> cartFinished;
+  final String searchTerm;
+  final Function setSearchTerm;
 
   @override
   State<Dashboard> createState() => _DashboardState();
@@ -507,12 +524,11 @@ class _DashboardState extends State<Dashboard> {
                                 },
                                 child: Column(children: [
                                   widget.companies.isNotEmpty
-                                      ? Image(
-                                          width: 100,
-                                          height: 100,
-                                          image: NetworkImage(widget
-                                              .companies[store.companyId - 1]
-                                              .logoUrl))
+                                      ? getImage(
+                                          widget.companies[store.companyId - 1]
+                                              .logoUrl,
+                                          100,
+                                          100)
                                       : CircularProgressIndicator(),
                                   Text(store.town,
                                       style: TextStyle(
@@ -542,15 +558,18 @@ class _DashboardState extends State<Dashboard> {
                           Navigator.push(context,
                               MaterialPageRoute(builder: (context) {
                             return SearchPage(
-                                companies: widget.companies,
-                                tags: widget.tags,
-                                stores: widget.userStores,
-                                userTags: widget.userTags,
-                                setTags: widget.setTags,
-                                cart: widget.cart,
-                                cartFinished: widget.cartFinished,
-                                setCart: widget.setCart,
-                                setCartFinished: widget.setCartFinished);
+                              companies: widget.companies,
+                              tags: widget.tags,
+                              stores: widget.userStores,
+                              userTags: widget.userTags,
+                              setTags: widget.setTags,
+                              cart: widget.cart,
+                              cartFinished: widget.cartFinished,
+                              setCart: widget.setCart,
+                              setCartFinished: widget.setCartFinished,
+                              searchTerm: widget.searchTerm,
+                              setSearchTerm: widget.setSearchTerm,
+                            );
                           }))
                         },
                     child: Text("Confirm Stores")),
@@ -606,11 +625,10 @@ class _CheckOutState extends State<CheckOut> {
                                 Text(s.town,
                                     style:
                                         TextStyle(fontWeight: FontWeight.bold)),
-                                Image(
-                                    width: 75,
-                                    height: 50,
-                                    image: NetworkImage(widget
-                                        .companies[s.companyId - 1].logoUrl))
+                                getImage(
+                                    widget.companies[s.companyId - 1].logoUrl,
+                                    75,
+                                    50),
                               ]),
                               Expanded(
                                 child: SizedBox(
@@ -655,11 +673,10 @@ class _CheckOutState extends State<CheckOut> {
                                 Text(s.town,
                                     style:
                                         TextStyle(fontWeight: FontWeight.bold)),
-                                Image(
-                                    width: 75,
-                                    height: 50,
-                                    image: NetworkImage(widget
-                                        .companies[s.companyId - 1].logoUrl))
+                                getImage(
+                                    widget.companies[s.companyId - 1].logoUrl,
+                                    75,
+                                    50),
                               ]),
                               Expanded(
                                 child: SizedBox(
@@ -708,6 +725,8 @@ class SearchPage extends StatefulWidget {
     required this.setCart,
     required this.setCartFinished,
     required this.setTags,
+    required this.searchTerm,
+    required this.setSearchTerm,
   }) : super(key: key);
 
   final List<Company> companies;
@@ -715,6 +734,9 @@ class SearchPage extends StatefulWidget {
   final Function setCart;
   final Function setCartFinished;
   final Function setTags;
+  final Function setSearchTerm;
+  final String searchTerm;
+  String termt = "";
   final List<Product> cart;
   final List<Product> cartFinished;
   final List<Store> stores;
@@ -729,19 +751,23 @@ class _SearchPageState extends State<SearchPage> {
   late Product selectedProduct;
   int page = 1;
   int pageLength = 100;
-  String searchTerm = "";
   final ScrollController scrollController = ScrollController();
-  final TextEditingController searchFieldController = TextEditingController();
+  TextEditingController searchFieldController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    widget.products = fetchProducts(widget.stores.map((s) => s.id).toList());
+    widget.products = fetchProducts(widget.stores.map((s) => s.id).toList(),
+        search: widget.termt, tags: widget.userTags, page: page);
   }
 
   @override
   Widget build(BuildContext context) {
     List<int> storeIds = widget.stores.map((s) => s.id).toList();
+    void s() {
+      setState(() => 1);
+    }
+
     setupScrollListener(
         scrollController: scrollController,
         onAtTop: () => 1,
@@ -752,18 +778,15 @@ class _SearchPageState extends State<SearchPage> {
               print(page);
             } else {
               print("${v.length} < ${page * pageLength}");
-
               return;
             }
-            page = 1;
             widget.products = fetchProducts(
               storeIds,
-              search: searchTerm,
+              search: widget.termt,
               tags: widget.userTags,
               page: page,
               toAdd: v,
             );
-            setState(() => 1);
           });
         });
 
@@ -776,14 +799,14 @@ class _SearchPageState extends State<SearchPage> {
                   color: Colors.white, borderRadius: BorderRadius.circular(5)),
               child: TextField(
                 onSubmitted: (text) {
-                  searchTerm = text;
                   page = 1;
+                  widget.termt = text;
                   widget.products = fetchProducts(
                     storeIds,
                     search: text,
                     tags: widget.userTags,
                   );
-                  setState(() => 1);
+                  setState(() {});
                 },
                 controller: searchFieldController,
                 decoration: InputDecoration(
@@ -792,11 +815,12 @@ class _SearchPageState extends State<SearchPage> {
                       icon: const Icon(Icons.clear),
                       onPressed: () {
                         searchFieldController.clear();
-                        searchTerm = "";
+                        widget.termt = "";
                         page = 1;
+
                         widget.products =
                             fetchProducts(storeIds, tags: widget.userTags);
-                        setState(() => 1);
+                        widget.products!.then((v) => setState(() => 1));
                       },
                     ),
                     hintText: 'Search By Product...',
@@ -811,41 +835,52 @@ class _SearchPageState extends State<SearchPage> {
                   showModalBottomSheet<void>(
                       context: context,
                       builder: (BuildContext context) {
-                        return SizedBox(
-                          height: 200,
-                          child: Column(
-                            children: [
-                              Text("Filter By Tags",
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold)),
-                              SizedBox(height: 5),
-                              SizedBox(
-                                height: 175,
-                                child: SingleChildScrollView(
-                                  child: Wrap(
-                                      spacing: 5.0,
-                                      children: widget.tags
-                                          .map((tag) => FilterChip(
-                                              label: Text(tag.name),
-                                              selected:
-                                                  widget.userTags.contains(tag),
-                                              onSelected: (bool selected) {
-                                                page = 1;
-                                                widget.setTags(tag);
-                                                widget.products = fetchProducts(
-                                                  storeIds,
-                                                  search: searchTerm,
-                                                  tags: widget.userTags,
-                                                );
-                                                setState(() => 1);
-                                              }))
-                                          .toList()
-                                          .cast<Widget>()),
+                        return StatefulBuilder(builder:
+                            (BuildContext context, StateSetter setState) {
+                          return SizedBox(
+                            height: 175,
+                            child: Column(
+                              children: [
+                                Text("Filter By Tags",
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold)),
+                                SizedBox(height: 5),
+                                SizedBox(
+                                  height: 150,
+                                  child: SingleChildScrollView(
+                                    child: Wrap(
+                                        runSpacing: 2,
+                                        spacing: 5.0,
+                                        children: widget.tags
+                                            .map((tag) => FilterChip(
+                                                label: Text(tag.name),
+                                                selected: widget.userTags
+                                                    .contains(tag),
+                                                onSelected: (bool selected) {
+                                                  page = 1;
+                                                  widget.userTags.contains(tag)
+                                                      ? widget.userTags
+                                                          .remove(tag)
+                                                      : widget.userTags
+                                                          .add(tag);
+                                                  widget.products =
+                                                      fetchProducts(
+                                                    storeIds,
+                                                    search: widget.termt,
+                                                    tags: widget.userTags,
+                                                  );
+                                                  setState(() => 1);
+                                                  widget.products!
+                                                      .then((v) => s());
+                                                }))
+                                            .toList()
+                                            .cast<Widget>()),
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        );
+                              ],
+                            ),
+                          );
+                        });
                       })
                 },
               ),
@@ -865,7 +900,8 @@ class _SearchPageState extends State<SearchPage> {
                                           cart: widget.cart,
                                           cartFinished: widget.cartFinished,
                                           setCart: widget.setCart,
-                                          setCartFinished: widget.setCartFinished,
+                                          setCartFinished:
+                                              widget.setCartFinished,
                                         )))
                           }),
                 ],
@@ -962,6 +998,9 @@ class _SearchPageState extends State<SearchPage> {
                           child: Row(
                             children: [
                               Expanded(child: ProductBox(p: p)),
+                              Expanded(
+                                child: getImage(p.pictureUrl, 60, 60),
+                              ),
                               StoreRow(
                                   product: p,
                                   store: widget.stores
@@ -1001,12 +1040,7 @@ class ProductBox extends StatelessWidget {
               child: Text(p.name,
                   overflow: TextOverflow.fade, softWrap: true, maxLines: 2)),
           Row(children: [
-            Image.network(
-                p.pictureUrl[0] == "h"
-                    ? p.pictureUrl
-                    : "https://${p.pictureUrl}",
-                width: 24,
-                height: 24),
+            getImage(p.pictureUrl, 24, 24),
             Expanded(
               child: Text(p.size == "N/A" ? "" : "  ${p.size}"),
             ),
@@ -1061,7 +1095,7 @@ class StoreRow extends StatelessWidget {
             children: [
               Text(store.town,
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              Image(width: 30 , height: 30, image: NetworkImage(logoUrl))
+              getImage(logoUrl, 30, 30)
             ],
           ),
         ],
