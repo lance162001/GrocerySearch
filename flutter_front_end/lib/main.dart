@@ -787,6 +787,7 @@ class _SearchPageState extends State<SearchPage> {
               page: page,
               toAdd: v,
             );
+            setState(() => {});
           });
         });
 
