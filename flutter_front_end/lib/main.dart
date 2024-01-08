@@ -11,12 +11,12 @@ dynamic extractPage(Map<String, dynamic> json) {
   return json['items'];
 }
 
-bool local = false;
+//// CHANGE ME
+bool local = true;
+////
 
-String addr = 'localhost';
-String port = '23451';
-
-String hostname = local ? addr : 'asktheinter.net';
+String hostname = local ? 'localhost' : 'asktheinter.net';
+String port = local ? '8000' : '23451';
 
 Future<List<Product>> fetchProducts(List<int> storeIds,
     {String search = "",
@@ -1034,10 +1034,10 @@ class ProductBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-        height: 71,
+        height: 80,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SizedBox(
-              height: 34,
+              height: 40,
               child: Text(p.name,
                   overflow: TextOverflow.fade, softWrap: true, maxLines: 2)),
           Row(children: [
