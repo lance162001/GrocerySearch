@@ -2,17 +2,21 @@ import 'dart:convert';
 import 'dart:core';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_front_end/check_out.dart';
+import 'package:flutter_front_end/main_search.dart';
+import 'package:flutter_front_end/product_box.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'chart.dart';
+import 'package:flutter_front_end/pretty_search.dart';
 
 dynamic extractPage(Map<String, dynamic> json) {
   return json['items'];
 }
 
 //// CHANGE ME
-bool local = true;
+bool local = false;
 ////
 
 String hostname = local ? 'localhost' : 'asktheinter.net';
@@ -397,7 +401,8 @@ class _MyAppState extends State<MyApp> {
       initialRoute: '/',
       routes: {
         '/chart': (context) => BarChartSample4(),
-        '/': (context) => Dashboard(
+        '/testing' : () => ,
+        '/': (context) => StoreSearch(
               companies: companies,
               tags: tags,
               setTags: setTags,
@@ -422,296 +427,6 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-class Dashboard extends StatefulWidget {
-  Dashboard({
-    Key? key,
-    required this.companies,
-    required this.tags,
-    required this.stores,
-    required this.userStores,
-    required this.userTags,
-    required this.searchTerm,
-    required this.setSearchTerm,
-    required this.setStore,
-    required this.setCart,
-    required this.setCartFinished,
-    required this.setTags,
-    required this.cart,
-    required this.cartFinished,
-  }) : super(key: key);
-
-  final List<Company> companies;
-  final List<Tag> tags;
-  Future<List<Store>> stores;
-  List<Store> userStores;
-  List<Tag> userTags;
-  final Function setStore;
-  final Function setCart;
-  final Function setCartFinished;
-  final Function setTags;
-  final List<Product> cart;
-  final List<Product> cartFinished;
-  final String searchTerm;
-  final Function setSearchTerm;
-
-  @override
-  State<Dashboard> createState() => _DashboardState();
-}
-
-class _DashboardState extends State<Dashboard> {
-  late String storeSearch;
-  final TextEditingController storeSearchController = TextEditingController();
-  bool populatedStores = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Container(
-          width: double.infinity,
-          height: 40,
-          decoration: BoxDecoration(
-              color: Colors.white, borderRadius: BorderRadius.circular(5)),
-          child: TextFormField(
-            keyboardType: TextInputType.text,
-            onChanged: (text) => {
-              setState(() {
-                widget.stores = fetchStores(text);
-              })
-            },
-            controller: storeSearchController,
-            decoration: InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    storeSearchController.clear();
-                  },
-                ),
-                hintText: 'Search For Stores By Zipcode or Address!',
-                border: InputBorder.none),
-          ),
-        ),
-      ),
-      body: Center(
-        child: Column(
-          children: [
-            Expanded(
-              child: FutureBuilder<List<Store>>(
-                  future: widget.stores,
-                  builder: (context, snapshot) {
-                    if (snapshot.hasData) {
-                      List<Store> stores = snapshot.data! + widget.userStores;
-
-                      stores = stores.toSet().toList();
-                      return GridView.builder(
-                        itemCount: stores.length,
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2),
-                        shrinkWrap: true,
-                        primary: false,
-                        padding: const EdgeInsets.all(8),
-                        itemBuilder: (context, index) {
-                          Store store = stores[index];
-                          return Card(
-                            color: widget.userStores.contains(store)
-                                ? Colors.lightBlue
-                                : const Color.fromARGB(255, 144, 220, 255),
-                            child: InkWell(
-                                splashColor: Colors.blue.withAlpha(30),
-                                onTap: () {
-                                  widget.setStore(store);
-                                },
-                                child: Column(children: [
-                                  widget.companies.isNotEmpty
-                                      ? getImage(
-                                          widget.companies[store.companyId - 1]
-                                              .logoUrl,
-                                          100,
-                                          100)
-                                      : CircularProgressIndicator(),
-                                  Text(store.town,
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold)),
-                                  Text(store.state,
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold)),
-                                  Text(store.address,
-                                      style: TextStyle(
-                                          fontStyle: FontStyle.italic)),
-                                ])),
-                          );
-                        },
-                      );
-                    } else if (snapshot.hasError) {
-                      return Text('${snapshot.error}');
-                    }
-                    return CircularProgressIndicator();
-                  }),
-            ),
-            SizedBox(height: 20),
-            widget.userStores.isEmpty
-                ? OutlinedButton(
-                    onPressed: () => {}, child: Text("Confirm Stores"))
-                : ElevatedButton(
-                    onPressed: () => {
-                          Navigator.push(context,
-                              MaterialPageRoute(builder: (context) {
-                            return SearchPage(
-                              companies: widget.companies,
-                              tags: widget.tags,
-                              stores: widget.userStores,
-                              userTags: widget.userTags,
-                              setTags: widget.setTags,
-                              cart: widget.cart,
-                              cartFinished: widget.cartFinished,
-                              setCart: widget.setCart,
-                              setCartFinished: widget.setCartFinished,
-                              searchTerm: widget.searchTerm,
-                              setSearchTerm: widget.setSearchTerm,
-                            );
-                          }))
-                        },
-                    child: Text("Confirm Stores")),
-            SizedBox(height: 20),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class CheckOut extends StatefulWidget {
-  CheckOut({
-    Key? key,
-    required this.cart,
-    required this.cartFinished,
-    required this.stores,
-    required this.setCart,
-    required this.setCartFinished,
-    required this.companies,
-  }) : super(key: key);
-
-  final Function setCart;
-  final Function setCartFinished;
-  List<Product> cartFinished;
-  List<Product> cart;
-  final List<Store> stores;
-  final List<Company> companies;
-
-  @override
-  State<CheckOut> createState() => _CheckOutState();
-}
-
-class _CheckOutState extends State<CheckOut> {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-        appBar: AppBar(
-          title: Text("Checkout"),
-        ),
-        body: Column(
-          children: [
-            Text("To Do:", style: TextStyle(fontWeight: FontWeight.bold)),
-            Expanded(
-              child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.all(1),
-                  children: widget.stores
-                      .map((s) => Column(
-                            children: [
-                              Row(children: [
-                                Text(s.town,
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold)),
-                                getImage(
-                                    widget.companies[s.companyId - 1].logoUrl,
-                                    75,
-                                    50),
-                              ]),
-                              Expanded(
-                                child: SizedBox(
-                                  width: 180,
-                                  child: ListView(
-                                      scrollDirection: Axis.vertical,
-                                      shrinkWrap: true,
-                                      padding: const EdgeInsets.all(1),
-                                      children: widget.cart
-                                          .where((p) => p.storeId == s.id)
-                                          .map((p) => Card(
-                                              color: Colors.white,
-                                              clipBehavior: Clip.hardEdge,
-                                              child: InkWell(
-                                                  onTap: () {
-                                                    widget.cart.remove(p);
-                                                    widget.cartFinished.add(p);
-                                                    widget.setCart(widget.cart);
-                                                    widget.setCartFinished(
-                                                        widget.cartFinished);
-                                                  },
-                                                  child: ProductBox(p: p))))
-                                          .toList()
-                                          .cast<Widget>()),
-                                ),
-                              ),
-                            ],
-                          ))
-                      .toList()),
-            ),
-            SizedBox(height: 35),
-            Text("Done:", style: TextStyle(fontWeight: FontWeight.bold)),
-            Expanded(
-              child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.all(1),
-                  children: widget.stores
-                      .map((s) => Column(
-                            children: [
-                              Row(children: [
-                                Text(s.town,
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold)),
-                                getImage(
-                                    widget.companies[s.companyId - 1].logoUrl,
-                                    75,
-                                    50),
-                              ]),
-                              Expanded(
-                                child: SizedBox(
-                                  width: 180,
-                                  child: ListView(
-                                      scrollDirection: Axis.vertical,
-                                      shrinkWrap: true,
-                                      padding: const EdgeInsets.all(1),
-                                      children: widget.cartFinished
-                                          .where((p) => p.storeId == s.id)
-                                          .map((p) => Card(
-                                              color: Colors.white,
-                                              clipBehavior: Clip.hardEdge,
-                                              child: InkWell(
-                                                  onTap: () {
-                                                    widget.cart.add(p);
-                                                    widget.cartFinished
-                                                        .remove(p);
-                                                    widget.setCart(widget.cart);
-                                                    widget.setCartFinished(
-                                                        widget.cartFinished);
-                                                  },
-                                                  child: ProductBox(p: p))))
-                                          .toList()
-                                          .cast<Widget>()),
-                                ),
-                              ),
-                            ],
-                          ))
-                      .toList()),
-            ),
-          ],
-        ));
-  }
-}
 
 class SearchPage extends StatefulWidget {
   SearchPage({
@@ -1024,50 +739,6 @@ class _SearchPageState extends State<SearchPage> {
                 return CircularProgressIndicator();
               }
             }));
-  }
-}
-
-class ProductBox extends StatelessWidget {
-  const ProductBox({super.key, required this.p});
-
-  final Product p;
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-        height: 80,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(
-              height: 40,
-              child: Text(p.name,
-                  overflow: TextOverflow.fade, softWrap: true, maxLines: 2)),
-          Row(children: [
-            getImage(p.pictureUrl, 24, 24),
-            Expanded(
-              child: Text(p.size == "N/A" ? "" : "  ${p.size}"),
-            ),
-          ]),
-          Row(children: [
-            Text(
-                p.memberPrice == p.salePrice
-                    ? "\$${p.basePrice}"
-                    : "\$${p.basePrice} | ",
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: p.memberPrice == p.salePrice
-                        ? FontWeight.bold
-                        : FontWeight.normal)),
-            Text(p.salePrice == "" ? "" : "\$${p.salePrice}",
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: p.memberPrice == "N/A"
-                      ? FontWeight.bold
-                      : FontWeight.normal,
-                )),
-            Text(p.memberPrice == "" ? "" : " | \$${p.memberPrice}",
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-            getNotification(p.priceHistory),
-          ])
-        ]));
   }
 }
 
