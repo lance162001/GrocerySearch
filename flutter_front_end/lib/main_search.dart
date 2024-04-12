@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_front_end/main.dart';
+import 'package:flutter_front_end/product_search.dart';
 
 class StoreSearch extends StatefulWidget {
   StoreSearch({
