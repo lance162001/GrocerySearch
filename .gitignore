@@ -130,6 +130,7 @@ dmypy.json
 
 # DB
 app.db
+app.db-journal
 
 # VENV
 service/pyvenv.cfg
