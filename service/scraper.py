@@ -678,15 +678,17 @@ def scheduled_job():
             tags[t.name] = t.id
     get_any(stores)
     message = f"""\
-Scraper: GS Scraper - {datetime.now().strftime("%A, %d. %B %Y %I:%M%p")}
+Subject: GS Scraper - {datetime.now().strftime("%A, %d. %B %Y %I:%M%p")}
 
 Started at: {start.strftime("%A, %d. %B %Y %I:%M%p")}
 Ended at: {datetime.now().strftime("%A, %d. %B %Y %I:%M%p")}
 
 Num New Products: {len(emailer_info["products"])}
-New Products: {emailer_info["products"]}
 
+New Products:
 """ 
+    for p in emailer_info["products"]:
+        message += f"\n{p.name} | p.brand | p.company_id" 
 
     emailer.send(message)
 
