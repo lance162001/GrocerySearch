@@ -1,11 +1,12 @@
 import smtplib, ssl
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
 
 port = 465
-password = os.gotenv("password")
-sender_email = os.gotenv("username")
+password = os.getenv("password")
+sender_email = os.getenv("username")
 receiver_email = "lancegruber2@gmail.com"
 default_message = """\
 Subject: Testing!
