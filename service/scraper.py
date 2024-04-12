@@ -1,14 +1,15 @@
-# Old Selenium Scraping Dependencies 
-#####################################
+# Old Selenium Scraping Dependencies #####################################
 # from bs4 import BeautifulSoup 
 # from selenium.webdriver.firefox.options import Options
 # from selenium import webdriver
 # from selenium.webdriver.common.by import By
 # import time
-# from datetime import datetime
 
-# import sys
-# import time
+import emailer
+
+from datetime import datetime
+import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, wait, as_completed
 
 from models.base import Base, engine
@@ -17,6 +18,8 @@ from models import Product, Product_Instance, PricePoint, Store, Tag, Tag_Instan
 from urllib.request import Request, urlopen
 import json
 import re
+
+import schedule
 
 sess = Session(engine)
 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36'}
@@ -304,15 +307,6 @@ def get_any(stores):
             whole_foods(s.id, s.scraper_id)
         if s.company_id == 2:
             trader_joes(s.id, s.scraper_id)
-
-stores = sess.query(Store).all()
-if stores == []:
-    stores = setup()
-else:
-    for t in sess.query(Tag).all():
-        tags[t.name] = t.id
-
-get_any(stores)
 
 # seperated_stores = [[],[]]
 # for store in stores:
@@ -664,5 +658,42 @@ if doing_it_with_selenium:
         sess.commit()
         browser.close()
 
-    if __name__ == "__main__":
-        update_stores(stores = sess.query(Store).all())
+
+
+
+
+@schedule.repeat(schedule.every().day.at("10:30"))
+def scheduled_job():
+    print(f"SCRAPING - {datetime.now()}")
+    start = datetime.now()
+    stores = sess.query(Store).all()
+    if stores == []:
+        stores = setup()
+    else:
+        for t in sess.query(Tag).all():
+            tags[t.name] = t.id
+    get_any(stores)
+    message = f"""\
+Scraper: GS Scraper - {datetime.now().strftime("%A, %d. %B %Y %I:%M%p")}
+
+Started at: {start.strftime("%A, %d. %B %Y %I:%M%p")}
+Ended at: {datetime.now().strftime("%A, %d. %B %Y %I:%M%p")}""" 
+
+    emailer.send(message)
+
+#update_stores(stores = sess.query(Store).all())
+
+
+if __name__ == "__main__":
+    print("starting")
+
+    message = f"""\
+Subject: GS Scraper (Starting) - {datetime.now().strftime("%A, %d. %B %Y %I:%M%p")}
+
+:)"""
+    
+    emailer.send(message)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
