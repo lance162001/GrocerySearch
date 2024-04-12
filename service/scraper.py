@@ -32,6 +32,8 @@ categories = ["produce", "dairy-eggs", "meat", "prepared-foods", "pantry", "bake
 diet_types = ["organic", "vegan", "kosher", "gluten free", "dairy free", "vegetarian"]
 tags = {}
 
+emailer_info = { "products": [], }
+
 def setup():
     toAdd = []
     toAdd.append(Company(logo_url="https://external-content.duckduckgo.com/iu/?u=http%3A%2F%2Fwww.sott.net%2Fimage%2Fimage%2Fs5%2F102602%2Ffull%2Fwholefoods.png&f=1&nofb=1&ipt=21419f3cd82d823842c0297318a102a87ac9b6b801dd2417cc5661c32591fbc4&ipo=images", name="Whole Foods"))
@@ -124,6 +126,7 @@ def whole_foods(store_id, store_code):
                     picture_url = raw['imageThumbnail'],
                     tags = []
                 )
+                emailer_info["products"].append(prod)
                 sess.add(prod)
                 sess.flush()
                 for i in diet_types:
@@ -208,6 +211,7 @@ def trader_joes(store_id, store_code):
                 company_id = 2,
                 picture_url = f"traderjoes.com{raw['primary_image']}",
             )
+            emailer_info["products"].append(p)
             sess.add(p)
             sess.flush()
             t = []
@@ -677,7 +681,12 @@ def scheduled_job():
 Scraper: GS Scraper - {datetime.now().strftime("%A, %d. %B %Y %I:%M%p")}
 
 Started at: {start.strftime("%A, %d. %B %Y %I:%M%p")}
-Ended at: {datetime.now().strftime("%A, %d. %B %Y %I:%M%p")}""" 
+Ended at: {datetime.now().strftime("%A, %d. %B %Y %I:%M%p")}
+
+Num New Products: {len(emailer_info["products"])}
+New Products: {emailer_info["products"]}
+
+""" 
 
     emailer.send(message)
 
