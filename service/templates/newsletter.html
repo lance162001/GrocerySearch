@@ -1,0 +1,22 @@
+<html>
+<body>
+<h1>Your Grocery Search</h1>
+<h3>Current Stores</h3>
+{% for company in companies %}
+  {% for store in stores %}
+    {% if store.company_id == company.id %}
+      <p> <img src="{{ company.logo_url }}" width="50" height="50"> {{ store.address }} {{ store.town }} {{ store.state }} </p>
+    {% endif %}
+  {% endfor %}
+{% endfor %}
+
+<h3>New Products</h3>
+{% for product in products %}
+
+<p> {{ product.name }} {{ product.brand }} 
+  <img src="{{ product.picture_url }}" width="25" height="25"> 
+</p>
+
+{% endfor %}
+</body>
+</html>

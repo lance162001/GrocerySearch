@@ -1,0 +1,21 @@
+Your Grocery Search
+Current Stores
+{% for company in companies %}
+  {% for store in stores %}
+    {% if store.company_id == company.id %}
+{{ company.name }}
+{{ store.address }} {{ store.town }} {{ store.state }}
+    {% endif %}
+  {% endfor %}
+{% endfor %}
+
+New Products
+{% for product in products %}
+
+{{ product.name }} {{ product.brand }} 
+
+{% endfor %}
+
+
+
+this is a txt and not html
