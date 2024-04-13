@@ -333,7 +333,8 @@ New Products:
     for p in emailer_info["products"]:
         message += f"\n{p.name} | p.brand | p.company_id" 
 
-    emailer.send(message)
+    emailer.simple_send(message)
+    emailer.send(emailer_info)
 
 #update_stores(stores = sess.query(Store).all())
 
@@ -346,7 +347,7 @@ Subject: GS Scraper (Starting) - {datetime.now().strftime("%A, %d. %B %Y %I:%M%p
 
 :)"""
     
-    emailer.send(message)
+    emailer.simple_send(message)
 
     while True:
         schedule.run_pending()

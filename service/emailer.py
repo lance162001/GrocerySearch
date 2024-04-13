@@ -44,6 +44,12 @@ def send(data):
         server.login(sender_email,password)
         server.sendmail(sender_email, receiver_email, message.as_string())
 
+def simple_send(message):
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL("smtp.gmail.com",port,context=context) as server:
+        server.login(sender_email,password)
+        server.sendmail(sender_email, receiver_email, message)
+
 if __name__ == "__main__":
     dummy_data = { "products": [], "product_instances": [], "price_points": [], "stores": [], "companies": []}
     dummy_data["companies"].append(Company(id=1, logo_url="https://external-content.duckduckgo.com/iu/?u=http%3A%2F%2Fwww.sott.net%2Fimage%2Fimage%2Fs5%2F102602%2Ffull%2Fwholefoods.png&f=1&nofb=1&ipt=21419f3cd82d823842c0297318a102a87ac9b6b801dd2417cc5661c32591fbc4&ipo=images", name="Whole Foods"))
