@@ -3,7 +3,9 @@
 <h1>Your Grocery Search</h1>
 <h3>Current Stores</h3>
 {% for company in companies %}
+  <p> {{ company.id }} </p>
   {% for store in stores %}
+  <p> {{ store.id }} | {{ store.company_id }}</p>
     {% if store.company_id == company.id %}
       <p> <img src="{{ company.logo_url }}" width="50" height="50"> {{ store.address }} {{ store.town }} {{ store.state }} </p>
     {% endif %}

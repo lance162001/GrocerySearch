@@ -331,7 +331,7 @@ Num New Products: {len(emailer_info["products"])}
 New Products:
 """ 
     for p in emailer_info["products"]:
-        message += f"\n{p.name} | p.brand | p.company_id" 
+        message += f"\n{p.name} | {p.brand} | {p.company_id}" 
 
     emailer.simple_send(message)
     emailer.send(emailer_info)
