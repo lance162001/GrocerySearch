@@ -319,12 +319,7 @@ def scheduled_job():
     else:
         for t in sess.query(Tag).all():
             tags[t.name] = t.id
-    
-    w = []
-    for store in stores:
-        if store.company_id == 1:
-            w.append(store)
-    get_any(w)
+    get_any(stores)
     message = f"""\
 Subject: GS Scraper - {datetime.now().strftime("%A, %B %d %Y %I:%M%p")}
 
