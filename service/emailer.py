@@ -26,18 +26,30 @@ def build_message(data):
     html = newsletter.render(
         stores=data["stores"],
         companies=data["companies"],
-        products=data["products"]
+        products=data["product_instances"]
     )
     txt = plaintext.render(
         stores=data["stores"],
         companies=data["companies"],
-        products=data["products"]
+        products=data["product_instances"]
     )
     message.attach(MIMEText(txt,"plain"))
     message.attach(MIMEText(html,"html"))
     return message
 
 def send(data):
+    data["product_instances"].sort(key=lambda p: p.product_id)
+    data["products"].sort(key=lambda p: p.id)
+    data["price_points"].sort(key=lambda p: p.id)
+    for p in data["product_instances"]:
+        p.prod = data["products"][p.product_id-1]
+        p.price_point = data["price_points"][p.product_id-1]
+
+    data["companies"].sort(key=lambda c: c.id)
+    for s in data["stores"]:
+        s.company_name = data["companies"][s.company_id-1].name
+        s.company_logo = data["companies"][s.company_id-1].logo_url
+
     message = build_message(data)
     context = ssl.create_default_context()
     with smtplib.SMTP_SSL("smtp.gmail.com",port,context=context) as server:

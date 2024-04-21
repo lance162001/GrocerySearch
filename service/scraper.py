@@ -55,7 +55,7 @@ def whole_foods(store_id, store_code):
     for category in wf_categories:
         offset = 0
         limit = 60
-        url = f"https://www.wholefoodsmarket.com/api/products/category/[leafCategory]?leafCategory={category}&store={store_code}&limit=60&offset="
+        url = f"https://www.wholefoodsmarket.com/api/products/category/{category}?leafCategory={category}&store={store_code}&limit=60&offset="
         raw_products = []
         while True:
             try:
@@ -63,9 +63,12 @@ def whole_foods(store_id, store_code):
                 req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36')
                 response = urlopen(req)
                 results = json.loads(response.read())['results']
-            except:
+            except Exception as e:
+                print(e)
                 break
             if results == []:
+                if len(raw_products) == 0:
+                    pass #todo log something went wrong here
                 break
             for i in results:
                 if i['slug'] not in slugs:
@@ -75,9 +78,6 @@ def whole_foods(store_id, store_code):
             offset += limit
         for raw in raw_products:
             size = "N/A"
-            # if "/" in raw['regularPrice']:
-            #     size = "per " + raw['regularPrice'].split("/")[-1] # almost always lb        
-            # else:
             n = raw['name'].lower()
             for i in [ "fl oz", "lb", "oz"," gram ","ml", "pound"]:
                 if i in n:
@@ -92,8 +92,6 @@ def whole_foods(store_id, store_code):
                     if len(l) > 1:
                         del l[-1]
                         raw['name'] = "".join(l)
-
-
 
                     if len(raw['name']) < 4:
                         raw['name'] = n
@@ -304,8 +302,10 @@ def get_joes_store(stores,searchterm):
 def get_any(stores):
     for s in stores:
         if s.company_id == 1:
+            print("wf")
             whole_foods(s.id, s.scraper_id)
         if s.company_id == 2:
+            print("tj")
             trader_joes(s.id, s.scraper_id)
 
 
@@ -319,13 +319,19 @@ def scheduled_job():
     else:
         for t in sess.query(Tag).all():
             tags[t.name] = t.id
-    get_any(stores)
+    
+    w = []
+    for store in stores:
+        if store.company_id == 1:
+            w.append(store)
+    get_any(w)
     message = f"""\
 Subject: GS Scraper - {datetime.now().strftime("%A, %B %d %Y %I:%M%p")}
 
 Started at: {start.strftime("%A, %d. %B %Y %I:%M%p %Ss")}
 Ended at: {datetime.now().strftime("%A, %d. %B %Y %I:%M%p %Ss")}
 
+Num Stores Scraped: {len(stores)}
 Num New Products: {len(emailer_info["products"])}
 Num New Product Instances: {len(emailer_info["product_instances"])}
 Num New Price Points: {len(emailer_info["price_points"])}
@@ -342,6 +348,8 @@ New Products:
 
 if __name__ == "__main__":
     print("starting")
+
+    scheduled_job()
 
     message = f"""\
 Subject: GS Scraper (Starting) - {datetime.now().strftime("%A, %d. %B %Y %I:%M%p")}

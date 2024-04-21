@@ -1,23 +1,30 @@
 <html>
+
+<head>
+  <style>
+  h1 {text-align: center;}
+  h3 {text-align: center;}
+  p {text-align: center;}
+  div {text-align: center;}
+  </style>
+</head>
+
 <body>
 <h1>Your Grocery Search</h1>
-<h3>Current Stores</h3>
-{% for company in companies %}
-  <p> {{ company.id }} </p>
-  {% for store in stores %}
-  <p> {{ store.id }} | {{ store.company_id }}</p>
-    {% if store.company_id == company.id %}
-      <p> <img src="{{ company.logo_url }}" width="50" height="50"> {{ store.address }} {{ store.town }} {{ store.state }} </p>
-    {% endif %}
+{% for store in stores %}
+      <p> <img src="{{ store.company_logo }}" width="20" height="20"> {{ store.company_name }}{{ store.address }} {{ store.town }} {{ store.state }} </p>
+
+  {% for p in products %}
+
+  {% if p.store_id == store.id %}
+
+  <p> {{ p.prod.name }} {{ p.prod.brand }} 
+    <img src="{{ product.picture_url }}" width="20" height="20"> 
+  </p>
+
+  {% endif %}
+
   {% endfor %}
-{% endfor %}
-
-<h3>New Products</h3>
-{% for product in products %}
-
-<p> {{ product.name }} {{ product.brand }} 
-  <img src="{{ product.picture_url }}" width="25" height="25"> 
-</p>
 
 {% endfor %}
 </body>
