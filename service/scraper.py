@@ -343,9 +343,6 @@ New Products:
 
 if __name__ == "__main__":
     print("starting")
-
-    scheduled_job()
-
     message = f"""\
 Subject: GS Scraper (Starting) - {datetime.now().strftime("%A, %d. %B %Y %I:%M%p")}
 
