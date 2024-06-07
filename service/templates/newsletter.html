@@ -10,16 +10,14 @@
 </head>
 
 <body>
-<h1>Your Grocery Search</h1>
+<h1>New Products at Your Stores</h1>
 {% for store in stores %}
-      <p> <img src="{{ store.company_logo }}" width="20" height="20"> {{ store.company_name }}{{ store.address }} {{ store.town }} {{ store.state }} </p>
-
+      <p> <img src="{{ store.company_logo }}" width="20" height="20"> {{ store.company_name }} {{ store.address }} {{ store.town }} {{ store.state }} </p>
   {% for p in products %}
-
   {% if p.store_id == store.id %}
 
   <p> {{ p.prod.name }} {{ p.prod.brand }} 
-    <img src="{{ product.picture_url }}" width="20" height="20"> 
+    <img src="{{ p.prod.picture_url }}" width="20" height="20"> {{ p.price }}
   </p>
 
   {% endif %}

@@ -83,7 +83,7 @@ def whole_foods(store_id, store_code):
                 if i in n:
                     unitIndex = max(0,n.find(i)-4)
                     aroundUnit = n[unitIndex:unitIndex+len(i)+4]
-                    num = re.findall("(\d+(\.\d+)?)|(\.\d+)", aroundUnit)
+                    num = re.findall(r"(\d+(\.\d+)?)|(\.\d+)", aroundUnit)
                     if num == [] or num[0][0] == "":
                         break
                     size = f"{num[0][0]} {i}"
@@ -98,6 +98,7 @@ def whole_foods(store_id, store_code):
                     break
             if raw['name'][0:1] == "PB" and raw['brand'] == "Renpure":
                 size = raw['name'][-5]
+            raw['name'] = raw['name'].title()
             prod = sess.query(Product).filter(Product.name == raw['name']).first()
             if prod == None:
                 try: 
@@ -110,7 +111,7 @@ def whole_foods(store_id, store_code):
                     raw['imageThumbnail'] = "https://external-content.duckduckgo.com/iu/?u=http%3A%2F%2Fwww.sott.net%2Fimage%2Fimage%2Fs5%2F102602%2Ffull%2Fwholefoods.png&f=1&nofb=1&ipt=21419f3cd82d823842c0297318a102a87ac9b6b801dd2417cc5661c32591fbc4&ipo=images"
                 prod = Product(
                     company_id = 1,
-                    name = raw['name'].title(),
+                    name = raw['name'],
                     brand = raw['brand'],
                     picture_url = raw['imageThumbnail'],
                     tags = []
@@ -294,7 +295,6 @@ def get_joes_store(stores,searchterm):
     for s in stores:
         if s.scraper_id == store.scraper_id:
             return 0
-    emailer_info["stores"].append(store)
     sess.add(store)
     sess.commit()
     return 1
@@ -319,6 +319,8 @@ def scheduled_job():
     else:
         for t in sess.query(Tag).all():
             tags[t.name] = t.id
+    emailer_info["stores"] = stores
+    emailer_info["companies"] = sess.query(Company).all()
     get_any(stores)
     message = f"""\
 Subject: GS Scraper - {datetime.now().strftime("%A, %B %d %Y %I:%M%p")}
@@ -340,7 +342,10 @@ New Products:
 
 #update_stores(stores = sess.query(Store).all())
 
+def user_newsletter():
+    pass
 
+testing=True
 if __name__ == "__main__":
     print("starting")
     message = f"""\
@@ -350,6 +355,11 @@ Subject: GS Scraper (Starting) - {datetime.now().strftime("%A, %d. %B %Y %I:%M%p
     
     emailer.simple_send(message)
 
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
+    # for testing
+    if testing:
+        scheduled_job()
+
+    else:
+        while True:
+            schedule.run_pending()
+            time.sleep(1)
