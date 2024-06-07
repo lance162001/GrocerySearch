@@ -53,6 +53,7 @@ def lowest_formatted_price(pp):
 def send(data):
     for p in data["product_instances"]:
         #p.prod = Product(company_id=10,name="---",brand="---",picture_url="https://logos-world.net/wp-content/uploads/2022/02/Trader-Joes-Emblem.png")
+        p.prod = None
         for prod in data["products"]:
             if prod.id == p.product_id:
                 p.prod = prod
