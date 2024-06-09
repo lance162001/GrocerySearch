@@ -8,7 +8,7 @@ class Company(BaseModel):
 	logo_url: str
 	name: str
 	class Config:
-		orm_mode = True # lets pydantic convert SQLAlchemy object <-> JSON
+		from_attributes = True # lets pydantic convert SQLAlchemy object <-> JSON
 
 class Store(BaseModel):
 	id: Optional[int]
@@ -19,4 +19,4 @@ class Store(BaseModel):
 	state: str
 	zipcode: str
 	class Config:
-		orm_mode = True # lets pydantic convert SQLAlchemy object <-> JSON
+		from_attributes = True # lets pydantic convert SQLAlchemy object <-> JSON

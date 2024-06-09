@@ -10,18 +10,18 @@ class PricePoint(BaseModel):
 	size: Optional[str]
 	created_at: Optional[datetime]
 	class Config:
-		orm_mode = True
+		from_attributes = True
 
 class Tag(BaseModel):
 	id: Optional[int]
 	name: str
 	class Config:
-		orm_mode = True
+		from_attributes = True
 
 class Tag_Instance(BaseModel):
 	tag_id: int
 	class Config:
-		orm_mode = True
+		from_attributes = True
 
 class Product(BaseModel):
 	id: Optional[int]
@@ -31,16 +31,16 @@ class Product(BaseModel):
 	picture_url: str
 	tags: List[Tag_Instance] = []
 	class Config:
-		orm_mode = True
+		from_attributes = True
 
 class Product_Instance(BaseModel):
 	store_id: int
 	price_points: List[PricePoint] = []
 	class Config:
-		orm_mode = True
+		from_attributes = True
 
 class Product_Details(BaseModel):
 	Product: Product
 	Product_Instance: Product_Instance 
 	class Config:
-		orm_mode = True
+		from_attributes = True

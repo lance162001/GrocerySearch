@@ -4,6 +4,7 @@ from datetime import datetime
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, wait, as_completed
+import threading
 
 from models.base import Base, engine
 from sqlalchemy.orm import Session
@@ -49,6 +50,7 @@ def setup():
     sess.add_all(toAdd)
     sess.commit()
     return sess.query(Store).all()
+
 
 def whole_foods(store_id, store_code):
     slugs = []
@@ -299,14 +301,37 @@ def get_joes_store(stores,searchterm):
     sess.commit()
     return 1
 
+def store_filter(company_id):
+    def x(store):
+        return store.company_id == company_id
+    return x
+    
+def get_all_wf(stores):
+    for i in stores:
+        whole_foods(i.id, i.scraper_id)
+
+def get_all_tj(stores):
+    for i in stores:
+        trader_joes(i.id, i.scraper_id)
+
+
 def get_any(stores):
-    for s in stores:
-        if s.company_id == 1:
-            print("wf")
-            whole_foods(s.id, s.scraper_id)
-        if s.company_id == 2:
-            print("tj")
-            trader_joes(s.id, s.scraper_id)
+    wf_stores = filter(store_filter(1),stores)
+    tj_stores = filter(store_filter(2),stores)
+    wf_thread = threading.Thread(target=get_all_wf,args=([wf_stores]))
+    tj_thread = threading.Thread(target=get_all_tj,args=([tj_stores]))
+    wf_thread.start()
+    tj_thread.start()
+    wf_thread.join()
+    tj_thread.join()
+
+    # for s in stores:
+    #     if s.company_id == 1:
+    #         print("wf")
+    #         whole_foods(s.id, s.scraper_id)
+    #     if s.company_id == 2:
+    #         print("tj")
+    #         trader_joes(s.id, s.scraper_id)
 
 
 @schedule.repeat(schedule.every().day.at("10:30"))
