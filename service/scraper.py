@@ -12,9 +12,11 @@ from models import Product, Product_Instance, PricePoint, Store, Tag, Tag_Instan
 from urllib.request import Request, urlopen
 import json
 import re
-
+import random
 import schedule
 
+sess_id = random.randint(1,1000000000)
+sess_start_time=datetime.now()
 sess = Session(engine)
 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36'}
 
@@ -24,7 +26,9 @@ categories = ["produce", "dairy-eggs", "meat", "prepared-foods", "pantry", "bake
 diet_types = ["organic", "vegan", "kosher", "gluten free", "dairy free", "vegetarian"]
 tags = {}
 
-emailer_info = { "products": [], "product_instances": [], "price_points": [], "stores": [], "companies": []}
+
+blank_emailer_info = { "products": [], "product_instances": [], "price_points": [], "stores": [], "companies": []}
+emailer_info = blank_emailer_info.copy()
 
 def setup():
     toAdd = []
@@ -325,17 +329,10 @@ def get_any(stores):
     wf_thread.join()
     tj_thread.join()
 
-    # for s in stores:
-    #     if s.company_id == 1:
-    #         print("wf")
-    #         whole_foods(s.id, s.scraper_id)
-    #     if s.company_id == 2:
-    #         print("tj")
-    #         trader_joes(s.id, s.scraper_id)
-
 
 @schedule.repeat(schedule.every().day.at("10:30"))
 def scheduled_job():
+    emailer_info = blank_emailer_info.copy()
     print(f"SCRAPING - {datetime.now()}")
     start = datetime.now()
     stores = sess.query(Store).all()
@@ -348,7 +345,10 @@ def scheduled_job():
     emailer_info["companies"] = sess.query(Company).all()
     get_any(stores)
     message = f"""\
-Subject: GS Scraper - {datetime.now().strftime("%A, %B %d %Y %I:%M%p")}
+GS Scraper Daily Test Run
+
+Session ID: {sess_id}
+Session Start: {sess_start_time.strftime("%A, %d. %B %Y %I:%M%p %Ss")}
 
 Started at: {start.strftime("%A, %d. %B %Y %I:%M%p %Ss")}
 Ended at: {datetime.now().strftime("%A, %d. %B %Y %I:%M%p %Ss")}
@@ -365,25 +365,24 @@ New Products:
     emailer.simple_send(message)
     emailer.send(emailer_info)
 
-#update_stores(stores = sess.query(Store).all())
-
 def user_newsletter():
     pass
 
-testing=True
+if sys.argv[1] == "debug" or sys.argv[1] == "d":
+    debug=True
+else:
+    debug=False
 if __name__ == "__main__":
     print("starting")
-    message = f"""\
-Subject: GS Scraper (Starting) - {datetime.now().strftime("%A, %d. %B %Y %I:%M%p")}
+#     message = f"""\
+# Subject: GS Scraper (Starting) - {datetime.now().strftime("%A, %d. %B %Y %I:%M%p")}
 
-:)"""
-    
-    emailer.simple_send(message)
+# :)"""
+#     emailer.simple_send(message)
 
-    # for testing
-    if testing:
+    # If debug, run immediately. Otherwise, run according to schedule.
+    if debug:
         scheduled_job()
-
     else:
         while True:
             schedule.run_pending()

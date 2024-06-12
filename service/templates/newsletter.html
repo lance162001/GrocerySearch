@@ -12,7 +12,7 @@
 <body>
 <h1>New Products at Your Stores</h1>
 {% for store in stores %}
-      <p> <img src="{{ store.company_logo }}" width="20" height="20"> {{ store.company_name }} {{ store.address }} {{ store.town }} {{ store.state }} </p>
+      <p> <img src="{{ store.company_logo }}" width="20" height="20"> <strong>{{ store.company_name }} {{ store.address }} {{ store.town }} {{ store.state }} </strong></p>
   {% for p in products %}
   {% if p.store_id == store.id %}
 

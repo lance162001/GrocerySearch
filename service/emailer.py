@@ -77,8 +77,13 @@ def send(data):
         server.login(sender_email,password)
         server.sendmail(sender_email, receiver_email, message.as_string())
 
-def simple_send(message):
-    msg = MIMEText(message, _charset="UTF-8")
+def simple_send(m):
+    msg = MIMEMultipart("alternative")
+    msg.set_charset("utf8")
+    msg["Subject"] = m.split("\n",1)[0]
+    msg["From"] = sender_email
+    msg["To"] = receiver_email
+    msg.attach(MIMEText(m.split("\n",1)[1], "plain", "UTF-8"))
     context = ssl.create_default_context()
     with smtplib.SMTP_SSL("smtp.gmail.com",port,context=context) as server:
         server.login(sender_email,password)
