@@ -5,9 +5,9 @@ from datetime import datetime
 
 class PricePoint(Base, BaseModel):
     __tablename__ = 'price_points'
-    member_price = Column(Integer)
-    sale_price = Column(Integer)
-    base_price = Column(Integer)
+    member_price = Column(String(10))
+    sale_price = Column(String(10))
+    base_price = Column(String(10))
     size = Column(String(50))
     created_at = Column(DateTime, default=datetime.now())
     instance = relationship('Product_Instance', back_populates="price_points")
