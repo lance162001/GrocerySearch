@@ -367,8 +367,7 @@ New Products:
 
 def user_newsletter():
     pass
-
-if sys.argv[1] == "debug" or sys.argv[1] == "d":
+if len(sys.argv) != 1 and (sys.argv[1] == "debug" or sys.argv[1] == "d"):
     debug=True
 else:
     debug=False
