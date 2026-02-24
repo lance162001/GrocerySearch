@@ -1,6 +1,88 @@
 # GrocerySearch
-A centralized API &amp; Frontend Webserver for grocery price analysis and comparison
 
-This is a work in progress, currently able to scrape Whole Foods and Trader Joes, with more to come!
+A centralized API and frontend for grocery price analysis and comparison.
+
+This repository combines a Python backend (scrapers, API, templates) with a
+Flutter-based front end. It's a work-in-progress; current scrapers include
+Whole Foods and Trader Joe's with more stores planned.
 
 ![Data Flow and UX Diagram](Data_Flow_UX_Diagram.jpeg?raw=true "Data Flow and UX Diagram")
+
+## Quick Links
+
+- Service: [service](service)
+- Flutter front end: [flutter_front_end](flutter_front_end)
+
+## Features
+
+- Scrape product and pricing data from multiple grocery stores
+- Expose a simple REST API for products, stores, and users under `service/api`
+- Provide a Flutter UI for searching and visualizing results
+
+## Quick Start
+
+Service (Python)
+
+1. Create a virtual environment and activate it:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+2. Install dependencies and run the service (FastAPI/ASGI)
+
+```bash
+pip install -r service/requirements.txt
+# Start with uvicorn (recommended): replace `service.main:app` with your app module and ASGI app name
+uvicorn service.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Scraper
+
+The scraper lives at `service/scraper.py`. It runs on a schedule by default and
+will send a daily summary when it runs. To run a one-off immediate scrape or to
+test behavior, use the debug flag which runs the scraping job immediately:
+
+```bash
+python service/scraper.py debug
+# or short form
+python service/scraper.py d
+```
+
+When run without the debug flag, the scraper runs in a loop and executes the
+scheduled job (see `schedule` usage inside the script).
+
+Flutter Front End
+
+1. Change to the Flutter project and fetch packages:
+
+```bash
+cd flutter_front_end
+flutter pub get
+```
+
+2. Run the app (example: Chrome):
+
+```bash
+flutter run -d chrome
+```
+
+## Development Notes
+
+- Scrapers: `service/scraper.py` contains the scraping routines; extend it for
+	additional stores and be mindful of site terms and rate limits.
+- API endpoints live under `service/api` and use simple schemas in `service/schemas`.
+- Data models are in `service/models` and can be extended for analytics or storage.
+
+## Contributing
+
+- Fork and open a pull request. Keep changes focused and include tests where
+	appropriate.
+- If adding a new store scraper, include a short README explaining selectors
+	and any special handling.
+
+## License & Contact
+
+See the `LICENSE` file at the repository root. For questions or collaboration,
+open an issue or contact the maintainers via the project issue tracker.
