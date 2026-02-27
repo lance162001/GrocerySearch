@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_front_end/main.dart';
 import 'package:flutter_front_end/product_box.dart';
 import 'package:flutter_front_end/check_out.dart';
+import 'package:flutter_front_end/chart.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 
@@ -17,6 +18,9 @@ class SearchPage extends StatefulWidget {
     required this.cartFinished,
     required this.setCart,
     required this.setCartFinished,
+    required this.addToCartQty,
+    required this.removeFromCartAll,
+    required this.cartQuantities,
     required this.setTags,
     required this.searchTerm,
     required this.setSearchTerm,
@@ -26,6 +30,9 @@ class SearchPage extends StatefulWidget {
   final List<Tag> tags;
   final Function setCart;
   final Function setCartFinished;
+  final Function addToCartQty;
+  final Function removeFromCartAll;
+  final Map<int, int> cartQuantities;
   final Function setTags;
   final Function setSearchTerm;
   final String searchTerm;
@@ -44,8 +51,17 @@ class _SearchPageState extends State<SearchPage> {
   late Product selectedProduct;
   int page = 1;
   int pageLength = 100;
+  Map<int, int> quantities = {};
   final ScrollController scrollController = ScrollController();
   TextEditingController searchFieldController = TextEditingController();
+
+  void _addToCart(Product p, int qty) {
+    widget.addToCartQty(p, qty);
+  }
+
+  void _removeFromCart(Product p) {
+    widget.removeFromCartAll(p);
+  }
 
   @override
   void initState() {
@@ -180,23 +196,26 @@ class _SearchPageState extends State<SearchPage> {
               ),
               Row(
                 children: [
-                  Text(widget.cart.length.toString()),
+                  Text((widget.cartQuantities.values.fold(0, (a, b) => a + b)).toString()),
                   IconButton(
                       icon: Icon(Icons.shopping_cart_checkout),
                       iconSize: 32,
-                      onPressed: () => {
-                            Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (context) => CheckOut(
-                                          companies: widget.companies,
-                                          stores: widget.stores,
-                                          cart: widget.cart,
-                                          cartFinished: widget.cartFinished,
-                                          setCart: widget.setCart,
-                                          setCartFinished:
-                                              widget.setCartFinished,
-                                        )))
+                        onPressed: () => {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => CheckOut(
+                                  companies: widget.companies,
+                                  stores: widget.stores,
+                                  cart: widget.cart,
+                                  cartFinished: widget.cartFinished,
+                                  setCart: widget.setCart,
+                                  setCartFinished:
+                                    widget.setCartFinished,
+                                  addToCartQty: widget.addToCartQty,
+                                  removeFromCartAll: widget.removeFromCartAll,
+                                  cartQuantities: widget.cartQuantities,
+                                )))
                           }),
                 ],
               )
@@ -219,81 +238,178 @@ class _SearchPageState extends State<SearchPage> {
                     itemBuilder: (context, index) {
                       Product p = products[index];
                       return Card(
-                        color: widget.cart.contains(p)
-                            ? Colors.lightBlue[100]
-                            : Colors.white,
+                            color: (widget.cartQuantities[p.id] ?? 0) > 0
+                              ? Colors.lightBlue[100]
+                              : Colors.white,
                         clipBehavior: Clip.hardEdge,
                         child: InkWell(
                           splashColor: Colors.blue.withAlpha(30),
                           onTap: () {
-                            widget.cart.contains(p)
-                                ? widget.cart.remove(p)
-                                : widget.cart.add(p);
-                            widget.setCart(widget.cart);
+                            final qty = quantities[p.id] ?? 1;
+                            if ((widget.cartQuantities[p.id] ?? 0) > 0) {
+                              _removeFromCart(p);
+                            } else {
+                              _addToCart(p, qty);
+                            }
                           },
                           onLongPress: () {
                             showModalBottomSheet<void>(
                                 context: context,
                                 builder: (BuildContext context) {
-                                  return SizedBox(
-                                    height: 225,
-                                    child: Column(
-                                      children: [
-                                        Text("${p.name}\nPrice History",
-                                            style: TextStyle(
-                                                fontWeight: FontWeight.bold)),
-                                        SizedBox(
-                                          width: 200,
-                                          height: 100,
-                                          child: BarChart(
-                                            BarChartData(),
-                                            swapAnimationCurve: Curves.linear,
-                                            swapAnimationDuration:
-                                                Duration(milliseconds: 150),
-                                          ),
-                                        ),
-                                        SizedBox(height: 12),
-                                        ElevatedButton(
-                                          onPressed: () => {
-                                            setState(() =>
-                                                widget.cart.contains(p)
-                                                    ? widget.cart.remove(p)
-                                                    : widget.cart.add(p)),
-                                            Navigator.pop(context)
-                                          },
-                                          child: Column(
-                                            children: [
-                                              Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: widget.cart
-                                                          .contains(p)
-                                                      ? [
-                                                          Text(
-                                                              "Remove from Cart?"),
-                                                          Icon(Icons
-                                                              .remove_shopping_cart)
-                                                        ]
-                                                      : [
-                                                          Text("Add To Cart?"),
-                                                          Icon(Icons
-                                                              .add_shopping_cart)
-                                                        ]),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
+                                          return SizedBox(
+                                            height: 360,
+                                            child: Column(
+                                              children: [
+                                                Padding(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                                                  child: Row(
+                                                    children: [
+                                                      ClipRRect(
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        child: getImage(p.pictureUrl, 84, 84),
+                                                      ),
+                                                      SizedBox(width: 12),
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          children: [
+                                                            Text(p.name, style: TextStyle(fontWeight: FontWeight.bold)),
+                                                            SizedBox(height: 6),
+                                                            Text('${p.size} • ${p.brand}', style: TextStyle(color: Colors.grey[700], fontSize: 12)),
+                                                            SizedBox(height: 8),
+                                                            Row(
+                                                              children: [
+                                                                if (p.memberPrice != "") Text(formatPriceString(p.memberPrice), style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+                                                                SizedBox(width: 8),
+                                                                if (p.salePrice != "") Text(formatPriceString(p.salePrice), style: TextStyle(decoration: TextDecoration.lineThrough, color: Colors.redAccent)),
+                                                                SizedBox(width: 8),
+                                                                Text(formatPriceString(p.basePrice), style: TextStyle(color: Colors.grey[800])),
+                                                              ],
+                                                            )
+                                                          ],
+                                                        ),
+                                                      )
+                                                    ],
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  child: Padding(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                                                    child: PriceHistoryChart(pricepoints: p.priceHistory),
+                                                  ),
+                                                ),
+                                                Padding(
+                                                  padding: const EdgeInsets.only(bottom: 8.0),
+                                                  child: ElevatedButton(
+                                                    onPressed: () => {
+                                                      setState(() {
+                                                        final qty = quantities[p.id] ?? 1;
+                                                        if ((widget.cartQuantities[p.id] ?? 0) > 0) {
+                                                          _removeFromCart(p);
+                                                        } else {
+                                                          _addToCart(p, qty);
+                                                        }
+                                                      }),
+                                                      Navigator.pop(context)
+                                                    },
+                                                    child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: (widget.cartQuantities[p.id] ?? 0) > 0
+                                                          ? [
+                                                              Text("Remove from Cart?"),
+                                                              SizedBox(width: 6),
+                                                              Icon(Icons.remove_shopping_cart)
+                                                            ]
+                                                          : [
+                                                              Text("Add To Cart?"),
+                                                              SizedBox(width: 6),
+                                                              Icon(Icons.add_shopping_cart)
+                                                            ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
                                 });
                           },
                           child: Row(
                             children: [
-                              Expanded(child: ProductBox(p: p)),
-                              Expanded(
-                                child: getImage(p.pictureUrl, 60, 60),
+                              Expanded(child: ProductBox(p: p, qty: widget.cartQuantities[p.id] ?? 0)),
+                              SizedBox(
+                                width: 96,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    IconButton(
+                                      iconSize: 28,
+                                      icon: (widget.cartQuantities[p.id] ?? 0) > 0
+                                        ? Icon(Icons.remove_shopping_cart)
+                                        : Icon(Icons.add_shopping_cart),
+                                      onPressed: () {
+                                        setState(() {
+                                          final qty = quantities[p.id] ?? 1;
+                                          if ((widget.cartQuantities[p.id] ?? 0) > 0) {
+                                            _removeFromCart(p);
+                                          } else {
+                                            _addToCart(p, qty);
+                                          }
+                                        });
+                                      },
+                                      tooltip: (widget.cartQuantities[p.id] ?? 0) > 0
+                                        ? 'Remove from cart'
+                                        : 'Add to cart',
+                                    ),
+                                    SizedBox(height: 6),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          iconSize: 18,
+                                          padding: EdgeInsets.zero,
+                                          constraints: BoxConstraints(),
+                                          icon: Icon(Icons.remove_circle_outline),
+                                          onPressed: () {
+                                            setState(() {
+                                              final curr = quantities[p.id] ?? 1;
+                                              final next = (curr - 1).clamp(1, 999);
+                                              quantities[p.id] = next;
+                                            });
+                                          },
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                                          child: Text('${quantities[p.id] ?? 1}'),
+                                        ),
+                                        IconButton(
+                                          iconSize: 18,
+                                          padding: EdgeInsets.zero,
+                                          constraints: BoxConstraints(),
+                                          icon: Icon(Icons.add_circle_outline),
+                                          onPressed: () {
+                                            setState(() {
+                                              quantities[p.id] = (quantities[p.id] ?? 1) + 1;
+                                            });
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: 6),
+                                    if (p.salePrice != "")
+                                      Chip(
+                                        label: Text("SALE",
+                                            style: TextStyle(color: Colors.white)),
+                                        backgroundColor: Colors.redAccent,
+                                      )
+                                    else if (p.memberPrice != "")
+                                      Chip(
+                                        label: Text("MEMBER",
+                                            style: TextStyle(color: Colors.white)),
+                                        backgroundColor:
+                                            Theme.of(context).colorScheme.primary,
+                                      )
+                                  ],
+                                ),
                               ),
                               StoreRow(
                                   product: p,

@@ -8,6 +8,7 @@ import threading
 
 from models.base import Base, engine
 from sqlalchemy.orm import Session
+from sqlalchemy import inspect, text
 from models import Product, Product_Instance, PricePoint, Store, Tag, Tag_Instance, Company
 from urllib.request import Request, urlopen
 import json
@@ -29,6 +30,48 @@ tags = {}
 
 blank_emailer_info = { "products": [], "product_instances": [], "price_points": [], "stores": [], "companies": []}
 emailer_info = blank_emailer_info.copy()
+
+
+size_pattern = re.compile(
+    r"(?P<value>\d+(?:\.\d+)?|\.\d+)\s*(?P<unit>fl\.?\s*oz|fluid\s*ounces?|oz|ounces?|lb|lbs|pounds?|grams?|g|kg|kilograms?|ml|milliliters?|l|liters?)\b",
+    re.IGNORECASE,
+)
+
+
+def extract_size_and_clean_name(raw_name):
+    if not raw_name:
+        return "N/A", "N/A"
+
+    match = size_pattern.search(raw_name)
+    if match is None:
+        return "N/A", raw_name
+
+    unit = match.group("unit").lower().replace(".", "")
+    if unit in {"fluid ounce", "fluid ounces", "fl oz"}:
+        normalized_unit = "fl oz"
+    elif unit in {"ounce", "ounces", "oz"}:
+        normalized_unit = "oz"
+    elif unit in {"lb", "lbs", "pound", "pounds"}:
+        normalized_unit = "lb"
+    elif unit in {"gram", "grams", "g"}:
+        normalized_unit = "gram"
+    elif unit in {"kilogram", "kilograms", "kg"}:
+        normalized_unit = "kg"
+    elif unit in {"milliliter", "milliliters", "ml"}:
+        normalized_unit = "ml"
+    elif unit in {"liter", "liters", "l"}:
+        normalized_unit = "l"
+    else:
+        normalized_unit = unit
+
+    value = match.group("value")
+    cleaned_name = size_pattern.sub("", raw_name, count=1)
+    cleaned_name = re.sub(r"\s{2,}", " ", cleaned_name)
+    cleaned_name = cleaned_name.strip(" ,-/")
+    if len(cleaned_name) < 4:
+        cleaned_name = raw_name
+
+    return f"{value} {normalized_unit}", cleaned_name
 
 def setup():
     toAdd = []
@@ -83,29 +126,17 @@ def whole_foods(store_id, store_code):
             print(offset)
             offset += limit
         for raw in raw_products:
-            size = "N/A"
-            n = raw['name'].lower()
-            for i in [ "fl oz", "lb", "oz"," gram ","ml", "pound"]:
-                if i in n:
-                    unitIndex = max(0,n.find(i)-4)
-                    aroundUnit = n[unitIndex:unitIndex+len(i)+4]
-                    num = re.findall(r"(\d+(\.\d+)?)|(\.\d+)", aroundUnit)
-                    if num == [] or num[0][0] == "":
-                        break
-                    size = f"{num[0][0]} {i}"
-                    raw['name'] = "".join(raw['name'].split(size))
-                    l = raw['name'].split(",")
-                    if len(l) > 1:
-                        del l[-1]
-                        raw['name'] = "".join(l)
-
-                    if len(raw['name']) < 4:
-                        raw['name'] = n
-                    break
-            if raw['name'][0:1] == "PB" and raw['brand'] == "Renpure":
+            raw_full_name = str(raw.get('name', ''))
+            raw_brand = str(raw.get('brand', ''))
+            size, cleaned_name = extract_size_and_clean_name(raw_full_name)
+            raw['name'] = cleaned_name
+            n = raw_full_name.lower()
+            if raw['name'].startswith("PB") and raw['brand'] == "Renpure" and len(raw['name']) >= 5:
                 size = raw['name'][-5]
             raw['name'] = raw['name'].title()
-            prod = sess.query(Product).filter(Product.name == raw['name']).first()
+            prod = sess.query(Product).filter(
+                Product.raw_name == raw_full_name,
+            ).first()
             if prod == None:
                 try: 
                     raw['brand'] = raw['brand'].title()
@@ -117,6 +148,7 @@ def whole_foods(store_id, store_code):
                     raw['imageThumbnail'] = "https://external-content.duckduckgo.com/iu/?u=http%3A%2F%2Fwww.sott.net%2Fimage%2Fimage%2Fs5%2F102602%2Ffull%2Fwholefoods.png&f=1&nofb=1&ipt=21419f3cd82d823842c0297318a102a87ac9b6b801dd2417cc5661c32591fbc4&ipo=images"
                 prod = Product(
                     company_id = 1,
+                    raw_name = raw_full_name,
                     name = raw['name'],
                     brand = raw['brand'],
                     picture_url = raw['imageThumbnail'],
@@ -169,6 +201,9 @@ def whole_foods(store_id, store_code):
         sess.commit()
 
 def trader_joes(store_id, store_code):
+    tj_headers = headers
+    tj_headers['Host'] = 'www.traderjoes.com'
+    tj_headers['Origin'] = 'https://www.traderjoes.com'
     url = "https://www.traderjoes.com/api/graphql"
     main_body = {
         "operationName": "SearchProducts",
@@ -192,6 +227,7 @@ def trader_joes(store_id, store_code):
             results = json.loads(response.read())['data']['products']['items']
         except:
             break
+            input("???")
         if results == []:
             break
         for i in results:
@@ -263,7 +299,7 @@ def get_joes_store(stores,searchterm):
         "request": {
             "appkey": "8BC3433A-60FC-11E3-991D-B2EE0C70A832",
             "formdata": {
-            "geoip": false,
+            "geoip": "false",
             "dataview": "store_default",
             "limit": 1,
             "geolocs": {
@@ -362,17 +398,35 @@ New Products:
 """ 
     for p in emailer_info["products"]:
         message += f"\n{p.name} | {p.brand} | {p.company_id}" 
-    emailer.simple_send(message)
-    emailer.send(emailer_info)
+    try:
+        emailer.simple_send(message)
+        emailer.send(emailer_info)
+    except Exception as e:
+        if debug:
+            print(f"Email skipped in debug due to error: {e}")
+        else:
+            raise
 
 def user_newsletter():
     pass
+
+
+def ensure_schema():
+    Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+    product_columns = {col['name'] for col in inspector.get_columns('products')}
+    if 'raw_name' not in product_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE products ADD COLUMN raw_name VARCHAR(150)"))
+
+
 if len(sys.argv) != 1 and (sys.argv[1] == "debug" or sys.argv[1] == "d"):
     debug=True
 else:
     debug=False
 if __name__ == "__main__":
     print("starting")
+    ensure_schema()
 #     message = f"""\
 # Subject: GS Scraper (Starting) - {datetime.now().strftime("%A, %d. %B %Y %I:%M%p")}
 
@@ -382,6 +436,7 @@ if __name__ == "__main__":
     # If debug, run immediately. Otherwise, run according to schedule.
     if debug:
         scheduled_job()
+        print("DEBUGGING")
     else:
         while True:
             schedule.run_pending()

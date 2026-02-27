@@ -15,6 +15,7 @@ class PricePoint(Base, BaseModel):
 
 class Product(Base,BaseModel):
     __tablename__ = 'products'
+    raw_name = Column(String(150))
     name = Column(String(100))
     brand = Column(String(100))
     company_id = Column(Integer, ForeignKey("companies.id"))

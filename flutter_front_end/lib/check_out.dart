@@ -11,10 +11,16 @@ class CheckOut extends StatefulWidget {
     required this.setCart,
     required this.setCartFinished,
     required this.companies,
+    required this.addToCartQty,
+    required this.removeFromCartAll,
+    required this.cartQuantities,
   }) : super(key: key);
 
   final Function setCart;
   final Function setCartFinished;
+  final Function addToCartQty;
+  final Function removeFromCartAll;
+  final Map<int, int> cartQuantities;
   List<Product> cartFinished;
   List<Product> cart;
   final List<Store> stores;
@@ -33,7 +39,16 @@ class _CheckOutState extends State<CheckOut> {
         ),
         body: Column(
           children: [
-            Text("To Do:", style: TextStyle(fontWeight: FontWeight.bold)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text("To Do:", style: TextStyle(fontWeight: FontWeight.bold)),
+                Padding(
+                  padding: const EdgeInsets.only(right: 12.0),
+                  child: Text('Total Items: ${widget.cartQuantities.values.fold(0, (a, b) => a + b)}', style: TextStyle(fontWeight: FontWeight.bold)),
+                )
+              ],
+            ),
             Expanded(
               child: ListView(
                   scrollDirection: Axis.horizontal,
@@ -65,13 +80,21 @@ class _CheckOutState extends State<CheckOut> {
                                               clipBehavior: Clip.hardEdge,
                                               child: InkWell(
                                                   onTap: () {
-                                                    widget.cart.remove(p);
-                                                    widget.cartFinished.add(p);
-                                                    widget.setCart(widget.cart);
-                                                    widget.setCartFinished(
-                                                        widget.cartFinished);
+                                                    setState(() {
+                                                      widget.cart.removeWhere((item) => item.id == p.id);
+                                                      if (!widget.cartFinished.any((item) => item.id == p.id)) {
+                                                        widget.cartFinished.add(p);
+                                                      }
+                                                      widget.setCart(widget.cart);
+                                                      widget.setCartFinished(widget.cartFinished);
+                                                    });
                                                   },
-                                                  child: ProductBox(p: p))))
+                                                  child: Column(
+                                                    children: [
+                                                      ProductBox(p: p, qty: widget.cartQuantities[p.id] ?? 0),
+                                                      Text('Qty: ${widget.cartQuantities[p.id] ?? 0}'),
+                                                    ],
+                                                  ))))
                                           .toList()
                                           .cast<Widget>()),
                                 ),
@@ -106,21 +129,23 @@ class _CheckOutState extends State<CheckOut> {
                                       scrollDirection: Axis.vertical,
                                       shrinkWrap: true,
                                       padding: const EdgeInsets.all(1),
-                                      children: widget.cartFinished
+                                        children: widget.cartFinished
                                           .where((p) => p.storeId == s.id)
                                           .map((p) => Card(
-                                              color: Colors.white,
-                                              clipBehavior: Clip.hardEdge,
-                                              child: InkWell(
-                                                  onTap: () {
-                                                    widget.cart.add(p);
-                                                    widget.cartFinished
-                                                        .remove(p);
-                                                    widget.setCart(widget.cart);
-                                                    widget.setCartFinished(
-                                                        widget.cartFinished);
-                                                  },
-                                                  child: ProductBox(p: p))))
+                                            color: Colors.white,
+                                            clipBehavior: Clip.hardEdge,
+                                            child: InkWell(
+                                              onTap: () {
+                                              setState(() {
+                                                if (!widget.cart.any((item) => item.id == p.id)) {
+                                                  widget.cart.add(p);
+                                                }
+                                                widget.cartFinished.removeWhere((item) => item.id == p.id);
+                                                widget.setCart(widget.cart);
+                                                widget.setCartFinished(widget.cartFinished);
+                                              });
+                                              },
+                                              child: ProductBox(p: p, qty: widget.cartQuantities[p.id] ?? 0))))
                                           .toList()
                                           .cast<Widget>()),
                                 ),

@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_front_end/main.dart' show PricePoint;
 
 class BarChartSample4 extends StatefulWidget {
   BarChartSample4({super.key});
@@ -9,6 +10,210 @@ class BarChartSample4 extends StatefulWidget {
   final Color light = Colors.cyan.shade200;
   @override
   State<StatefulWidget> createState() => BarChartSample4State();
+}
+
+/// A simple line chart widget that plots the lowest price from a list of
+/// [PricePoint]s against their chronological order. Designed to be small
+/// and robust for use in product detail modals.
+class PriceHistoryChart extends StatelessWidget {
+  final List<PricePoint> pricepoints;
+
+  const PriceHistoryChart({super.key, required this.pricepoints});
+
+  static const double _gramsPerOunce = 28.349523125;
+  static const double _mlPerFluidOunce = 29.5735295625;
+
+  ({double amount, String unit})? _normalizeSize(String size) {
+    final raw = size.trim().toLowerCase();
+    if (raw.isEmpty || raw == 'n/a' || raw == 'na') return null;
+
+    final match = RegExp(r'(\d+(?:\.\d+)?)\s*([a-zA-Z]+(?:\s*[a-zA-Z]+)?)').firstMatch(raw);
+    if (match == null) return null;
+
+    final qty = double.tryParse(match.group(1)!);
+    if (qty == null || qty <= 0) return null;
+
+    final unitRaw = match.group(2)!.replaceAll(' ', '').toLowerCase();
+
+    switch (unitRaw) {
+      case 'oz':
+      case 'ounce':
+      case 'ounces':
+        return (amount: qty, unit: 'oz');
+      case 'lb':
+      case 'lbs':
+      case 'pound':
+      case 'pounds':
+        return (amount: qty * 16.0, unit: 'oz');
+      case 'g':
+      case 'gram':
+      case 'grams':
+        return (amount: qty / _gramsPerOunce, unit: 'oz');
+      case 'kg':
+      case 'kilogram':
+      case 'kilograms':
+        return (amount: (qty * 1000.0) / _gramsPerOunce, unit: 'oz');
+      case 'floz':
+      case 'fluidounce':
+      case 'fluidounces':
+        return (amount: qty, unit: 'fl oz');
+      case 'ml':
+      case 'milliliter':
+      case 'milliliters':
+        return (amount: qty / _mlPerFluidOunce, unit: 'fl oz');
+      case 'l':
+      case 'liter':
+      case 'liters':
+      case 'ltr':
+        return (amount: (qty * 1000.0) / _mlPerFluidOunce, unit: 'fl oz');
+      case 'qt':
+      case 'quart':
+      case 'quarts':
+        return (amount: qty * 32.0, unit: 'fl oz');
+      case 'pt':
+      case 'pint':
+      case 'pints':
+        return (amount: qty * 16.0, unit: 'fl oz');
+      case 'gal':
+      case 'gallon':
+      case 'gallons':
+        return (amount: qty * 128.0, unit: 'fl oz');
+      case 'ct':
+      case 'count':
+      case 'ea':
+      case 'each':
+      case 'pk':
+      case 'pack':
+        return (amount: qty, unit: 'ct');
+      default:
+        return null;
+    }
+  }
+
+  ({double value, String? unit}) _metricForPoint(PricePoint point) {
+    final normalized = _normalizeSize(point.size);
+    if (normalized == null || normalized.amount <= 0) {
+      return (value: point.lowestPrice(), unit: null);
+    }
+    return (value: point.lowestPrice() / normalized.amount, unit: normalized.unit);
+  }
+
+  double _priceForChart(PricePoint point) {
+    return _metricForPoint(point).value;
+  }
+
+  String _formatCurrency(double value) {
+    return '\$${value.toStringAsFixed(2)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (pricepoints.isEmpty) {
+      return Center(child: Text('No price history'));
+    }
+
+    // Aggregate by UTC calendar day so each day has exactly one data point.
+    // If multiple entries exist on the same day, keep only the latest one.
+    final Map<int, PricePoint> latestByUtcDay = {};
+    for (final pp in pricepoints) {
+      final utc = pp.timestamp.toUtc();
+      final dayKey = DateTime.utc(utc.year, utc.month, utc.day).millisecondsSinceEpoch;
+      final existing = latestByUtcDay[dayKey];
+        final shouldReplace = existing == null ||
+          pp.timestamp.isAfter(existing.timestamp) ||
+          (pp.timestamp.isAtSameMomentAs(existing.timestamp) && _priceForChart(pp) < _priceForChart(existing));
+      if (shouldReplace) {
+        latestByUtcDay[dayKey] = pp;
+      }
+    }
+
+    // Sort aggregated entries chronologically (one per day).
+    final aggEntries = latestByUtcDay.values.toList()
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+    final spots = <FlSpot>[];
+    final aggDates = <DateTime>[];
+    double minY = double.infinity;
+    double maxY = double.negativeInfinity;
+    for (var i = 0; i < aggEntries.length; i++) {
+      final pp = aggEntries[i];
+      final y = _priceForChart(pp);
+      spots.add(FlSpot(i.toDouble(), y));
+      aggDates.add(pp.timestamp);
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+
+    // Small padding so line doesn't sit on graph edge
+    final yPadding = (maxY - minY) * 0.1;
+    final minYDisplay = (minY.isFinite) ? (minY - yPadding) : 0.0;
+    final maxYDisplay = (maxY.isFinite) ? (maxY + yPadding) : 1.0;
+
+    return AspectRatio(
+      aspectRatio: 1.8,
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: LineChart(
+          LineChartData(
+            lineTouchData: LineTouchData(
+              enabled: true,
+              touchTooltipData: LineTouchTooltipData(
+                tooltipBgColor: Colors.grey.shade800.withOpacity(0.9),
+                getTooltipItems: (touchedSpots) => touchedSpots.map((t) {
+                  final pp = aggEntries[t.x.toInt()];
+                  final metric = _metricForPoint(pp);
+                  final date = aggDates[t.x.toInt()];
+                  final unitText = metric.unit != null ? '/${metric.unit}' : '';
+                  final label = "${_formatCurrency(t.y)}$unitText\n${date.month}/${date.day}/${date.year}";
+                  return LineTooltipItem(label, const TextStyle(color: Colors.white, fontSize: 12));
+                }).toList(),
+              ),
+            ),
+            gridData: FlGridData(show: true, drawVerticalLine: false),
+            titlesData: FlTitlesData(
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  getTitlesWidget: (value, meta) {
+                    final i = value.toInt();
+                    if (i < 0 || i >= aggDates.length) return const SizedBox.shrink();
+                    final d = aggDates[i];
+                    return SideTitleWidget(axisSide: meta.axisSide, child: Text('${d.month}/${d.day}/${d.year % 100}', style: const TextStyle(fontSize: 10)));
+                  },
+                ),
+              ),
+              leftTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 60,
+                  getTitlesWidget: (value, meta) {
+                    return SideTitleWidget(
+                      axisSide: meta.axisSide,
+                      child: Text(_formatCurrency(value), style: const TextStyle(fontSize: 10)),
+                    );
+                  },
+                ),
+              ),
+              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            ),
+            minY: minYDisplay,
+            maxY: maxYDisplay,
+            lineBarsData: [
+              LineChartBarData(
+                spots: spots,
+                isCurved: true,
+                dotData: FlDotData(show: true),
+                belowBarData: BarAreaData(show: true, color: Theme.of(context).colorScheme.primary.withOpacity(0.15)),
+                color: Theme.of(context).colorScheme.primary,
+                barWidth: 2,
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class BarChartSample4State extends State<BarChartSample4> {

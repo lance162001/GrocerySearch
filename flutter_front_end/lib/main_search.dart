@@ -15,6 +15,9 @@ class StoreSearch extends StatefulWidget {
     required this.setStore,
     required this.setCart,
     required this.setCartFinished,
+    required this.addToCartQty,
+    required this.removeFromCartAll,
+    required this.cartQuantities,
     required this.setTags,
     required this.cart,
     required this.cartFinished,
@@ -28,6 +31,9 @@ class StoreSearch extends StatefulWidget {
   final Function setStore;
   final Function setCart;
   final Function setCartFinished;
+  final Function addToCartQty;
+  final Function removeFromCartAll;
+  final Map<int, int> cartQuantities;
   final Function setTags;
   final List<Product> cart;
   final List<Product> cartFinished;
@@ -147,6 +153,9 @@ class _StoreSearchState extends State<StoreSearch> {
                               cartFinished: widget.cartFinished,
                               setCart: widget.setCart,
                               setCartFinished: widget.setCartFinished,
+                              addToCartQty: widget.addToCartQty,
+                              removeFromCartAll: widget.removeFromCartAll,
+                              cartQuantities: widget.cartQuantities,
                               searchTerm: widget.searchTerm,
                               setSearchTerm: widget.setSearchTerm,
                             );

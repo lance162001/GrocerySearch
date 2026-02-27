@@ -15,11 +15,25 @@ dynamic extractPage(Map<String, dynamic> json) {
 }
 
 //// CHANGE ME
-bool local = false;
+bool local = true;
 ////
 
 String hostname = local ? 'localhost' : 'asktheinter.net';
 String port = local ? '8000' : '23451';
+
+double? parsePriceString(String raw) {
+  final cleaned = raw.trim().replaceAll(RegExp(r'[^0-9.\-]'), '');
+  if (cleaned.isEmpty) return null;
+  return double.tryParse(cleaned);
+}
+
+String formatPriceString(String raw) {
+  final parsed = parsePriceString(raw);
+  if (parsed == null) {
+    return raw.startsWith(r'$') ? raw : r'$' + raw;
+  }
+  return '\$${parsed.toStringAsFixed(2)}';
+}
 
 Future<List<Product>> fetchProducts(List<int> storeIds,
     {String search = "",
@@ -253,14 +267,30 @@ class Product {
         .cast<PricePoint>();
 
     pHistory.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    PricePoint latest = pHistory.isNotEmpty ? pHistory.first : PricePoint(
+      memberPrice: '',
+      salePrice: '',
+      basePrice: '0',
+      size: '',
+      timestamp: DateTime.now(),
+    );
+    for (final pp in pHistory) {
+      final isNewer = pp.timestamp.isAfter(latest.timestamp);
+      final isSameTimeButBetter =
+          pp.timestamp.isAtSameMomentAs(latest.timestamp) &&
+              pp.lowestPrice() < latest.lowestPrice();
+      if (isNewer || isSameTimeButBetter) {
+        latest = pp;
+      }
+    }
     return Product(
       id: p['id'],
-      lastUpdated: pHistory[0].timestamp,
+      lastUpdated: latest.timestamp,
       brand: p['brand'],
-      memberPrice: pHistory[0].memberPrice,
-      salePrice: pHistory[0].salePrice,
-      basePrice: pHistory[0].basePrice,
-      size: pHistory[0].size,
+      memberPrice: latest.memberPrice,
+      salePrice: latest.salePrice,
+      basePrice: latest.basePrice,
+      size: latest.size,
       pictureUrl: p['picture_url'],
       name: p['name'],
       priceHistory: pHistory,
@@ -348,10 +378,38 @@ Widget getNotification(List<PricePoint> pricepoints) {
 }
 
 Widget getImage(String url, double width, double height) {
+  String imageUrl;
+  if (url.startsWith('http')) {
+    imageUrl = url;
+  } else if (url.startsWith('/')) {
+    imageUrl = 'http://$hostname:$port' + url;
+  } else {
+    imageUrl = 'http://$hostname:$port/' + url;
+  }
   return CachedNetworkImage(
-      imageUrl: url[0] == "h" ? url : "https://$url",
+    imageUrl: imageUrl,
+    width: width,
+    height: height,
+    fit: BoxFit.contain,
+    alignment: Alignment.center,
+    fadeInDuration: Duration(milliseconds: 250),
+    placeholder: (context, url) => Container(
       width: width,
-      height: height);
+      height: height,
+      alignment: Alignment.center,
+      child: SizedBox(
+        width: (width < 24) ? 12 : 20,
+        height: (height < 24) ? 12 : 20,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      ),
+    ),
+    errorWidget: (context, url, error) => Container(
+      width: width,
+      height: height,
+      color: Colors.grey[200],
+      child: Icon(Icons.broken_image, size: (width < 24) ? 12 : 20, color: Colors.grey[600]),
+    ),
+  );
 }
 
 void main() {
@@ -373,6 +431,7 @@ class _MyAppState extends State<MyApp> {
   late Future<List<Product>> products;
   List<Product> cart = [];
   List<Product> cartFinished = [];
+  Map<int, int> cartQuantities = {};
   List<Tag> userTags = [];
   String searchTerm = "";
   void setTags(Tag tag) => setState(
@@ -381,6 +440,18 @@ class _MyAppState extends State<MyApp> {
   void setCart(List<Product> newCart) => setState(() => cart = newCart);
   void setCartFinished(List<Product> newCartFinished) =>
       setState(() => cartFinished = newCartFinished);
+
+  void addToCartQty(Product p, int qty) => setState(() {
+        cartQuantities[p.id] = (cartQuantities[p.id] ?? 0) + qty;
+        if (!cart.any((item) => item.id == p.id)) cart.add(p);
+      });
+
+  void removeFromCartAll(Product p) => setState(() {
+        cartQuantities.remove(p.id);
+        cart.removeWhere((item) => item.id == p.id);
+      });
+
+  int cartTotalItems() => cartQuantities.values.fold(0, (a, b) => a + b);
   void setStore(Store store) => setState(() => userStores.contains(store)
       ? userStores.remove(store)
       : userStores.add(store));
@@ -413,6 +484,9 @@ class _MyAppState extends State<MyApp> {
               setStore: setStore,
               setCart: setCart,
               setCartFinished: setCartFinished,
+              addToCartQty: addToCartQty,
+              removeFromCartAll: removeFromCartAll,
+              cartQuantities: cartQuantities,
               searchTerm: searchTerm,
               setSearchTerm: setSearchTerm,
             )
@@ -420,7 +494,16 @@ class _MyAppState extends State<MyApp> {
       debugShowCheckedModeBanner: false,
       title: 'GrocerySearch testing',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+        primaryColor: Colors.indigo,
+        scaffoldBackgroundColor: Colors.grey[50],
+        cardTheme: CardThemeData(
+          elevation: 2,
+          margin: EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        textTheme: Theme.of(context).textTheme.apply(bodyColor: Colors.grey[900], displayColor: Colors.grey[900]),
       ),
     );
   }
