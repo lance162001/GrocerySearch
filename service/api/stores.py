@@ -23,11 +23,18 @@ from fastapi_pagination.ext.sqlalchemy import paginate
 
 from difflib import SequenceMatcher
 import Levenshtein
+import os
 
 from sqlalchemy import select, desc, or_
 
 #scraper.debug_mode = True
 store_router = APIRouter()
+
+
+def _logo_url(company: models.Company) -> str:
+    name = f"company_{company.id}.png"
+    path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'logos', name)
+    return f"/static/logos/{name}" if os.path.exists(path) else str(company.logo_url)
 
 def similar(a, b):
     return Levenshtein.ratio(a.lower(),b.lower())
@@ -74,14 +81,14 @@ async def store_search(search: str | None = "", sess: Session=Depends(get_db)):
 async def get_company(id: int, sess: Session=Depends(get_db)):
     company = sess.query(models.Company).get(id)
     if company:
-        return company
+        return schemas.Company(id=int(company.id), name=str(company.name), logo_url=_logo_url(company))
     else:
         raise HTTPException(404, detail=f"Company with id {id} not found")
 
 @store_router.get("/company", response_model=List[schemas.Company])
 async def get_all_companies(sess: Session=Depends(get_db)):
     out = sess.query(models.Company).all()
-    return out
+    return [schemas.Company(id=int(c.id), name=str(c.name), logo_url=_logo_url(c)) for c in out]
 
 @store_router.post("/stores/product_search", response_model=Page[schemas.Product_Details] )
 async def full_product_search(ids: List[int], tags: List[int] | None = [], search: str | None = "", sess: Session=Depends(get_db)):

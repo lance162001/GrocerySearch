@@ -31,6 +31,49 @@ class CheckOut extends StatefulWidget {
 }
 
 class _CheckOutState extends State<CheckOut> {
+  double _productUnitPrice(Product product) {
+    return parsePriceString(product.memberPrice) ??
+        parsePriceString(product.salePrice) ??
+        parsePriceString(product.basePrice) ??
+        0.0;
+  }
+
+  double _checkoutTotal() {
+    final productsById = <int, Product>{
+      for (final product in [...widget.cart, ...widget.cartFinished])
+        product.instanceId: product,
+    };
+
+    double total = 0.0;
+    widget.cartQuantities.forEach((productId, quantity) {
+      final product = productsById[productId];
+      if (product == null || quantity <= 0) {
+        return;
+      }
+      total += _productUnitPrice(product) * quantity;
+    });
+
+    return total;
+  }
+
+  double _storeSectionSubtotal(List<Product> products, int storeId) {
+    final productsById = <int, Product>{
+      for (final product in products.where((product) => product.storeId == storeId))
+        product.instanceId: product,
+    };
+
+    double total = 0.0;
+    widget.cartQuantities.forEach((productId, quantity) {
+      final product = productsById[productId];
+      if (product == null || quantity <= 0) {
+        return;
+      }
+      total += _productUnitPrice(product) * quantity;
+    });
+
+    return total;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -45,7 +88,19 @@ class _CheckOutState extends State<CheckOut> {
                 Text("To Do:", style: TextStyle(fontWeight: FontWeight.bold)),
                 Padding(
                   padding: const EdgeInsets.only(right: 12.0),
-                  child: Text('Total Items: ${widget.cartQuantities.values.fold(0, (a, b) => a + b)}', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Total Items: ${widget.cartQuantities.values.fold(0, (a, b) => a + b)}',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        'Total: \$${_checkoutTotal().toStringAsFixed(2)}',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
                 )
               ],
             ),
@@ -81,8 +136,8 @@ class _CheckOutState extends State<CheckOut> {
                                               child: InkWell(
                                                   onTap: () {
                                                     setState(() {
-                                                      widget.cart.removeWhere((item) => item.id == p.id);
-                                                      if (!widget.cartFinished.any((item) => item.id == p.id)) {
+                                                      widget.cart.removeWhere((item) => item.instanceId == p.instanceId);
+                                                      if (!widget.cartFinished.any((item) => item.instanceId == p.instanceId)) {
                                                         widget.cartFinished.add(p);
                                                       }
                                                       widget.setCart(widget.cart);
@@ -91,8 +146,8 @@ class _CheckOutState extends State<CheckOut> {
                                                   },
                                                   child: Column(
                                                     children: [
-                                                      ProductBox(p: p, qty: widget.cartQuantities[p.id] ?? 0),
-                                                      Text('Qty: ${widget.cartQuantities[p.id] ?? 0}'),
+                                                      ProductBox(p: p, qty: widget.cartQuantities[p.instanceId] ?? 0),
+                                                      Text('Qty: ${widget.cartQuantities[p.instanceId] ?? 0}'),
                                                     ],
                                                   ))))
                                           .toList()
@@ -122,6 +177,10 @@ class _CheckOutState extends State<CheckOut> {
                                     75,
                                     50),
                               ]),
+                              Text(
+                                'Store Total: \$${_storeSectionSubtotal([...widget.cart, ...widget.cartFinished], s.id).toStringAsFixed(2)}',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
                               Expanded(
                                 child: SizedBox(
                                   width: 180,
@@ -137,15 +196,15 @@ class _CheckOutState extends State<CheckOut> {
                                             child: InkWell(
                                               onTap: () {
                                               setState(() {
-                                                if (!widget.cart.any((item) => item.id == p.id)) {
+                                                if (!widget.cart.any((item) => item.instanceId == p.instanceId)) {
                                                   widget.cart.add(p);
                                                 }
-                                                widget.cartFinished.removeWhere((item) => item.id == p.id);
+                                                widget.cartFinished.removeWhere((item) => item.instanceId == p.instanceId);
                                                 widget.setCart(widget.cart);
                                                 widget.setCartFinished(widget.cartFinished);
                                               });
                                               },
-                                              child: ProductBox(p: p, qty: widget.cartQuantities[p.id] ?? 0))))
+                                              child: ProductBox(p: p, qty: widget.cartQuantities[p.instanceId] ?? 0))))
                                           .toList()
                                           .cast<Widget>()),
                                 ),

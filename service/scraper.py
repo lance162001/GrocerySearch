@@ -1,3 +1,4 @@
+# TODOS - ask AI to figure out a way to determine that bananas are per pound and limes are per each when there isn't much to go off of
 import emailer
 
 from datetime import datetime

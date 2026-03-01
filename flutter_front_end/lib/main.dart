@@ -210,6 +210,7 @@ class PricePoint {
 
 class Product {
   int id;
+  int instanceId;
   DateTime lastUpdated;
   String brand;
   String memberPrice;
@@ -235,14 +236,15 @@ class Product {
 
   @override
   bool operator ==(Object other) {
-    return (other is Product) && (other.id == id) && (other.storeId == storeId);
+    return (other is Product) && (other.instanceId == instanceId);
   }
 
   @override
-  int get hashCode => int.parse("$id$storeId");
+  int get hashCode => instanceId;
 
   Product({
     required this.id,
+    required this.instanceId,
     required this.lastUpdated,
     required this.brand,
     required this.memberPrice,
@@ -260,6 +262,10 @@ class Product {
   factory Product.fromJson(Map<String, dynamic> json) {
     Map<String, dynamic> p = json['Product'];
     Map<String, dynamic> i = json['Product_Instance'];
+    final dynamic rawInstanceId = i['id'];
+    final int safeInstanceId = rawInstanceId is int
+        ? rawInstanceId
+        : Object.hash(p['id'], i['store_id']) & 0x3fffffff;
 
     List<PricePoint> pHistory = i['price_points']
         .map((p) => PricePoint.fromJson(p))
@@ -285,6 +291,7 @@ class Product {
     }
     return Product(
       id: p['id'],
+      instanceId: safeInstanceId,
       lastUpdated: latest.timestamp,
       brand: p['brand'],
       memberPrice: latest.memberPrice,
@@ -442,13 +449,13 @@ class _MyAppState extends State<MyApp> {
       setState(() => cartFinished = newCartFinished);
 
   void addToCartQty(Product p, int qty) => setState(() {
-        cartQuantities[p.id] = (cartQuantities[p.id] ?? 0) + qty;
-        if (!cart.any((item) => item.id == p.id)) cart.add(p);
+      cartQuantities[p.instanceId] = (cartQuantities[p.instanceId] ?? 0) + qty;
+      if (!cart.any((item) => item.instanceId == p.instanceId)) cart.add(p);
       });
 
   void removeFromCartAll(Product p) => setState(() {
-        cartQuantities.remove(p.id);
-        cart.removeWhere((item) => item.id == p.id);
+      cartQuantities.remove(p.instanceId);
+      cart.removeWhere((item) => item.instanceId == p.instanceId);
       });
 
   int cartTotalItems() => cartQuantities.values.fold(0, (a, b) => a + b);

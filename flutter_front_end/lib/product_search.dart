@@ -63,6 +63,61 @@ class _SearchPageState extends State<SearchPage> {
     widget.removeFromCartAll(p);
   }
 
+  double? _effectivePrice(Product product) {
+    return parsePriceString(product.memberPrice) ??
+        parsePriceString(product.salePrice) ??
+        parsePriceString(product.basePrice);
+  }
+
+  Store? _storeForId(int storeId) {
+    for (final store in widget.stores) {
+      if (store.id == storeId) {
+        return store;
+      }
+    }
+    return null;
+  }
+
+  Company? _companyForId(int companyId) {
+    for (final company in widget.companies) {
+      if (company.id == companyId) {
+        return company;
+      }
+    }
+    return null;
+  }
+
+  List<Product> _similarProducts(Product selected, List<Product> allProducts) {
+    final perStore = <int, Product>{};
+    for (final candidate in allProducts) {
+      if (candidate.id != selected.id || candidate.storeId == selected.storeId) {
+        continue;
+      }
+      final existing = perStore[candidate.storeId];
+      if (existing == null) {
+        perStore[candidate.storeId] = candidate;
+        continue;
+      }
+      final existingPrice = _effectivePrice(existing);
+      final candidatePrice = _effectivePrice(candidate);
+      if (candidatePrice != null &&
+          (existingPrice == null || candidatePrice < existingPrice)) {
+        perStore[candidate.storeId] = candidate;
+      }
+    }
+
+    final results = perStore.values.toList();
+    results.sort((a, b) {
+      final aPrice = _effectivePrice(a);
+      final bPrice = _effectivePrice(b);
+      if (aPrice == null && bPrice == null) return 0;
+      if (aPrice == null) return 1;
+      if (bPrice == null) return -1;
+      return aPrice.compareTo(bPrice);
+    });
+    return results;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -237,27 +292,28 @@ class _SearchPageState extends State<SearchPage> {
                     padding: const EdgeInsets.all(1),
                     itemBuilder: (context, index) {
                       Product p = products[index];
-                      return Card(
-                            color: (widget.cartQuantities[p.id] ?? 0) > 0
+                          return Card(
+                            color: (widget.cartQuantities[p.instanceId] ?? 0) > 0
                               ? Colors.lightBlue[100]
                               : Colors.white,
                         clipBehavior: Clip.hardEdge,
                         child: InkWell(
                           splashColor: Colors.blue.withAlpha(30),
                           onTap: () {
-                            final qty = quantities[p.id] ?? 1;
-                            if ((widget.cartQuantities[p.id] ?? 0) > 0) {
+                            final qty = quantities[p.instanceId] ?? 1;
+                            if ((widget.cartQuantities[p.instanceId] ?? 0) > 0) {
                               _removeFromCart(p);
                             } else {
                               _addToCart(p, qty);
                             }
                           },
                           onLongPress: () {
+                            final similarProducts = _similarProducts(p, products);
                             showModalBottomSheet<void>(
                                 context: context,
                                 builder: (BuildContext context) {
                                           return SizedBox(
-                                            height: 360,
+                                            height: 500,
                                             child: Column(
                                               children: [
                                                 Padding(
@@ -292,6 +348,144 @@ class _SearchPageState extends State<SearchPage> {
                                                     ],
                                                   ),
                                                 ),
+                                                if (similarProducts.isNotEmpty)
+                                                  Padding(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                                                    child: Align(
+                                                      alignment: Alignment.centerLeft,
+                                                      child: Text(
+                                                        'At other selected stores',
+                                                        style: TextStyle(
+                                                          fontWeight: FontWeight.w600,
+                                                          color: Colors.grey[800],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                if (similarProducts.isNotEmpty)
+                                                  SizedBox(
+                                                    height: 126,
+                                                    child: ListView.separated(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                                                      scrollDirection: Axis.horizontal,
+                                                      itemCount: similarProducts.length,
+                                                      separatorBuilder: (_, __) => SizedBox(width: 8),
+                                                      itemBuilder: (context, similarIndex) {
+                                                        final other = similarProducts[similarIndex];
+                                                        final selectedPrice = _effectivePrice(p);
+                                                        final otherPrice = _effectivePrice(other);
+                                                        final store = _storeForId(other.storeId);
+                                                        final company = store == null
+                                                            ? null
+                                                            : _companyForId(store.companyId);
+
+                                                        Color borderColor = Colors.blueGrey;
+                                                        Color backgroundColor = Colors.blueGrey.shade50;
+                                                        Color accentColor = Colors.blueGrey.shade700;
+                                                        String comparison = 'Same price';
+                                                        String deltaText = 'No difference';
+
+                                                        if (selectedPrice != null && otherPrice != null) {
+                                                          final delta = (selectedPrice - otherPrice).abs();
+                                                          if (selectedPrice > otherPrice) {
+                                                            borderColor = Colors.red.shade400;
+                                                            backgroundColor = Colors.red.shade50;
+                                                            accentColor = Colors.red.shade700;
+                                                            comparison = 'Higher here';
+                                                            deltaText = '\$${delta.toStringAsFixed(2)} more';
+                                                          } else if (selectedPrice < otherPrice) {
+                                                            borderColor = Colors.green.shade400;
+                                                            backgroundColor = Colors.green.shade50;
+                                                            accentColor = Colors.green.shade700;
+                                                            comparison = 'Lower here';
+                                                            deltaText = '\$${delta.toStringAsFixed(2)} less';
+                                                          } else {
+                                                            borderColor = Colors.blueGrey.shade400;
+                                                            backgroundColor = Colors.blueGrey.shade50;
+                                                            accentColor = Colors.blueGrey.shade700;
+                                                            comparison = 'Same price';
+                                                            deltaText = 'No difference';
+                                                          }
+                                                        } else {
+                                                          comparison = 'Price unavailable';
+                                                          deltaText = 'Cannot compare';
+                                                        }
+
+                                                        return Container(
+                                                          width: 168,
+                                                          padding: const EdgeInsets.all(8),
+                                                          decoration: BoxDecoration(
+                                                            color: backgroundColor,
+                                                            borderRadius: BorderRadius.circular(10),
+                                                            border: Border.all(color: borderColor),
+                                                          ),
+                                                          child: Column(
+                                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                            mainAxisAlignment: MainAxisAlignment.start,
+                                                            children: [
+                                                              Row(
+                                                                children: [
+                                                                  if (company != null)
+                                                                    ClipRRect(
+                                                                      borderRadius: BorderRadius.circular(6),
+                                                                      child: getImage(company.logoUrl, 22, 22),
+                                                                    ),
+                                                                  if (company != null)
+                                                                    SizedBox(width: 6),
+                                                                  Expanded(
+                                                                    child: Text(
+                                                                      store?.town ?? 'Store ${other.storeId}',
+                                                                      maxLines: 1,
+                                                                      overflow: TextOverflow.ellipsis,
+                                                                      style: TextStyle(
+                                                                        fontWeight: FontWeight.w600,
+                                                                        fontSize: 12,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                              SizedBox(height: 6),
+                                                              Text(
+                                                                other.memberPrice != ""
+                                                                    ? formatPriceString(other.memberPrice)
+                                                                    : other.salePrice != ""
+                                                                        ? formatPriceString(other.salePrice)
+                                                                        : formatPriceString(other.basePrice),
+                                                                style: TextStyle(
+                                                                  fontWeight: FontWeight.bold,
+                                                                  color: accentColor,
+                                                                  fontSize: 13,
+                                                                ),
+                                                                maxLines: 1,
+                                                                overflow: TextOverflow.ellipsis,
+                                                              ),
+                                                              SizedBox(height: 4),
+                                                              Text(
+                                                                comparison,
+                                                                style: TextStyle(
+                                                                  color: accentColor,
+                                                                  fontSize: 11,
+                                                                  fontWeight: FontWeight.w600,
+                                                                ),
+                                                                maxLines: 1,
+                                                                overflow: TextOverflow.ellipsis,
+                                                              ),
+                                                              Text(
+                                                                deltaText,
+                                                                style: TextStyle(
+                                                                  color: Colors.grey[800],
+                                                                  fontSize: 11,
+                                                                ),
+                                                                maxLines: 1,
+                                                                overflow: TextOverflow.ellipsis,
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        );
+                                                      },
+                                                    ),
+                                                  ),
                                                 Expanded(
                                                   child: Padding(
                                                     padding: const EdgeInsets.symmetric(horizontal: 12.0),
@@ -303,8 +497,8 @@ class _SearchPageState extends State<SearchPage> {
                                                   child: ElevatedButton(
                                                     onPressed: () => {
                                                       setState(() {
-                                                        final qty = quantities[p.id] ?? 1;
-                                                        if ((widget.cartQuantities[p.id] ?? 0) > 0) {
+                                                        final qty = quantities[p.instanceId] ?? 1;
+                                                        if ((widget.cartQuantities[p.instanceId] ?? 0) > 0) {
                                                           _removeFromCart(p);
                                                         } else {
                                                           _addToCart(p, qty);
@@ -314,7 +508,7 @@ class _SearchPageState extends State<SearchPage> {
                                                     },
                                                     child: Row(
                                                       mainAxisSize: MainAxisSize.min,
-                                                      children: (widget.cartQuantities[p.id] ?? 0) > 0
+                                                        children: (widget.cartQuantities[p.instanceId] ?? 0) > 0
                                                           ? [
                                                               Text("Remove from Cart?"),
                                                               SizedBox(width: 6),
@@ -335,7 +529,7 @@ class _SearchPageState extends State<SearchPage> {
                           },
                           child: Row(
                             children: [
-                              Expanded(child: ProductBox(p: p, qty: widget.cartQuantities[p.id] ?? 0)),
+                              Expanded(child: ProductBox(p: p, qty: widget.cartQuantities[p.instanceId] ?? 0)),
                               SizedBox(
                                 width: 96,
                                 child: Column(
@@ -343,20 +537,20 @@ class _SearchPageState extends State<SearchPage> {
                                   children: [
                                     IconButton(
                                       iconSize: 28,
-                                      icon: (widget.cartQuantities[p.id] ?? 0) > 0
+                                      icon: (widget.cartQuantities[p.instanceId] ?? 0) > 0
                                         ? Icon(Icons.remove_shopping_cart)
                                         : Icon(Icons.add_shopping_cart),
                                       onPressed: () {
                                         setState(() {
-                                          final qty = quantities[p.id] ?? 1;
-                                          if ((widget.cartQuantities[p.id] ?? 0) > 0) {
+                                          final qty = quantities[p.instanceId] ?? 1;
+                                          if ((widget.cartQuantities[p.instanceId] ?? 0) > 0) {
                                             _removeFromCart(p);
                                           } else {
                                             _addToCart(p, qty);
                                           }
                                         });
                                       },
-                                      tooltip: (widget.cartQuantities[p.id] ?? 0) > 0
+                                      tooltip: (widget.cartQuantities[p.instanceId] ?? 0) > 0
                                         ? 'Remove from cart'
                                         : 'Add to cart',
                                     ),
@@ -371,15 +565,15 @@ class _SearchPageState extends State<SearchPage> {
                                           icon: Icon(Icons.remove_circle_outline),
                                           onPressed: () {
                                             setState(() {
-                                              final curr = quantities[p.id] ?? 1;
+                                              final curr = quantities[p.instanceId] ?? 1;
                                               final next = (curr - 1).clamp(1, 999);
-                                              quantities[p.id] = next;
+                                              quantities[p.instanceId] = next;
                                             });
                                           },
                                         ),
                                         Padding(
                                           padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                                          child: Text('${quantities[p.id] ?? 1}'),
+                                          child: Text('${quantities[p.instanceId] ?? 1}'),
                                         ),
                                         IconButton(
                                           iconSize: 18,
@@ -388,7 +582,7 @@ class _SearchPageState extends State<SearchPage> {
                                           icon: Icon(Icons.add_circle_outline),
                                           onPressed: () {
                                             setState(() {
-                                              quantities[p.id] = (quantities[p.id] ?? 1) + 1;
+                                              quantities[p.instanceId] = (quantities[p.instanceId] ?? 1) + 1;
                                             });
                                           },
                                         ),
