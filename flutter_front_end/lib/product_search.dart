@@ -54,6 +54,8 @@ class _SearchPageState extends State<SearchPage> {
   Map<int, int> quantities = {};
   final ScrollController scrollController = ScrollController();
   TextEditingController searchFieldController = TextEditingController();
+  bool showOnlySpread = false;
+  bool showOnlySale = false;
 
   void _addToCart(Product p, int qty) {
     widget.addToCartQty(p, qty);
@@ -67,6 +69,15 @@ class _SearchPageState extends State<SearchPage> {
     return parsePriceString(product.memberPrice) ??
         parsePriceString(product.salePrice) ??
         parsePriceString(product.basePrice);
+  }
+
+  bool _hasSalePrice(Product product) {
+    bool hasValue(String value) {
+      final normalized = value.trim().toLowerCase();
+      return normalized.isNotEmpty && normalized != 'null' && normalized != 'none';
+    }
+
+    return hasValue(product.salePrice) || hasValue(product.memberPrice);
   }
 
   Store? _storeForId(int storeId) {
@@ -118,11 +129,43 @@ class _SearchPageState extends State<SearchPage> {
     return results;
   }
 
+  Map<String, dynamic>? _getPriceSpreadInfo(Product selected, List<Product> allProducts) {
+    final perStore = <int, double>{};
+    for (final candidate in allProducts) {
+      if (candidate.id != selected.id) continue;
+      final price = _effectivePrice(candidate);
+      if (price != null) {
+        if (!perStore.containsKey(candidate.storeId) || price < perStore[candidate.storeId]!) {
+          perStore[candidate.storeId] = price;
+        }
+      }
+    }
+
+    if (perStore.length < 2) return null;
+
+    final prices = perStore.values.toList();
+    final minPrice = prices.reduce((a, b) => a < b ? a : b);
+    final maxPrice = prices.reduce((a, b) => a > b ? a : b);
+    final spread = maxPrice - minPrice;
+
+    if (spread < 0.01) return null;
+
+    return {
+      'spread': spread,
+      'storeCount': perStore.length,
+      'minPrice': minPrice,
+      'maxPrice': maxPrice,
+    };
+  }
+
   @override
   void initState() {
     super.initState();
     widget.products = fetchProducts(widget.stores.map((s) => s.id).toList(),
-        search: widget.termt, tags: widget.userTags, page: page);
+      search: widget.termt,
+      tags: widget.userTags,
+      onSaleOnly: showOnlySale,
+      page: page);
   }
 
   @override
@@ -148,6 +191,7 @@ class _SearchPageState extends State<SearchPage> {
               storeIds,
               search: widget.termt,
               tags: widget.userTags,
+              onSaleOnly: showOnlySale,
               page: page,
               toAdd: v,
             );
@@ -170,6 +214,7 @@ class _SearchPageState extends State<SearchPage> {
                     storeIds,
                     search: text,
                     tags: widget.userTags,
+                    onSaleOnly: showOnlySale,
                   );
                   setState(() {});
                 },
@@ -184,7 +229,11 @@ class _SearchPageState extends State<SearchPage> {
                         page = 1;
 
                         widget.products =
-                            fetchProducts(storeIds, tags: widget.userTags);
+                            fetchProducts(
+                              storeIds,
+                              tags: widget.userTags,
+                              onSaleOnly: showOnlySale,
+                            );
                         widget.products!.then((v) => setState(() => 1));
                       },
                     ),
@@ -203,9 +252,59 @@ class _SearchPageState extends State<SearchPage> {
                         return StatefulBuilder(builder:
                             (BuildContext context, StateSetter setState) {
                           return SizedBox(
-                            height: 175,
+                            height: 320,
                             child: Column(
                               children: [
+                                Text("Filters",
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold)),
+                                SizedBox(height: 12),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text("Show only items on sale",
+                                          style: TextStyle(fontSize: 14)),
+                                      Switch(
+                                        value: showOnlySale,
+                                        onChanged: (bool value) {
+                                          page = 1;
+                                          setState(() {
+                                            showOnlySale = value;
+                                          });
+                                          widget.products = fetchProducts(
+                                            storeIds,
+                                            search: widget.termt,
+                                            tags: widget.userTags,
+                                            onSaleOnly: showOnlySale,
+                                          );
+                                          this.setState(() => 1);
+                                        },
+                                      )
+                                    ],
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text("Show items with price spread",
+                                          style: TextStyle(fontSize: 14)),
+                                      Switch(
+                                        value: showOnlySpread,
+                                        onChanged: (bool value) {
+                                          setState(() {
+                                            showOnlySpread = value;
+                                          });
+                                          this.setState(() => 1);
+                                        },
+                                      )
+                                    ],
+                                  ),
+                                ),
+                                Divider(),
                                 Text("Filter By Tags",
                                     style:
                                         TextStyle(fontWeight: FontWeight.bold)),
@@ -233,6 +332,7 @@ class _SearchPageState extends State<SearchPage> {
                                                     storeIds,
                                                     search: widget.termt,
                                                     tags: widget.userTags,
+                                                    onSaleOnly: showOnlySale,
                                                   );
                                                   setState(() => 1);
                                                   widget.products!
@@ -284,6 +384,44 @@ class _SearchPageState extends State<SearchPage> {
                   return Text("No Products Found!");
                 }
 
+                if (showOnlySale) {
+                  products = products.where(_hasSalePrice).toList();
+
+                  if (products.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          "No products found that are currently on sale",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                        ),
+                      ),
+                    );
+                  }
+                }
+
+                // Filter products with price spread if enabled
+                if (showOnlySpread) {
+                  products = products.where((product) {
+                    final spreadInfo = _getPriceSpreadInfo(product, products);
+                    return spreadInfo != null;
+                  }).toList();
+                
+                  if (products.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          "No products found with price differences across stores",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                        ),
+                      ),
+                    );
+                  }
+                }
+
                 return ListView.builder(
                     controller: scrollController,
                     itemCount: products.length,
@@ -292,12 +430,15 @@ class _SearchPageState extends State<SearchPage> {
                     padding: const EdgeInsets.all(1),
                     itemBuilder: (context, index) {
                       Product p = products[index];
-                          return Card(
-                            color: (widget.cartQuantities[p.instanceId] ?? 0) > 0
-                              ? Colors.lightBlue[100]
-                              : Colors.white,
+                      final spreadInfo = _getPriceSpreadInfo(p, products);
+                      return Card(
+                        color: (widget.cartQuantities[p.instanceId] ?? 0) > 0
+                          ? Colors.lightBlue[100]
+                          : Colors.white,
                         clipBehavior: Clip.hardEdge,
-                        child: InkWell(
+                        child: Stack(
+                          children: [
+                            InkWell(
                           splashColor: Colors.blue.withAlpha(30),
                           onTap: () {
                             final qty = quantities[p.instanceId] ?? 1;
@@ -531,12 +672,13 @@ class _SearchPageState extends State<SearchPage> {
                             children: [
                               Expanded(child: ProductBox(p: p, qty: widget.cartQuantities[p.instanceId] ?? 0)),
                               SizedBox(
-                                width: 96,
+                                width: 76,
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     IconButton(
-                                      iconSize: 28,
+                                      iconSize: 24,
+                                      padding: EdgeInsets.zero,
                                       icon: (widget.cartQuantities[p.instanceId] ?? 0) > 0
                                         ? Icon(Icons.remove_shopping_cart)
                                         : Icon(Icons.add_shopping_cart),
@@ -554,12 +696,12 @@ class _SearchPageState extends State<SearchPage> {
                                         ? 'Remove from cart'
                                         : 'Add to cart',
                                     ),
-                                    SizedBox(height: 6),
+                                    SizedBox(height: 4),
                                     Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         IconButton(
-                                          iconSize: 18,
+                                          iconSize: 16,
                                           padding: EdgeInsets.zero,
                                           constraints: BoxConstraints(),
                                           icon: Icon(Icons.remove_circle_outline),
@@ -571,12 +713,12 @@ class _SearchPageState extends State<SearchPage> {
                                             });
                                           },
                                         ),
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                                          child: Text('${quantities[p.instanceId] ?? 1}'),
+                                        SizedBox(
+                                          width: 22,
+                                          child: Text('${quantities[p.instanceId] ?? 1}', textAlign: TextAlign.center, style: TextStyle(fontSize: 11)),
                                         ),
                                         IconButton(
-                                          iconSize: 18,
+                                          iconSize: 16,
                                           padding: EdgeInsets.zero,
                                           constraints: BoxConstraints(),
                                           icon: Icon(Icons.add_circle_outline),
@@ -588,19 +730,21 @@ class _SearchPageState extends State<SearchPage> {
                                         ),
                                       ],
                                     ),
-                                    SizedBox(height: 6),
+                                    SizedBox(height: 2),
                                     if (p.salePrice != "")
                                       Chip(
                                         label: Text("SALE",
-                                            style: TextStyle(color: Colors.white)),
+                                            style: TextStyle(color: Colors.white, fontSize: 10)),
                                         backgroundColor: Colors.redAccent,
+                                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                                       )
                                     else if (p.memberPrice != "")
                                       Chip(
                                         label: Text("MEMBER",
-                                            style: TextStyle(color: Colors.white)),
+                                            style: TextStyle(color: Colors.white, fontSize: 10)),
                                         backgroundColor:
                                             Theme.of(context).colorScheme.primary,
+                                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                                       )
                                   ],
                                 ),
@@ -618,6 +762,64 @@ class _SearchPageState extends State<SearchPage> {
                                       .logoUrl),
                             ],
                           ),
+                        ),
+                            if (spreadInfo != null)
+                              Positioned(
+                                top: 8,
+                                left: 0,
+                                right: 0,
+                                child: Align(
+                                  alignment: Alignment.topCenter,
+                                  child: Builder(
+                                    builder: (context) {
+                                      final currentPrice = _effectivePrice(p);
+                                      final isMinPrice = currentPrice != null &&
+                                          (currentPrice - spreadInfo['minPrice']).abs() < 0.01;
+                                      final badgeColor = isMinPrice ? Colors.green[600] : Colors.red[600];
+                                      final badgeIcon = isMinPrice
+                                          ? Icons.trending_down
+                                          : Icons.trending_up;
+                                      final badgeLabel = isMinPrice
+                                          ? '\$${spreadInfo['spread'].toStringAsFixed(2)} Cheaper Here'
+                                          : '\$${spreadInfo['spread'].toStringAsFixed(2)} More Here';
+
+                                      return Container(
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: badgeColor,
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black26,
+                                              blurRadius: 4,
+                                              offset: Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(badgeIcon,
+                                                color: Colors.white, size: 16),
+                                            SizedBox(width: 6),
+                                            Text(
+                                              badgeLabel,
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       );
                     });

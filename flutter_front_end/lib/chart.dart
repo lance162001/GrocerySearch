@@ -144,6 +144,16 @@ class PriceHistoryChart extends StatelessWidget {
       if (y > maxY) maxY = y;
     }
 
+    // Keep bottom date labels sparse and deterministic to avoid overlap.
+    const maxDateLabels = 4;
+    final labelStep = aggDates.length <= maxDateLabels
+        ? 1
+        : (aggDates.length / (maxDateLabels - 1)).ceil();
+    final labeledIndexes = <int>{
+      for (var i = 0; i < aggDates.length; i += labelStep) i,
+      if (aggDates.isNotEmpty) aggDates.length - 1,
+    };
+
     // Small padding so line doesn't sit on graph edge
     final yPadding = (maxY - minY) * 0.1;
     final minYDisplay = (minY.isFinite) ? (minY - yPadding) : 0.0;
@@ -174,11 +184,22 @@ class PriceHistoryChart extends StatelessWidget {
               bottomTitles: AxisTitles(
                 sideTitles: SideTitles(
                   showTitles: true,
+                  reservedSize: 42,
+                  interval: labelStep.toDouble(),
                   getTitlesWidget: (value, meta) {
-                    final i = value.toInt();
+                    final i = value.round();
+                    if ((value - i).abs() > 0.001) return const SizedBox.shrink();
                     if (i < 0 || i >= aggDates.length) return const SizedBox.shrink();
+                    if (!labeledIndexes.contains(i)) return const SizedBox.shrink();
                     final d = aggDates[i];
-                    return SideTitleWidget(axisSide: meta.axisSide, child: Text('${d.month}/${d.day}/${d.year % 100}', style: const TextStyle(fontSize: 10)));
+                    return SideTitleWidget(
+                      axisSide: meta.axisSide,
+                      angle: -0.6,
+                      child: Text(
+                        '${d.month}/${d.day}',
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                    );
                   },
                 ),
               ),
@@ -199,6 +220,8 @@ class PriceHistoryChart extends StatelessWidget {
             ),
             minY: minYDisplay,
             maxY: maxYDisplay,
+            minX: 0,
+            maxX: (spots.length - 1).toDouble(),
             lineBarsData: [
               LineChartBarData(
                 spots: spots,

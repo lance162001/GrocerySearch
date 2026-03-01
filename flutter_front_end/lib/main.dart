@@ -38,16 +38,18 @@ String formatPriceString(String raw) {
 Future<List<Product>> fetchProducts(List<int> storeIds,
     {String search = "",
     List<Tag> tags = const [],
+    bool onSaleOnly = false,
     int page = 1,
     int size = 100,
     List<Product> toAdd = const []}) async {
-  final String uri;
-  if (search != "") {
-    uri =
-        'http://$hostname:$port/stores/product_search?search=$search&page=$page&size=$size';
-  } else {
-    uri = 'http://$hostname:$port/stores/product_search?page=$page&size=$size';
-  }
+  final queryParams = <String, String>{
+    'page': '$page',
+    'size': '$size',
+    if (search != "") 'search': search,
+    if (onSaleOnly) 'on_sale': 'true',
+  };
+  final uri = Uri.http('$hostname:$port', '/stores/product_search', queryParams)
+      .toString();
 
   final headers = {HttpHeaders.contentTypeHeader: 'application/json'};
   Object body =
@@ -531,21 +533,16 @@ class StoreRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 110,
+      width: 70,
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(product.brand,
-              maxLines: 2,
-              style: TextStyle(fontSize: 11),
-              overflow: TextOverflow.fade,
-              softWrap: true),
-          Row(
-            children: [
-              Text(store.town,
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              getImage(logoUrl, 30, 30)
-            ],
-          ),
+          getImage(logoUrl, 20, 20),
+          SizedBox(height: 2),
+          Text(store.town,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
         ],
       ),
     );

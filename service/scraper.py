@@ -1,4 +1,3 @@
-# TODOS - ask AI to figure out a way to determine that bananas are per pound and limes are per each when there isn't much to go off of
 import emailer
 
 from datetime import datetime
@@ -83,7 +82,7 @@ def setup():
     toAdd.append(Store(company_id=1, scraper_id=10319, address="300 Legacy Pl", zipcode="02026", town="Dedham", state="Massachusetts"))
     toAdd.append(Store(company_id=2, scraper_id=512, address="375 Russell St", zipcode='01035', town='Hadley', state='Massachusetts'))
     toAdd.append(Store(company_id=1, scraper_id=10156, address="575 Worcester Rd", zipcode='01701', town='Framingham', state='Massachusetts'))
-
+    toAdd.append(Store(company_id=1, scraper_id=10145, address="525 N Lamar Blvd", zipcode="78703", town="Austin", state="Texas"))
     count = 1
     for t in categories:
         tags[t] = count

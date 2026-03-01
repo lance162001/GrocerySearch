@@ -45,7 +45,7 @@ async def get_all_stores(sess: Session=Depends(get_db)):
 
 @store_router.get("/stores/{id}/products", response_model=List[schemas.Product_Instance])
 async def get_products_from_store(id: int, sess: Session=Depends(get_db)):
-    product_instances = sess.query(models.Product_Instance).filter(store_id==id).all()
+    product_instances = sess.query(models.Product_Instance).filter(models.Product_Instance.store_id == id).all()
     if product_instances == []:
         raise HTTPException(404, detail=f"Product from store with id {id} not found")
     return product_instances
@@ -91,16 +91,41 @@ async def get_all_companies(sess: Session=Depends(get_db)):
     return [schemas.Company(id=int(c.id), name=str(c.name), logo_url=_logo_url(c)) for c in out]
 
 @store_router.post("/stores/product_search", response_model=Page[schemas.Product_Details] )
-async def full_product_search(ids: List[int], tags: List[int] | None = [], search: str | None = "", sess: Session=Depends(get_db)):
+async def full_product_search(
+    ids: List[int],
+    tags: List[int] | None = None,
+    search: str | None = "",
+    on_sale: bool = False,
+    sess: Session=Depends(get_db)
+):
     s = select(models.Product, models.Product_Instance).where(
         models.Product.id == models.Product_Instance.product_id).where(
         models.Product_Instance.store_id.in_(ids) )
+    tags = tags or []
     if search != "":
         s = s.where(
         models.Product.name.like(f"%{search}%")
     )
     for i in tags:
         s = s.where(models.Product.tags.any(models.Tag_Instance.tag_id == i))
+    if on_sale:
+        latest_pricepoint_id = (
+            select(func.max(models.PricePoint.id))
+            .where(models.PricePoint.instance_id == models.Product_Instance.id)
+            .correlate(models.Product_Instance)
+            .scalar_subquery()
+        )
+        s = s.where(
+            select(models.PricePoint.id)
+            .where(
+                models.PricePoint.id == latest_pricepoint_id,
+                or_(
+                    func.coalesce(models.PricePoint.sale_price, "") != "",
+                    func.coalesce(models.PricePoint.member_price, "") != "",
+                ),
+            )
+            .exists()
+        )
     s = s.order_by(func.length(models.Product.name))
     return paginate(sess,s)
     # def sim(a):
