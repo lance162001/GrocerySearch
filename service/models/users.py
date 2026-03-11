@@ -7,6 +7,7 @@ from datetime import datetime
 class User(Base, BaseModel):
     __tablename__ = 'users'
     recent_zipcode = Column(String(5))
+    bundles = relationship("Product_Bundle", back_populates="user", order_by="Product_Bundle.created_at.desc()")
 
 class Saved_Store(Base):
     __tablename__ = 'saved_stores'
@@ -20,17 +21,20 @@ class Saved_Product(Base):
     product_id = Column(Integer, ForeignKey("products.id"))
     bundle_id = Column(Integer, ForeignKey("product_bundles.id"))
     bundle = relationship("Product_Bundle", back_populates="products")
+    product = relationship("Product", lazy="joined")
     __table_args__ = (PrimaryKeyConstraint("product_id","bundle_id"), {})
 
 class Product_Bundle(Base, BaseModel):
     __tablename__ = 'product_bundles'
     user_id = Column(Integer, ForeignKey("users.id"))
     name = Column(String(255))
-    created_at = Column(DateTime, default=datetime.now())
-    products = relationship("Saved_Product", back_populates="bundle")
+    created_at = Column(DateTime, default=datetime.now)
+    products = relationship("Saved_Product", back_populates="bundle", lazy="joined")
+    user = relationship("User", back_populates="bundles")
 
 class Store_Visit(Base, BaseModel):
     __tablename__ = 'store_visits'
     product_bundle_id = Column(Integer, ForeignKey("product_bundles.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
-    created_at = Column(DateTime, default=datetime.now())
+    created_at = Column(DateTime, default=datetime.now)
+    bundle = relationship("Product_Bundle")

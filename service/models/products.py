@@ -9,7 +9,7 @@ class PricePoint(Base, BaseModel):
     sale_price = Column(String(10))
     base_price = Column(String(10))
     size = Column(String(50))
-    created_at = Column(DateTime, default=datetime.now())
+    created_at = Column(DateTime, default=datetime.now)
     instance = relationship('Product_Instance', back_populates="price_points")
     instance_id = Column(Integer, ForeignKey('product_instances.id'))
 

@@ -1,33 +1,19 @@
-from fastapi import APIRouter, BackgroundTasks
-
+import os
 from typing import List
 
+import Levenshtein
 from fastapi import APIRouter, Depends
-from fastapi.encoders import jsonable_encoder
-from sqlalchemy.orm import Session, load_only
+from fastapi.exceptions import HTTPException
+from fastapi_pagination import Page, add_pagination
+from fastapi_pagination.ext.sqlalchemy import paginate
+from sqlalchemy import select, or_
+from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import func
 
 from . import get_db
-
 import models
 import schemas
-import random
-import datetime
-#import scraper
-import requests
-from fastapi.exceptions import HTTPException
 
-from fastapi_pagination import Page, add_pagination#, paginate
-from fastapi_pagination.ext.sqlalchemy import paginate
-
-
-from difflib import SequenceMatcher
-import Levenshtein
-import os
-
-from sqlalchemy import select, desc, or_
-
-#scraper.debug_mode = True
 store_router = APIRouter()
 
 
@@ -36,78 +22,79 @@ def _logo_url(company: models.Company) -> str:
     path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'logos', name)
     return f"/static/logos/{name}" if os.path.exists(path) else str(company.logo_url)
 
-def similar(a, b):
-    return Levenshtein.ratio(a.lower(),b.lower())
+
+def similar(a: str, b: str) -> float:
+    return Levenshtein.ratio(a.lower(), b.lower())
+
 
 @store_router.get("/stores", response_model=List[schemas.Store])
-async def get_all_stores(sess: Session=Depends(get_db)):
+async def get_all_stores(sess: Session = Depends(get_db)):
     return sess.query(models.Store).all()
 
+
 @store_router.get("/stores/{id}/products", response_model=List[schemas.Product_Instance])
-async def get_products_from_store(id: int, sess: Session=Depends(get_db)):
-    product_instances = sess.query(models.Product_Instance).filter(models.Product_Instance.store_id == id).all()
-    if product_instances == []:
+async def get_products_from_store(id: int, sess: Session = Depends(get_db)):
+    product_instances = sess.query(models.Product_Instance).filter(
+        models.Product_Instance.store_id == id
+    ).all()
+    if not product_instances:
         raise HTTPException(404, detail=f"Product from store with id {id} not found")
     return product_instances
 
+
 @store_router.get("/stores/search", response_model=Page[schemas.Store])
-async def store_search(search: str | None = "", sess: Session=Depends(get_db)):
-    # def sim(a):
-    #     return max(similar(a.address,search),similar(a.zipcode,search))
-    # q = sess.query(models.Store)
-    # if len(search) == 5 and search.isalnum:
-    #     stores = q.filter(models.Store.zipcode == zipcode).all()
-    # elif search == "":
-    #     stores = q.all()
-    # else:
-    #     stores = q.all()
-    #     stores.sort(key=sim,reverse=True)
-    # return paginate(stores)
+async def store_search(search: str | None = "", sess: Session = Depends(get_db)):
     if search == "":
         return paginate(sess, select(models.Store))
-    else:
-        return paginate(sess, select(models.Store)
-            .where(
-                or_(models.Store.address.like(f"%{search}%"),
-                    models.Store.zipcode.like(f"%{search}%"),
-                    models.Store.state.like(f"%{search}%"),
-                    models.Store.town.like(f"%{search}%"),
-                )
+    return paginate(
+        sess,
+        select(models.Store).where(
+            or_(
+                models.Store.address.like(f"%{search}%"),
+                models.Store.zipcode.like(f"%{search}%"),
+                models.Store.state.like(f"%{search}%"),
+                models.Store.town.like(f"%{search}%"),
             )
-        )
-        
+        ),
+    )
+
 
 @store_router.get("/company/{id}", response_model=schemas.Company)
-async def get_company(id: int, sess: Session=Depends(get_db)):
-    company = sess.query(models.Company).get(id)
-    if company:
-        return schemas.Company(id=int(company.id), name=str(company.name), logo_url=_logo_url(company))
-    else:
+async def get_company(id: int, sess: Session = Depends(get_db)):
+    company = sess.get(models.Company, id)
+    if not company:
         raise HTTPException(404, detail=f"Company with id {id} not found")
+    return schemas.Company(id=int(company.id), name=str(company.name), logo_url=_logo_url(company))
+
 
 @store_router.get("/company", response_model=List[schemas.Company])
-async def get_all_companies(sess: Session=Depends(get_db)):
-    out = sess.query(models.Company).all()
-    return [schemas.Company(id=int(c.id), name=str(c.name), logo_url=_logo_url(c)) for c in out]
+async def get_all_companies(sess: Session = Depends(get_db)):
+    companies = sess.query(models.Company).all()
+    return [schemas.Company(id=int(c.id), name=str(c.name), logo_url=_logo_url(c)) for c in companies]
 
-@store_router.post("/stores/product_search", response_model=Page[schemas.Product_Details] )
+
+@store_router.post("/stores/product_search", response_model=Page[schemas.Product_Details])
 async def full_product_search(
     ids: List[int],
     tags: List[int] | None = None,
     search: str | None = "",
     on_sale: bool = False,
-    sess: Session=Depends(get_db)
+    sess: Session = Depends(get_db),
 ):
-    s = select(models.Product, models.Product_Instance).where(
-        models.Product.id == models.Product_Instance.product_id).where(
-        models.Product_Instance.store_id.in_(ids) )
-    tags = tags or []
-    if search != "":
-        s = s.where(
-        models.Product.name.like(f"%{search}%")
+    s = (
+        select(models.Product, models.Product_Instance)
+        .where(models.Product.id == models.Product_Instance.product_id)
+        .where(models.Product_Instance.store_id.in_(ids))
     )
-    for i in tags:
-        s = s.where(models.Product.tags.any(models.Tag_Instance.tag_id == i))
+
+    tags = tags or []
+
+    if search:
+        s = s.where(models.Product.name.like(f"%{search}%"))
+
+    for tag_id in tags:
+        s = s.where(models.Product.tags.any(models.Tag_Instance.tag_id == tag_id))
+
     if on_sale:
         latest_pricepoint_id = (
             select(func.max(models.PricePoint.id))
@@ -126,29 +113,9 @@ async def full_product_search(
             )
             .exists()
         )
+
     s = s.order_by(func.length(models.Product.name))
-    return paginate(sess,s)
-    # def sim(a):
-    #     return similar(a.Product.name,search)
-    # rows = sess.execute(s).all()
-    # out = []
-    # if tags != []:
-    #     for r in rows:   
-    #         if tags in r.Product.tags:
-    #             out.append(r)
-    # else:
-    # out = rows
-    # if search != "":
-    #     out.sort(key=sim,reverse=True)
-    # return paginate(out)
-    # if search == "":
-    #     return paginate(sess,
-    #     select(models.Product,models.Product_Instance)
-    #     .where(
-    #         models.Product.id == models.Product_Instance.product_id, 
-    #         models.Product_Instance.store_id.in_(ids),
-    #         )
-    #     )
+    return paginate(sess, s)
 
 
 add_pagination(store_router)

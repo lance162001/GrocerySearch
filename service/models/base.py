@@ -7,7 +7,6 @@ from sqlalchemy import Column, Integer, DateTime
 
 Base = declarative_base()
 
-# TODO: move to api
 # Use an absolute path for the sqlite DB so all processes open the same file
 BASE_DIR = Path(__file__).resolve().parent.parent
 default_db = BASE_DIR / "app.db"
