@@ -10,6 +10,7 @@ import 'package:fl_chart/fl_chart.dart';
 class SearchPage extends StatefulWidget {
   SearchPage({
     super.key,
+    required this.currentUserId,
     required this.stores,
     required this.userTags,
     required this.companies,
@@ -27,6 +28,7 @@ class SearchPage extends StatefulWidget {
   });
 
   final List<Company> companies;
+  final int currentUserId;
   final List<Tag> tags;
   final Function setCart;
   final Function setCartFinished;
@@ -360,6 +362,7 @@ class _SearchPageState extends State<SearchPage> {
                             context,
                             MaterialPageRoute(
                               builder: (context) => CheckOut(
+                                  currentUserId: widget.currentUserId,
                                   companies: widget.companies,
                                   stores: widget.stores,
                                   cart: widget.cart,

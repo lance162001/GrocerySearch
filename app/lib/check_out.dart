@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter_front_end/main.dart';
 import 'package:flutter_front_end/product_box.dart';
+import 'package:flutter_front_end/bundle_plan.dart';
 
 class CheckOut extends StatefulWidget {
   CheckOut({
     Key? key,
+    required this.currentUserId,
     required this.cart,
     required this.cartFinished,
     required this.stores,
@@ -17,6 +21,7 @@ class CheckOut extends StatefulWidget {
   }) : super(key: key);
 
   final Function setCart;
+  final int currentUserId;
   final Function setCartFinished;
   final Function addToCartQty;
   final Function removeFromCartAll;
@@ -31,6 +36,8 @@ class CheckOut extends StatefulWidget {
 }
 
 class _CheckOutState extends State<CheckOut> {
+  bool _savingBundle = false;
+
   double _productUnitPrice(Product product) {
     return parsePriceString(product.memberPrice) ??
         parsePriceString(product.salePrice) ??
@@ -74,11 +81,112 @@ class _CheckOutState extends State<CheckOut> {
     return total;
   }
 
+  List<int> _cartProductIdsForBundle() {
+    final productByInstance = <int, Product>{
+      for (final product in [...widget.cart, ...widget.cartFinished])
+        product.instanceId: product,
+    };
+    final productIds = <int>{};
+
+    widget.cartQuantities.forEach((instanceId, qty) {
+      if (qty <= 0) return;
+      final product = productByInstance[instanceId];
+      if (product == null) return;
+      productIds.add(product.id);
+    });
+
+    return productIds.toList();
+  }
+
+  Future<void> _saveCartAsBundle() async {
+    if (_savingBundle) return;
+
+    final productIds = _cartProductIdsForBundle();
+    if (productIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cart is empty. Add items before saving.')),
+      );
+      return;
+    }
+
+    setState(() => _savingBundle = true);
+    try {
+      final headers = {'Content-Type': 'application/json'};
+      final name =
+          'Checkout ${DateTime.now().toIso8601String().substring(0, 19)}';
+
+      final createResponse = await http.post(
+        Uri.http('$hostname:$port', '/users/${widget.currentUserId}/bundles'),
+        headers: headers,
+        body: jsonEncode({'name': name}),
+      );
+
+      if (createResponse.statusCode != 200) {
+        throw Exception('Create bundle failed (${createResponse.statusCode})');
+      }
+
+      final created = jsonDecode(createResponse.body) as Map<String, dynamic>;
+      final bundleId = created['id'];
+      if (bundleId is! int || bundleId <= 0) {
+        throw Exception('Invalid bundle id returned by backend');
+      }
+
+      int addedCount = 0;
+      for (final productId in productIds) {
+        final addResponse = await http.post(
+          Uri.http('$hostname:$port', '/bundles/$bundleId/products'),
+          headers: headers,
+          body: jsonEncode({'product_id': productId}),
+        );
+        if (addResponse.statusCode == 200) {
+          addedCount++;
+        }
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Saved bundle #$bundleId with $addedCount items'),
+        ),
+      );
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => BundlePlanPage(
+            initialUserId: widget.currentUserId,
+            initialBundleId: bundleId,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save bundle: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _savingBundle = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
         appBar: AppBar(
           title: Text("Checkout"),
+          actions: [
+            TextButton.icon(
+              onPressed: _savingBundle ? null : _saveCartAsBundle,
+              icon: _savingBundle
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save),
+              label: const Text('Save Bundle'),
+            ),
+          ],
         ),
         body: Column(
           children: [

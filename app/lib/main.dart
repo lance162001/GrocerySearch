@@ -9,6 +9,8 @@ import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'chart.dart';
 import 'package:flutter_front_end/pretty_search.dart';
+import 'package:flutter_front_end/bundle_plan.dart';
+import 'package:flutter_front_end/user_id_cache.dart' as user_cache;
 
 dynamic extractPage(Map<String, dynamic> json) {
   return json['items'];
@@ -20,6 +22,34 @@ bool local = true;
 
 String hostname = local ? 'localhost' : 'asktheinter.net';
 String port = local ? '8000' : '23451';
+
+Future<int> fetchOrCreateUserId() async {
+  final cachedUserId = await user_cache.readCachedUserId();
+  if (cachedUserId != null && cachedUserId > 0) {
+    return cachedUserId;
+  }
+
+  final uri = Uri.http('$hostname:$port', '/users/create');
+  final headers = {HttpHeaders.contentTypeHeader: 'application/json'};
+  final response = await http.post(uri, headers: headers);
+  if (response.statusCode == 404) {
+    const fallbackUserId = 1;
+    await user_cache.writeCachedUserId(fallbackUserId);
+    return fallbackUserId;
+  }
+  if (response.statusCode != 200) {
+    throw Exception('Failed to create user: ${response.statusCode} ${response.body}');
+  }
+
+  final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+  final userId = decoded['id'];
+  if (userId is! int || userId <= 0) {
+    throw Exception('Backend returned invalid user id');
+  }
+
+  await user_cache.writeCachedUserId(userId);
+  return userId;
+}
 
 double? parsePriceString(String raw) {
   final cleaned = raw.trim().replaceAll(RegExp(r'[^0-9.\-]'), '');
@@ -91,6 +121,48 @@ Future<List<Store>> fetchStores(String search,
   } else {
     throw Exception('Failed to load stores');
   }
+}
+
+Future<List<Store>> fetchAllStores() async {
+  final uri = Uri.http('$hostname:$port', '/stores');
+  final headers = {HttpHeaders.contentTypeHeader: 'application/json'};
+  final response = await http.get(uri, headers: headers);
+  if (response.statusCode == 200) {
+    return (jsonDecode(response.body) as List<dynamic>)
+        .map((j) => Store.fromJson(j as Map<String, dynamic>))
+        .toList();
+  } else {
+    throw Exception('Failed to load all stores');
+  }
+}
+
+Future<Set<int>> fetchSavedStoreIdsForUser(int userId) async {
+  final uri = Uri.http('$hostname:$port', '/users/$userId/saved-stores');
+  final headers = {HttpHeaders.contentTypeHeader: 'application/json'};
+  final response = await http.get(uri, headers: headers);
+
+  if (response.statusCode == 404) {
+    return <int>{};
+  }
+  if (response.statusCode != 200) {
+    throw Exception('Failed to load saved stores: ${response.statusCode}');
+  }
+
+  final decoded = jsonDecode(response.body);
+  final List<dynamic> payload;
+  if (decoded is List<dynamic>) {
+    payload = decoded;
+  } else if (decoded is Map<String, dynamic> && decoded['items'] is List<dynamic>) {
+    payload = decoded['items'] as List<dynamic>;
+  } else {
+    return <int>{};
+  }
+
+  return payload
+      .map((entry) => (entry as Map<String, dynamic>)['store_id'])
+      .map((value) => value is int ? value : int.tryParse('$value'))
+      .whereType<int>()
+      .toSet();
 }
 
 Future<List<Tag>> fetchTags() async {
@@ -434,6 +506,9 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   late Future<List<Store>> stores;
+  int? currentUserId;
+  bool bootstrappingUser = true;
+  String? userBootstrapError;
   List<Tag> tags = [];
   List<Company> companies = [];
   List<Store> userStores = [];
@@ -466,9 +541,57 @@ class _MyAppState extends State<MyApp> {
       : userStores.add(store));
   void setSearchTerm(String term) => setState(() => searchTerm = term);
 
+  Future<void> _loadSavedStoresForUser(int userId) async {
+    try {
+      final savedStoreIds = await fetchSavedStoreIdsForUser(userId);
+      if (savedStoreIds.isEmpty) {
+        if (!mounted) return;
+        setState(() => userStores = []);
+        return;
+      }
+
+      final allStores = await fetchAllStores();
+      final savedStores = allStores
+          .where((store) => savedStoreIds.contains(store.id))
+          .toList();
+
+      if (!mounted) return;
+      setState(() => userStores = savedStores);
+    } catch (e) {
+      debugPrint('Could not load saved stores for user $userId: $e');
+    }
+  }
+
+  Future<void> _initializeUser() async {
+    setState(() {
+      bootstrappingUser = true;
+      userBootstrapError = null;
+    });
+
+    try {
+      final userId = await fetchOrCreateUserId();
+      if (!mounted) return;
+      setState(() {
+        currentUserId = userId;
+      });
+      await _loadSavedStoresForUser(userId);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        userBootstrapError = '$e';
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        bootstrappingUser = false;
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _initializeUser();
     fetchTags().then((t) => setState(() => tags = t));
     fetchCompanies().then((value) => setState(() => companies = value));
     stores = fetchStores("");
@@ -476,30 +599,84 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    if (bootstrappingUser) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                CircularProgressIndicator(),
+                SizedBox(height: 12),
+                Text('Setting up local user...'),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (currentUserId == null) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('Unable to load user ID.'),
+                  const SizedBox(height: 8),
+                  if (userBootstrapError != null)
+                    Text(
+                      userBootstrapError!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.red.shade700),
+                    ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _initializeUser,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final plannerUserId = currentUserId ?? 1;
+    final homePage = StoreSearch(
+      currentUserId: plannerUserId,
+      companies: companies,
+      tags: tags,
+      setTags: setTags,
+      stores: stores,
+      userStores: userStores,
+      userTags: userTags,
+      cart: cart,
+      cartFinished: cartFinished,
+      setStore: setStore,
+      setCart: setCart,
+      setCartFinished: setCartFinished,
+      addToCartQty: addToCartQty,
+      removeFromCartAll: removeFromCartAll,
+      cartQuantities: cartQuantities,
+      searchTerm: searchTerm,
+      setSearchTerm: setSearchTerm,
+    );
+
     return MaterialApp(
-      initialRoute: '/',
+      home: homePage,
       routes: {
         '/chart': (context) => BarChartSample4(),
         '/testing' : (context) => PrettySearch(),
-        '/': (context) => StoreSearch(
-              companies: companies,
-              tags: tags,
-              setTags: setTags,
-              stores: stores,
-              userStores: userStores,
-              userTags: userTags,
-              cart: cart,
-              cartFinished: cartFinished,
-              setStore: setStore,
-              setCart: setCart,
-              setCartFinished: setCartFinished,
-              addToCartQty: addToCartQty,
-              removeFromCartAll: removeFromCartAll,
-              cartQuantities: cartQuantities,
-              searchTerm: searchTerm,
-              setSearchTerm: setSearchTerm,
-            )
+        '/bundle-plan': (context) => BundlePlanPage(initialUserId: plannerUserId),
       },
+      onUnknownRoute: (settings) => MaterialPageRoute(builder: (context) => homePage),
       debugShowCheckedModeBanner: false,
       title: 'GrocerySearch testing',
       theme: ThemeData(
