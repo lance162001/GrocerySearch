@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_front_end/main.dart';
+import 'package:flutter_front_end/models/grocery_models.dart';
+import 'package:flutter_front_end/utils/price_utils.dart';
+import 'package:flutter_front_end/widgets/price_notification_icon.dart';
+import 'package:flutter_front_end/widgets/product_image.dart';
 
 class ProductBox extends StatelessWidget {
   const ProductBox({super.key, required this.p, this.qty = 0});
@@ -18,7 +21,7 @@ class ProductBox extends StatelessWidget {
               child: SizedBox(
                 width: 40,
                 height: 40,
-                child: getImage(p.pictureUrl, 40, 40),
+                child: ProductImage(url: p.pictureUrl, width: 40, height: 40),
               ),
             ),
             SizedBox(width: 6),
@@ -41,8 +44,7 @@ class ProductBox extends StatelessWidget {
                     ),
                   if (p.size != "") SizedBox(height: 6),
                   Row(children: [
-                    // height: 2, // Commenting out instead of removing for clarity
-                    getNotification(p.priceHistory),
+                    PriceNotificationIcon(pricePoints: p.priceHistory),
                   ])
                 ],
               ),

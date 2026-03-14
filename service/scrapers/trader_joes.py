@@ -241,3 +241,6 @@ def _persist_product(
     )
     collector["price_points"].append(pricepoint)
     sess.add(pricepoint)
+    # Commit per-product so the write lock is released between products,
+    # allowing concurrent scraper threads (WF, WG) to interleave writes.
+    sess.commit()

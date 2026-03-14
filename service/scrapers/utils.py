@@ -50,19 +50,34 @@ DEFAULT_USER_AGENT = (
 
 _SIZE_PATTERN = re.compile(
     r"(?P<value>\d+(?:\.\d+)?|\.\d+)\s*"
-    r"(?P<unit>fl\.?\s*oz|fluid\s*ounces?|oz|ounces?|lb|lbs|pounds?"
-    r"|grams?|g|kg|kilograms?|ml|milliliters?|l|liters?)\b",
+    r"(?P<unit>"
+    r"fl\.?\s*oz|fluid\s*ounces?|fz|oz|ounces?"
+    r"|lb|lbs|pounds?"
+    r"|grams?|gr|g|kg|kilograms?"
+    r"|ml|milliliters?|lt|l|liters?"
+    r"|gallons?|gal|gl"
+    r"|quarts?|qt|pints?|pt"
+    r"|ct|count|pk|packs?"
+    r"|ea|each"
+    r")\b",
     re.IGNORECASE,
 )
 
 _UNIT_ALIASES: dict[str, str] = {
     "fluid ounce": "fl oz", "fluid ounces": "fl oz", "fl oz": "fl oz",
+    "fz": "fl oz",
     "ounce": "oz", "ounces": "oz", "oz": "oz",
     "lb": "lb", "lbs": "lb", "pound": "lb", "pounds": "lb",
-    "gram": "gram", "grams": "gram", "g": "gram",
+    "gram": "gram", "grams": "gram", "gr": "gram", "g": "gram",
     "kilogram": "kg", "kilograms": "kg", "kg": "kg",
     "milliliter": "ml", "milliliters": "ml", "ml": "ml",
-    "liter": "l", "liters": "l", "l": "l",
+    "liter": "l", "liters": "l", "lt": "l", "l": "l",
+    "gallon": "gal", "gallons": "gal", "gal": "gal", "gl": "gal",
+    "quart": "qt", "quarts": "qt", "qt": "qt",
+    "pint": "pint", "pints": "pint", "pt": "pint",
+    "ct": "ct", "count": "ct",
+    "pk": "pk", "pack": "pk", "packs": "pk",
+    "ea": "each", "each": "each",
 }
 
 
@@ -102,6 +117,10 @@ def setup_seed_data(sess: Session) -> tuple[list, dict[str, int]]:
             logo_url="https://logos-world.net/wp-content/uploads/2022/02/Trader-Joes-Emblem.png",
             name="Trader Joes",
         ),
+        Company(
+            logo_url="https://images.wegmans.com/is/image/wegmanscsprod/Wegmans-Logo-Icon-thumb?fmt=webp-alpha",
+            name="Wegmans",
+        ),
         Store(company_id=1, scraper_id=10413, address="442 Washington St",
               zipcode="02482", town="Wellesley", state="Massachusetts"),
         Store(company_id=2, scraper_id=509, address="958 Highland Ave",
@@ -114,6 +133,8 @@ def setup_seed_data(sess: Session) -> tuple[list, dict[str, int]]:
               zipcode="01701", town="Framingham", state="Massachusetts"),
         Store(company_id=1, scraper_id=10145, address="525 N Lamar Blvd",
               zipcode="78703", town="Austin", state="Texas"),
+        Store(company_id=3, scraper_id=57, address="169 University Ave",
+              zipcode="02090", town="Westwood", state="Massachusetts"),
     ]
 
     tags: dict[str, int] = {}

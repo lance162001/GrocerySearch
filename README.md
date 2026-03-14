@@ -11,7 +11,7 @@ Whole Foods and Trader Joe's with more stores planned.
 ## Quick Links
 
 - Service: [service](service)
-- Flutter front end: [flutter_front_end](flutter_front_end)
+- Flutter front end: [app](app)
 
 ## Features
 
@@ -58,7 +58,7 @@ Flutter Front End
 1. Change to the Flutter project and fetch packages:
 
 ```bash
-cd flutter_front_end
+cd app
 flutter pub get
 ```
 
@@ -68,12 +68,22 @@ flutter pub get
 flutter run -d chrome
 ```
 
+3. To point the Flutter app at the remote backend instead of localhost, pass:
+
+```bash
+flutter run -d chrome --dart-define=USE_LOCAL_BACKEND=false
+```
+
+The Flutter package name remains `flutter_front_end`, but the active project
+directory is `app/`.
+
 ## Development Notes
 
 - Scrapers: `service/scraper.py` contains the scraping routines; extend it for
 	additional stores and be mindful of site terms and rate limits.
 - API endpoints live under `service/api` and use simple schemas in `service/schemas`.
 - Data models are in `service/models` and can be extended for analytics or storage.
+- Frontend state is now organized around a shared API service plus `provider`-backed app state under `app/lib/services` and `app/lib/state`.
 
 ## Contributing
 

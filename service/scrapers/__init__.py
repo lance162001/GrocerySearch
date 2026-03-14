@@ -2,10 +2,12 @@
 
 from .whole_foods import scrape_whole_foods
 from .trader_joes import scrape_trader_joes
+from .wegmans import scrape_wegmans
 from .utils import extract_size_and_clean_name
 
 __all__ = [
     "scrape_whole_foods",
     "scrape_trader_joes",
+    "scrape_wegmans",
     "extract_size_and_clean_name",
 ]

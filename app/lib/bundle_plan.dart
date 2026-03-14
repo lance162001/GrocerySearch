@@ -1,9 +1,8 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-
-import 'package:flutter_front_end/main.dart' show hostname, port, formatPriceString, parsePriceString;
+import 'package:flutter_front_end/services/grocery_api.dart';
+import 'package:flutter_front_end/utils/price_utils.dart';
+import 'package:flutter_front_end/widgets/product_image.dart';
+import 'package:provider/provider.dart';
 
 // ---------------------------------------------------------------------------
 // Data classes
@@ -185,6 +184,8 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
   // Selected bundle detail
   _BundleDetail? _selectedBundle;
 
+  GroceryApi get _api => context.read<GroceryApi>();
+
   @override
   void initState() {
     super.initState();
@@ -239,43 +240,25 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
   // Network helpers
   // ---------------------------------------------------------------------------
 
-  Future<Map<String, dynamic>?> _getObject(Uri uri) async {
-    final response = await http.get(uri);
-    if (response.statusCode != 200) return null;
-    final decoded = jsonDecode(response.body);
-    return decoded is Map<String, dynamic> ? decoded : null;
+  Future<Map<String, dynamic>?> _getObject(String path) async {
+    return _api.getObject(path);
   }
 
-  Future<List<Map<String, dynamic>>?> _getList(Uri uri) async {
-    final response = await http.get(uri);
-    if (response.statusCode != 200) return null;
-    final decoded = jsonDecode(response.body);
-    if (decoded is! List<dynamic>) return null;
-    return decoded
-        .whereType<Map<String, dynamic>>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
+  Future<List<Map<String, dynamic>>?> _getList(String path) async {
+    return _api.getObjectList(path);
   }
 
   Future<void> _ensureStoreLabels() async {
     if (_storeLabels.isNotEmpty) return;
-    final uri = Uri.http('$hostname:$port', '/stores');
     try {
-      final response = await http.get(uri);
-      if (response.statusCode != 200) return;
-      final List<dynamic> stores = jsonDecode(response.body) as List<dynamic>;
-      for (final s in stores) {
-        final m = s as Map<String, dynamic>;
-        final id = m['id'];
-        if (id is! int) continue;
-        final town = (m['town'] ?? '').toString();
-        final state = (m['state'] ?? '').toString();
-        final address = (m['address'] ?? '').toString();
+      final stores = await _api.fetchAllStores();
+      for (final store in stores) {
+        final id = store.id;
         String label = 'Store $id';
-        if (town.isNotEmpty && state.isNotEmpty) {
-          label = '$town, $state';
-        } else if (address.isNotEmpty) {
-          label = address;
+        if (store.town.isNotEmpty && store.state.isNotEmpty) {
+          label = '${store.town}, ${store.state}';
+        } else if (store.address.isNotEmpty) {
+          label = store.address;
         }
         _storeLabels[id] = label;
       }
@@ -304,14 +287,10 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
     try {
       await _ensureStoreLabels();
 
-      final dashboardUri = Uri.http('$hostname:$port', '/users/$userId/dashboard');
-      final bundlesUri = Uri.http('$hostname:$port', '/users/$userId/bundles');
-      final storesUri = Uri.http('$hostname:$port', '/users/$userId/saved-stores');
-
       final results = await Future.wait([
-        _getObject(dashboardUri),
-        _getList(bundlesUri),
-        _getList(storesUri),
+        _getObject('/users/$userId/dashboard'),
+        _getList('/users/$userId/bundles'),
+        _getList('/users/$userId/saved-stores'),
       ]);
 
       final dashboard = results[0] as Map<String, dynamic>?;
@@ -349,13 +328,11 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
 
     try {
       await _ensureStoreLabels();
-      final uri = Uri.http('$hostname:$port', '/bundles/$bundleId/detail');
-      final response = await http.get(uri);
-      if (response.statusCode != 200) {
-        _setError('Failed to load bundle detail (${response.statusCode})');
+      final data = await _getObject('/bundles/$bundleId/detail');
+      if (data == null) {
+        _setError('Failed to load bundle detail');
         return;
       }
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
       setState(() {
         _selectedBundle = _BundleDetail.fromJson(data);
         _status = null;
@@ -385,15 +362,7 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
 
     setState(() => _loading = true);
     try {
-      final response = await http.post(
-        Uri.http('$hostname:$port', '/users/$userId/bundles'),
-        headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode({'name': name}),
-      );
-      if (response.statusCode != 200) {
-        _setError('Failed to create bundle (${response.statusCode})');
-        return;
-      }
+      await _api.createBundle(userId, name);
       _setStatus('Bundle created');
       await _loadUser();
     } catch (e) {
@@ -417,15 +386,7 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
     setState(() => _loading = true);
     try {
       final bundleId = _selectedBundle!.id;
-      final response = await http.post(
-        Uri.http('$hostname:$port', '/bundles/$bundleId/products'),
-        headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode({'product_id': productId}),
-      );
-      if (response.statusCode != 200) {
-        _setError('Failed to add product (${response.statusCode})');
-        return;
-      }
+      await _api.addProductToBundle(bundleId, productId);
       _setStatus('Product added');
       await _openBundle(bundleId);
     } catch (e) {
@@ -445,15 +406,7 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
 
     setState(() => _loading = true);
     try {
-      final response = await http.post(
-        Uri.http('$hostname:$port', '/users/$userId/saved-stores'),
-        headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode({'store_id': storeId, 'member': _memberFlag}),
-      );
-      if (response.statusCode != 200) {
-        _setError('Failed to save store (${response.statusCode})');
-        return;
-      }
+      await _api.saveStoreForUser(userId, storeId, member: _memberFlag);
       _setStatus('Store saved');
       await _loadUser();
     } catch (e) {
@@ -476,64 +429,34 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
     });
 
     try {
-      final headers = {'Content-Type': 'application/json'};
-
-      final createBundleResponse = await http.post(
-        Uri.http('$hostname:$port', '/users/$userId/bundles'),
-        headers: headers,
-        body: jsonEncode({
-          'name': 'Demo Bundle ${DateTime.now().toIso8601String().substring(0, 19)}',
-        }),
+      final bundleId = await _api.createBundle(
+        userId,
+        'Demo Bundle ${DateTime.now().toIso8601String().substring(0, 19)}',
       );
 
-      if (createBundleResponse.statusCode != 200) {
-        _setError('Failed to create demo bundle (${createBundleResponse.statusCode})');
-        return;
-      }
-
-      final created = jsonDecode(createBundleResponse.body) as Map<String, dynamic>;
-      final int? bundleId = created['id'] as int?;
-      if (bundleId == null) {
-        _setError('Demo bundle created without a valid id');
-        return;
-      }
-
-      final productsResponse = await http.get(
-        Uri.http('$hostname:$port', '/products', {'page': '1', 'size': '8'}),
+      final productsPage = await _api.getObject(
+        '/products',
+        queryParameters: const {'page': '1', 'size': '8'},
       );
-
-      if (productsResponse.statusCode == 200) {
-        final productsPage = jsonDecode(productsResponse.body) as Map<String, dynamic>;
+      if (productsPage != null) {
         final items = (productsPage['items'] as List<dynamic>? ?? []);
         int added = 0;
         for (final item in items) {
           final m = item as Map<String, dynamic>;
           final id = m['id'];
           if (id is int) {
-            await http.post(
-              Uri.http('$hostname:$port', '/bundles/$bundleId/products'),
-              headers: headers,
-              body: jsonEncode({'product_id': id}),
-            );
+            await _api.addProductToBundle(bundleId, id);
             added++;
             if (added >= 5) break;
           }
         }
       }
 
-      final storesResponse = await http.get(Uri.http('$hostname:$port', '/stores'));
-      if (storesResponse.statusCode == 200) {
-        final stores = jsonDecode(storesResponse.body) as List<dynamic>;
+      final stores = await _api.fetchAllStores();
+      if (stores.isNotEmpty) {
         int savedCount = 0;
-        for (final s in stores) {
-          final m = s as Map<String, dynamic>;
-          final id = m['id'];
-          if (id is! int) continue;
-          await http.post(
-            Uri.http('$hostname:$port', '/users/$userId/saved-stores'),
-            headers: headers,
-            body: jsonEncode({'store_id': id, 'member': false}),
-          );
+        for (final store in stores) {
+          await _api.saveStoreForUser(userId, store.id);
           savedCount++;
           if (savedCount >= 3) break;
         }
@@ -895,12 +818,10 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
                 if (product.pictureUrl.isNotEmpty)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(6),
-                    child: Image.network(
-                      product.pictureUrl,
+                    child: ProductImage(
+                      url: product.pictureUrl,
                       width: 48,
                       height: 48,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox(width: 48, height: 48),
                     ),
                   ),
                 if (product.pictureUrl.isNotEmpty) const SizedBox(width: 10),

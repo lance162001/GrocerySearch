@@ -1,0 +1,69 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "service: run lan backend",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": [
+        "-m",
+        "uvicorn",
+        "main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/service"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "detail": "Runs the FastAPI backend so LAN devices can reach it on port 8000.",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "lan-debug",
+        "clear": true
+      }
+    },
+    {
+      "label": "app: run lan web debug",
+      "type": "shell",
+      "command": "flutter",
+      "args": [
+        "run",
+        "-d",
+        "web-server",
+        "--web-hostname",
+        "0.0.0.0",
+        "--web-port",
+        "3000",
+        "--dart-define=USE_LOCAL_BACKEND=true"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/app"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "detail": "Serves the Flutter web app in debug mode on port 3000 for other LAN devices.",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "lan-debug",
+        "clear": true
+      }
+    },
+    {
+      "label": "lan: debug frontend + backend",
+      "dependsOn": [
+        "service: run lan backend",
+        "app: run lan web debug"
+      ],
+      "dependsOrder": "parallel",
+      "problemMatcher": [],
+      "detail": "Starts both the FastAPI backend and the Flutter web debug server for LAN testing."
+    }
+  ]
+}

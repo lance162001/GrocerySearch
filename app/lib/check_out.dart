@@ -1,35 +1,15 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:flutter_front_end/main.dart';
-import 'package:flutter_front_end/product_box.dart';
 import 'package:flutter_front_end/bundle_plan.dart';
+import 'package:flutter_front_end/models/grocery_models.dart';
+import 'package:flutter_front_end/product_box.dart';
+import 'package:flutter_front_end/services/grocery_api.dart';
+import 'package:flutter_front_end/state/app_state.dart';
+import 'package:flutter_front_end/utils/price_utils.dart';
+import 'package:flutter_front_end/widgets/product_image.dart';
+import 'package:provider/provider.dart';
 
 class CheckOut extends StatefulWidget {
-  CheckOut({
-    Key? key,
-    required this.currentUserId,
-    required this.cart,
-    required this.cartFinished,
-    required this.stores,
-    required this.setCart,
-    required this.setCartFinished,
-    required this.companies,
-    required this.addToCartQty,
-    required this.removeFromCartAll,
-    required this.cartQuantities,
-  }) : super(key: key);
-
-  final Function setCart;
-  final int currentUserId;
-  final Function setCartFinished;
-  final Function addToCartQty;
-  final Function removeFromCartAll;
-  final Map<int, int> cartQuantities;
-  List<Product> cartFinished;
-  List<Product> cart;
-  final List<Store> stores;
-  final List<Company> companies;
+  const CheckOut({super.key});
 
   @override
   State<CheckOut> createState() => _CheckOutState();
@@ -45,14 +25,23 @@ class _CheckOutState extends State<CheckOut> {
         0.0;
   }
 
-  double _checkoutTotal() {
+  Company? _companyForStore(AppState appState, Store store) {
+    for (final company in appState.companies) {
+      if (company.id == store.companyId) {
+        return company;
+      }
+    }
+    return null;
+  }
+
+  double _checkoutTotal(AppState appState) {
     final productsById = <int, Product>{
-      for (final product in [...widget.cart, ...widget.cartFinished])
+      for (final product in [...appState.cart, ...appState.cartFinished])
         product.instanceId: product,
     };
 
     double total = 0.0;
-    widget.cartQuantities.forEach((productId, quantity) {
+    appState.cartQuantities.forEach((productId, quantity) {
       final product = productsById[productId];
       if (product == null || quantity <= 0) {
         return;
@@ -63,14 +52,14 @@ class _CheckOutState extends State<CheckOut> {
     return total;
   }
 
-  double _storeSectionSubtotal(List<Product> products, int storeId) {
+  double _storeSectionSubtotal(AppState appState, List<Product> products, int storeId) {
     final productsById = <int, Product>{
       for (final product in products.where((product) => product.storeId == storeId))
         product.instanceId: product,
     };
 
     double total = 0.0;
-    widget.cartQuantities.forEach((productId, quantity) {
+    appState.cartQuantities.forEach((productId, quantity) {
       final product = productsById[productId];
       if (product == null || quantity <= 0) {
         return;
@@ -81,14 +70,14 @@ class _CheckOutState extends State<CheckOut> {
     return total;
   }
 
-  List<int> _cartProductIdsForBundle() {
+  List<int> _cartProductIdsForBundle(AppState appState) {
     final productByInstance = <int, Product>{
-      for (final product in [...widget.cart, ...widget.cartFinished])
+      for (final product in [...appState.cart, ...appState.cartFinished])
         product.instanceId: product,
     };
     final productIds = <int>{};
 
-    widget.cartQuantities.forEach((instanceId, qty) {
+    appState.cartQuantities.forEach((instanceId, qty) {
       if (qty <= 0) return;
       final product = productByInstance[instanceId];
       if (product == null) return;
@@ -101,45 +90,35 @@ class _CheckOutState extends State<CheckOut> {
   Future<void> _saveCartAsBundle() async {
     if (_savingBundle) return;
 
-    final productIds = _cartProductIdsForBundle();
+    final appState = context.read<AppState>();
+    final userId = appState.currentUserId;
+    final productIds = _cartProductIdsForBundle(appState);
     if (productIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cart is empty. Add items before saving.')),
       );
       return;
     }
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User ID is unavailable.')),
+      );
+      return;
+    }
 
     setState(() => _savingBundle = true);
     try {
-      final headers = {'Content-Type': 'application/json'};
       final name =
           'Checkout ${DateTime.now().toIso8601String().substring(0, 19)}';
-
-      final createResponse = await http.post(
-        Uri.http('$hostname:$port', '/users/${widget.currentUserId}/bundles'),
-        headers: headers,
-        body: jsonEncode({'name': name}),
-      );
-
-      if (createResponse.statusCode != 200) {
-        throw Exception('Create bundle failed (${createResponse.statusCode})');
-      }
-
-      final created = jsonDecode(createResponse.body) as Map<String, dynamic>;
-      final bundleId = created['id'];
-      if (bundleId is! int || bundleId <= 0) {
-        throw Exception('Invalid bundle id returned by backend');
-      }
+      final api = context.read<GroceryApi>();
+      final bundleId = await api.createBundle(userId, name);
 
       int addedCount = 0;
       for (final productId in productIds) {
-        final addResponse = await http.post(
-          Uri.http('$hostname:$port', '/bundles/$bundleId/products'),
-          headers: headers,
-          body: jsonEncode({'product_id': productId}),
-        );
-        if (addResponse.statusCode == 200) {
+        try {
+          await api.addProductToBundle(bundleId, productId);
           addedCount++;
+        } catch (_) {
         }
       }
 
@@ -154,7 +133,7 @@ class _CheckOutState extends State<CheckOut> {
         context,
         MaterialPageRoute(
           builder: (context) => BundlePlanPage(
-            initialUserId: widget.currentUserId,
+            initialUserId: userId,
             initialBundleId: bundleId,
           ),
         ),
@@ -171,6 +150,9 @@ class _CheckOutState extends State<CheckOut> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final stores = appState.userStores;
+    final allProducts = [...appState.cart, ...appState.cartFinished];
     return Scaffold(
         appBar: AppBar(
           title: Text("Checkout"),
@@ -200,11 +182,11 @@ class _CheckOutState extends State<CheckOut> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        'Total Items: ${widget.cartQuantities.values.fold(0, (a, b) => a + b)}',
+                        'Total Items: ${appState.cartTotalItems}',
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        'Total: \$${_checkoutTotal().toStringAsFixed(2)}',
+                        'Total: \$${_checkoutTotal(appState).toStringAsFixed(2)}',
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ],
@@ -217,18 +199,23 @@ class _CheckOutState extends State<CheckOut> {
                   scrollDirection: Axis.horizontal,
                   shrinkWrap: true,
                   padding: const EdgeInsets.all(1),
-                  children: widget.stores
+                  children: stores
                       .map((s) => Column(
                             children: [
-                              Row(children: [
-                                Text(s.town,
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold)),
-                                getImage(
-                                    widget.companies[s.companyId - 1].logoUrl,
-                                    75,
-                                    50),
-                              ]),
+                              Builder(builder: (context) {
+                                final company = _companyForStore(appState, s);
+                                return Row(children: [
+                                  Text(s.town,
+                                      style:
+                                          TextStyle(fontWeight: FontWeight.bold)),
+                                  if (company != null)
+                                    ProductImage(
+                                      url: company.logoUrl,
+                                      width: 75,
+                                      height: 50,
+                                    ),
+                                ]);
+                              }),
                               Expanded(
                                 child: SizedBox(
                                   width: 180,
@@ -236,26 +223,19 @@ class _CheckOutState extends State<CheckOut> {
                                       scrollDirection: Axis.vertical,
                                       shrinkWrap: true,
                                       padding: const EdgeInsets.all(1),
-                                      children: widget.cart
+                                      children: appState.cart
                                           .where((p) => p.storeId == s.id)
                                           .map((p) => Card(
                                               color: Colors.white,
                                               clipBehavior: Clip.hardEdge,
                                               child: InkWell(
                                                   onTap: () {
-                                                    setState(() {
-                                                      widget.cart.removeWhere((item) => item.instanceId == p.instanceId);
-                                                      if (!widget.cartFinished.any((item) => item.instanceId == p.instanceId)) {
-                                                        widget.cartFinished.add(p);
-                                                      }
-                                                      widget.setCart(widget.cart);
-                                                      widget.setCartFinished(widget.cartFinished);
-                                                    });
+                                                    context.read<AppState>().moveCartItemToFinished(p);
                                                   },
                                                   child: Column(
                                                     children: [
-                                                      ProductBox(p: p, qty: widget.cartQuantities[p.instanceId] ?? 0),
-                                                      Text('Qty: ${widget.cartQuantities[p.instanceId] ?? 0}'),
+                                                      ProductBox(p: p, qty: appState.cartQuantities[p.instanceId] ?? 0),
+                                                      Text('Qty: ${appState.cartQuantities[p.instanceId] ?? 0}'),
                                                     ],
                                                   ))))
                                           .toList()
@@ -273,20 +253,25 @@ class _CheckOutState extends State<CheckOut> {
                   scrollDirection: Axis.horizontal,
                   shrinkWrap: true,
                   padding: const EdgeInsets.all(1),
-                  children: widget.stores
+                  children: stores
                       .map((s) => Column(
                             children: [
-                              Row(children: [
-                                Text(s.town,
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold)),
-                                getImage(
-                                    widget.companies[s.companyId - 1].logoUrl,
-                                    75,
-                                    50),
-                              ]),
+                              Builder(builder: (context) {
+                                final company = _companyForStore(appState, s);
+                                return Row(children: [
+                                  Text(s.town,
+                                      style:
+                                          TextStyle(fontWeight: FontWeight.bold)),
+                                  if (company != null)
+                                    ProductImage(
+                                      url: company.logoUrl,
+                                      width: 75,
+                                      height: 50,
+                                    ),
+                                ]);
+                              }),
                               Text(
-                                'Store Total: \$${_storeSectionSubtotal([...widget.cart, ...widget.cartFinished], s.id).toStringAsFixed(2)}',
+                                'Store Total: \$${_storeSectionSubtotal(appState, allProducts, s.id).toStringAsFixed(2)}',
                                 style: TextStyle(fontWeight: FontWeight.w600),
                               ),
                               Expanded(
@@ -296,23 +281,16 @@ class _CheckOutState extends State<CheckOut> {
                                       scrollDirection: Axis.vertical,
                                       shrinkWrap: true,
                                       padding: const EdgeInsets.all(1),
-                                        children: widget.cartFinished
+                                        children: appState.cartFinished
                                           .where((p) => p.storeId == s.id)
                                           .map((p) => Card(
                                             color: Colors.white,
                                             clipBehavior: Clip.hardEdge,
                                             child: InkWell(
                                               onTap: () {
-                                              setState(() {
-                                                if (!widget.cart.any((item) => item.instanceId == p.instanceId)) {
-                                                  widget.cart.add(p);
-                                                }
-                                                widget.cartFinished.removeWhere((item) => item.instanceId == p.instanceId);
-                                                widget.setCart(widget.cart);
-                                                widget.setCartFinished(widget.cartFinished);
-                                              });
+                                              context.read<AppState>().restoreFinishedItem(p);
                                               },
-                                              child: ProductBox(p: p, qty: widget.cartQuantities[p.instanceId] ?? 0))))
+                                              child: ProductBox(p: p, qty: appState.cartQuantities[p.instanceId] ?? 0))))
                                           .toList()
                                           .cast<Widget>()),
                                 ),

@@ -1,6 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_front_end/main.dart' show PricePoint;
+import 'package:flutter_front_end/models/grocery_models.dart';
 
 class BarChartSample4 extends StatefulWidget {
   BarChartSample4({super.key});
@@ -168,7 +168,7 @@ class PriceHistoryChart extends StatelessWidget {
             lineTouchData: LineTouchData(
               enabled: true,
               touchTooltipData: LineTouchTooltipData(
-                tooltipBgColor: Colors.grey.shade800.withOpacity(0.9),
+                tooltipBgColor: Colors.grey.shade800.withValues(alpha: 0.9),
                 getTooltipItems: (touchedSpots) => touchedSpots.map((t) {
                   final pp = aggEntries[t.x.toInt()];
                   final metric = _metricForPoint(pp);
@@ -227,7 +227,7 @@ class PriceHistoryChart extends StatelessWidget {
                 spots: spots,
                 isCurved: true,
                 dotData: FlDotData(show: true),
-                belowBarData: BarAreaData(show: true, color: Theme.of(context).colorScheme.primary.withOpacity(0.15)),
+                belowBarData: BarAreaData(show: true, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)),
                 color: Theme.of(context).colorScheme.primary,
                 barWidth: 2,
               )

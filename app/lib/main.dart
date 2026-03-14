@@ -2,26 +2,24 @@ import 'dart:convert';
 import 'dart:core';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_front_end/config/app_environment.dart';
+import 'package:flutter_front_end/config/app_routes.dart';
 import 'package:flutter_front_end/main_search.dart';
-import 'package:flutter_front_end/product_box.dart';
-import 'package:flutter_front_end/product_search.dart';
+import 'package:flutter_front_end/services/grocery_api.dart';
+import 'package:flutter_front_end/state/app_state.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'chart.dart';
-import 'package:flutter_front_end/pretty_search.dart';
 import 'package:flutter_front_end/bundle_plan.dart';
 import 'package:flutter_front_end/user_id_cache.dart' as user_cache;
+import 'package:provider/provider.dart';
 
 dynamic extractPage(Map<String, dynamic> json) {
   return json['items'];
 }
 
-//// CHANGE ME
-bool local = true;
-////
-
-String hostname = local ? 'localhost' : 'asktheinter.net';
-String port = local ? '8000' : '23451';
+String get hostname => AppEnvironment.current.hostname;
+String get port => AppEnvironment.current.port;
 
 Future<int> fetchOrCreateUserId() async {
   final cachedUserId = await user_cache.readCachedUserId();
@@ -463,9 +461,9 @@ Widget getImage(String url, double width, double height) {
   if (url.startsWith('http')) {
     imageUrl = url;
   } else if (url.startsWith('/')) {
-    imageUrl = 'http://$hostname:$port' + url;
+    imageUrl = 'http://$hostname:$port$url';
   } else {
-    imageUrl = 'http://$hostname:$port/' + url;
+    imageUrl = 'http://$hostname:$port/$url';
   }
   return CachedNetworkImage(
     imageUrl: imageUrl,
@@ -541,75 +539,43 @@ class _MyAppState extends State<MyApp> {
       : userStores.add(store));
   void setSearchTerm(String term) => setState(() => searchTerm = term);
 
-  Future<void> _loadSavedStoresForUser(int userId) async {
-    try {
-      final savedStoreIds = await fetchSavedStoreIdsForUser(userId);
-      if (savedStoreIds.isEmpty) {
-        if (!mounted) return;
-        setState(() => userStores = []);
-        return;
-      }
-
-      final allStores = await fetchAllStores();
-      final savedStores = allStores
-          .where((store) => savedStoreIds.contains(store.id))
-          .toList();
-
-      if (!mounted) return;
-      setState(() => userStores = savedStores);
-    } catch (e) {
-      debugPrint('Could not load saved stores for user $userId: $e');
+  Widget _buildHomePage(AppState appState) {
+    if (appState.bootstrappingUser) {
+      return const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 12),
+              Text('Setting up local user...'),
+            ],
+          ),
+        ),
+      );
     }
-  }
 
-  Future<void> _initializeUser() async {
-    setState(() {
-      bootstrappingUser = true;
-      userBootstrapError = null;
-    });
-
-    try {
-      final userId = await fetchOrCreateUserId();
-      if (!mounted) return;
-      setState(() {
-        currentUserId = userId;
-      });
-      await _loadSavedStoresForUser(userId);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        userBootstrapError = '$e';
-      });
-    } finally {
-      if (!mounted) return;
-      setState(() {
-        bootstrappingUser = false;
-      });
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeUser();
-    fetchTags().then((t) => setState(() => tags = t));
-    fetchCompanies().then((value) => setState(() => companies = value));
-    stores = fetchStores("");
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (bootstrappingUser) {
-      return MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          body: Center(
+    if (appState.currentUserId == null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                CircularProgressIndicator(),
-                SizedBox(height: 12),
-                Text('Setting up local user...'),
+              children: [
+                const Text('Unable to load user ID.'),
+                const SizedBox(height: 8),
+                if (appState.userBootstrapError != null)
+                  Text(
+                    appState.userBootstrapError!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.red.shade700),
+                  ),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: () => context.read<AppState>().initialize(force: true),
+                  child: const Text('Retry'),
+                ),
               ],
             ),
           ),
@@ -617,79 +583,59 @@ class _MyAppState extends State<MyApp> {
       );
     }
 
-    if (currentUserId == null) {
-      return MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('Unable to load user ID.'),
-                  const SizedBox(height: 8),
-                  if (userBootstrapError != null)
-                    Text(
-                      userBootstrapError!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.red.shade700),
-                    ),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _initializeUser,
-                    child: const Text('Retry'),
-                  ),
-                ],
+    return const StoreSearch();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const environment = AppEnvironment.current;
+    return MultiProvider(
+      providers: [
+        Provider<AppEnvironment>.value(value: environment),
+        Provider<GroceryApi>(
+          create: (_) => GroceryApi(environment: environment),
+        ),
+        ChangeNotifierProvider<AppState>(
+          create: (context) =>
+              AppState(api: context.read<GroceryApi>())..initialize(),
+        ),
+      ],
+      child: Builder(
+        builder: (context) {
+          final appState = context.watch<AppState>();
+          final plannerUserId = appState.currentUserId ?? 1;
+          final homePage = _buildHomePage(appState);
+          return MaterialApp(
+            home: homePage,
+            routes: {
+              AppRoutes.chart: (context) => BarChartSample4(),
+              AppRoutes.bundlePlan: (context) =>
+                  BundlePlanPage(initialUserId: plannerUserId),
+            },
+            onUnknownRoute: (settings) =>
+                MaterialPageRoute(builder: (context) => homePage),
+            debugShowCheckedModeBanner: false,
+            title: 'GrocerySearch',
+            theme: ThemeData(
+              useMaterial3: true,
+              colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+              primaryColor: Colors.indigo,
+              scaffoldBackgroundColor: Colors.grey[50],
+              cardTheme: CardThemeData(
+                elevation: 2,
+                margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
-          ),
-        ),
-      );
-    }
-
-    final plannerUserId = currentUserId ?? 1;
-    final homePage = StoreSearch(
-      currentUserId: plannerUserId,
-      companies: companies,
-      tags: tags,
-      setTags: setTags,
-      stores: stores,
-      userStores: userStores,
-      userTags: userTags,
-      cart: cart,
-      cartFinished: cartFinished,
-      setStore: setStore,
-      setCart: setCart,
-      setCartFinished: setCartFinished,
-      addToCartQty: addToCartQty,
-      removeFromCartAll: removeFromCartAll,
-      cartQuantities: cartQuantities,
-      searchTerm: searchTerm,
-      setSearchTerm: setSearchTerm,
-    );
-
-    return MaterialApp(
-      home: homePage,
-      routes: {
-        '/chart': (context) => BarChartSample4(),
-        '/testing' : (context) => PrettySearch(),
-        '/bundle-plan': (context) => BundlePlanPage(initialUserId: plannerUserId),
-      },
-      onUnknownRoute: (settings) => MaterialPageRoute(builder: (context) => homePage),
-      debugShowCheckedModeBanner: false,
-      title: 'GrocerySearch testing',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        primaryColor: Colors.indigo,
-        scaffoldBackgroundColor: Colors.grey[50],
-        cardTheme: CardThemeData(
-          elevation: 2,
-          margin: EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-        textTheme: Theme.of(context).textTheme.apply(bodyColor: Colors.grey[900], displayColor: Colors.grey[900]),
+          );
+        },
       ),
     );
   }

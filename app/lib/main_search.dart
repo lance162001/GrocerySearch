@@ -1,113 +1,101 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_front_end/main.dart';
+import 'package:flutter_front_end/config/app_routes.dart';
+import 'package:flutter_front_end/models/grocery_models.dart';
 import 'package:flutter_front_end/product_search.dart';
-import 'package:http/http.dart' as http;
+import 'package:flutter_front_end/services/grocery_api.dart';
+import 'package:flutter_front_end/state/app_state.dart';
+import 'package:flutter_front_end/widgets/product_image.dart';
+import 'package:provider/provider.dart';
 
 class StoreSearch extends StatefulWidget {
-  StoreSearch({
-    super.key,
-    required this.currentUserId,
-    required this.companies,
-    required this.tags,
-    required this.stores,
-    required this.userStores,
-    required this.userTags,
-    required this.searchTerm,
-    required this.setSearchTerm,
-    required this.setStore,
-    required this.setCart,
-    required this.setCartFinished,
-    required this.addToCartQty,
-    required this.removeFromCartAll,
-    required this.cartQuantities,
-    required this.setTags,
-    required this.cart,
-    required this.cartFinished,
-  });
-
-  final List<Company> companies;
-  final int currentUserId;
-  final List<Tag> tags;
-  Future<List<Store>> stores;
-  List<Store> userStores;
-  List<Tag> userTags;
-  final Function setStore;
-  final Function setCart;
-  final Function setCartFinished;
-  final Function addToCartQty;
-  final Function removeFromCartAll;
-  final Map<int, int> cartQuantities;
-  final Function setTags;
-  final List<Product> cart;
-  final List<Product> cartFinished;
-  final String searchTerm;
-  final Function setSearchTerm;
+  const StoreSearch({super.key});
 
   @override
   State<StoreSearch> createState() => _StoreSearchState();
 }
 
 class _StoreSearchState extends State<StoreSearch> {
-  late String storeSearch;
   final TextEditingController storeSearchController = TextEditingController();
-  bool populatedStores = false;
+  late Future<List<Store>> _storesFuture;
+  bool _initialized = false;
   bool showSelectedOnly = false;
   bool _savingStores = false;
 
   @override
-  void initState() {
-    super.initState();
-    _hydrateSavedStores();
-  }
-
-  Future<void> _hydrateSavedStores() async {
-    try {
-      final savedStoreIds = await fetchSavedStoreIdsForUser(widget.currentUserId);
-      if (savedStoreIds.isEmpty) return;
-
-      final loadedStoreIds = widget.userStores.map((store) => store.id).toSet();
-      final missingIds = savedStoreIds.difference(loadedStoreIds);
-      if (missingIds.isEmpty) return;
-
-      final allStores = await fetchAllStores();
-      final storesToAdd = allStores
-          .where((store) => missingIds.contains(store.id))
-          .toList();
-
-      if (storesToAdd.isEmpty || !mounted) return;
-      setState(() {
-        widget.userStores.addAll(storesToAdd);
-      });
-    } catch (_) {}
-  }
-
-  Future<void> _saveSelectedStoresForUser() async {
-    final headers = {'Content-Type': 'application/json'};
-    for (final store in widget.userStores) {
-      final response = await http.post(
-        Uri.http('$hostname:$port', '/users/${widget.currentUserId}/saved-stores'),
-        headers: headers,
-        body: jsonEncode({'store_id': store.id, 'member': false}),
-      );
-
-      if (response.statusCode != 200) {
-        throw Exception('Failed saving store ${store.id}: ${response.statusCode}');
-      }
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) {
+      return;
     }
+    _storesFuture = context.read<GroceryApi>().fetchStores('');
+    _initialized = true;
+  }
+
+  @override
+  void dispose() {
+    storeSearchController.dispose();
+    super.dispose();
   }
 
   void _clearSelectedStores() {
-    final selectedStores = List<Store>.from(widget.userStores);
-    for (final store in selectedStores) {
-      widget.setStore(store);
+    context.read<AppState>().clearSelectedStores();
+  }
+
+  void _searchStores(String text) {
+    setState(() {
+      _storesFuture = context.read<GroceryApi>().fetchStores(text);
+    });
+  }
+
+  void _clearSearch() {
+    storeSearchController.clear();
+    _searchStores('');
+  }
+
+  Company? _companyForStore(List<Company> companies, Store store) {
+    for (final company in companies) {
+      if (company.id == store.companyId) {
+        return company;
+      }
     }
-    setState(() {});
+    return null;
+  }
+
+  Future<void> _confirmStores() async {
+    final appState = context.read<AppState>();
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    setState(() => _savingStores = true);
+    try {
+      await appState.persistSelectedStores();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not save stores: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _savingStores = false);
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    await navigator.push(
+      MaterialPageRoute(builder: (context) => const SearchPage()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final selectedStores = appState.userStores;
+    final companies = appState.companies;
     final screenWidth = MediaQuery.of(context).size.width;
     final crossAxisCount = screenWidth >= 1100
         ? 5
@@ -123,25 +111,22 @@ class _StoreSearchState extends State<StoreSearch> {
           width: double.infinity,
           height: 40,
           decoration: BoxDecoration(
-              color: Colors.white, borderRadius: BorderRadius.circular(5)),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(5),
+          ),
           child: TextFormField(
             keyboardType: TextInputType.text,
-            onChanged: (text) => {
-              setState(() {
-                widget.stores = fetchStores(text);
-              })
-            },
+            onChanged: _searchStores,
             controller: storeSearchController,
             decoration: InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    storeSearchController.clear();
-                  },
-                ),
-                hintText: 'Search For Stores By Zipcode or Address!',
-                border: InputBorder.none),
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.clear),
+                onPressed: _clearSearch,
+              ),
+              hintText: 'Search For Stores By Zipcode or Address!',
+              border: InputBorder.none,
+            ),
           ),
         ),
         actions: [
@@ -161,7 +146,7 @@ class _StoreSearchState extends State<StoreSearch> {
                     const Icon(Icons.person, size: 16),
                     const SizedBox(width: 4),
                     Text(
-                      '${widget.currentUserId}',
+                      '${appState.currentUserId ?? 0}',
                       style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 12,
@@ -175,8 +160,8 @@ class _StoreSearchState extends State<StoreSearch> {
           IconButton(
             tooltip: 'Bundle planner',
             icon: const Icon(Icons.route),
-            onPressed: () => Navigator.pushNamed(context, '/bundle-plan'),
-          )
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.bundlePlan),
+          ),
         ],
       ),
       body: Column(
@@ -194,13 +179,13 @@ class _StoreSearchState extends State<StoreSearch> {
               children: [
                 Expanded(
                   child: Text(
-                    '${widget.userStores.length} selected',
+                    '${selectedStores.length} selected',
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
                 TextButton(
                   onPressed:
-                      widget.userStores.isEmpty ? null : _clearSelectedStores,
+                      selectedStores.isEmpty ? null : _clearSelectedStores,
                   child: const Text('Clear all'),
                 ),
                 const SizedBox(width: 8),
@@ -216,121 +201,134 @@ class _StoreSearchState extends State<StoreSearch> {
           ),
           Expanded(
             child: FutureBuilder<List<Store>>(
-                future: widget.stores,
-                builder: (context, snapshot) {
-                  if (snapshot.hasData) {
-                    List<Store> stores = snapshot.data! + widget.userStores;
-                    stores = stores.toSet().toList();
-
-                    stores.sort((a, b) {
-                      final aSelected = widget.userStores.contains(a);
-                      final bSelected = widget.userStores.contains(b);
-                      if (aSelected != bSelected) {
-                        return aSelected ? -1 : 1;
-                      }
-                      final townCompare =
-                          a.town.toLowerCase().compareTo(b.town.toLowerCase());
-                      if (townCompare != 0) return townCompare;
-                      return a.address
-                          .toLowerCase()
-                          .compareTo(b.address.toLowerCase());
-                    });
-
-                    if (showSelectedOnly) {
-                      stores = stores
-                          .where((store) => widget.userStores.contains(store))
-                          .toList();
+              future: _storesFuture,
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  var stores =
+                      <Store>{...snapshot.data!, ...selectedStores}.toList();
+                  stores.sort((a, b) {
+                    final aSelected = selectedStores.contains(a);
+                    final bSelected = selectedStores.contains(b);
+                    if (aSelected != bSelected) {
+                      return aSelected ? -1 : 1;
                     }
+                    final townCompare =
+                        a.town.toLowerCase().compareTo(b.town.toLowerCase());
+                    if (townCompare != 0) {
+                      return townCompare;
+                    }
+                    return a.address
+                        .toLowerCase()
+                        .compareTo(b.address.toLowerCase());
+                  });
 
-                    return GridView.builder(
-                      itemCount: stores.length,
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: crossAxisCount,
-                          childAspectRatio: 1.35,
-                          crossAxisSpacing: 6,
-                          mainAxisSpacing: 6),
-                      shrinkWrap: true,
-                      primary: false,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 4),
-                      itemBuilder: (context, index) {
-                        Store store = stores[index];
-                        final isSaved = widget.userStores.contains(store);
-                        return Card(
-                          color: isSaved
-                              ? Colors.lightBlue
-                              : const Color.fromARGB(255, 144, 220, 255),
-                          child: InkWell(
-                              splashColor: Colors.blue.withAlpha(30),
-                              onTap: () {
-                                widget.setStore(store);
-                                setState(() {});
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 4),
-                                child: Stack(
+                  if (showSelectedOnly) {
+                    stores = stores
+                        .where((store) => selectedStores.contains(store))
+                        .toList();
+                  }
+
+                  return GridView.builder(
+                    itemCount: stores.length,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      childAspectRatio: 1.35,
+                      crossAxisSpacing: 6,
+                      mainAxisSpacing: 6,
+                    ),
+                    shrinkWrap: true,
+                    primary: false,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
+                    itemBuilder: (context, index) {
+                      final store = stores[index];
+                      final isSaved = selectedStores.contains(store);
+                      final company = _companyForStore(companies, store);
+                      return Card(
+                        color: isSaved
+                            ? Colors.lightBlue
+                            : const Color.fromARGB(255, 144, 220, 255),
+                        child: InkWell(
+                          splashColor: Colors.blue.withAlpha(30),
+                          onTap: () {
+                            context.read<AppState>().toggleStore(store);
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 4,
+                            ),
+                            child: Stack(
+                              children: [
+                                if (isSaved)
+                                  const Align(
+                                    alignment: Alignment.topRight,
+                                    child: Icon(
+                                      Icons.bookmark,
+                                      size: 18,
+                                      color: Colors.indigo,
+                                    ),
+                                  ),
+                                Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    if (isSaved)
-                                      const Align(
-                                        alignment: Alignment.topRight,
-                                        child: Icon(
-                                          Icons.bookmark,
-                                          size: 18,
-                                          color: Colors.indigo,
-                                        ),
+                                    company != null
+                                        ? ProductImage(
+                                            url: company.logoUrl,
+                                            width: 58,
+                                            height: 58,
+                                          )
+                                        : SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      store.town,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
                                       ),
-                                    Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        widget.companies.isNotEmpty
-                                            ? getImage(
-                                                widget.companies[store.companyId - 1]
-                                                    .logoUrl,
-                                                58,
-                                                58)
-                                            : SizedBox(
-                                                width: 24,
-                                                height: 24,
-                                                child: CircularProgressIndicator(
-                                                    strokeWidth: 2),
-                                              ),
-                                        SizedBox(height: 4),
-                                        Text(
-                                          store.town,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12),
-                                        ),
-                                        Text(
-                                          store.state,
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 11),
-                                        ),
-                                        Text(
-                                          store.address,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                              fontStyle: FontStyle.italic,
-                                              fontSize: 10),
-                                        ),
-                                      ],
+                                    ),
+                                    Text(
+                                      store.state,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                    Text(
+                                      store.address,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontStyle: FontStyle.italic,
+                                        fontSize: 10,
+                                      ),
                                     ),
                                   ],
                                 ),
-                              )),
-                        );
-                      },
-                    );
-                  } else if (snapshot.hasError) {
-                    return Text('${snapshot.error}');
-                  }
-                  return Center(child: CircularProgressIndicator());
-                }),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                }
+                if (snapshot.hasError) {
+                  return Center(child: Text('${snapshot.error}'));
+                }
+                return const Center(child: CircularProgressIndicator());
+              },
+            ),
           ),
         ],
       ),
@@ -340,48 +338,15 @@ class _StoreSearchState extends State<StoreSearch> {
         child: SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: widget.userStores.isEmpty || _savingStores
-                ? null
-                : () async {
-                    setState(() => _savingStores = true);
-                    try {
-                      await _saveSelectedStoresForUser();
-                      if (!mounted) return;
-                      Navigator.push(context, MaterialPageRoute(builder: (context) {
-                        return SearchPage(
-                          currentUserId: widget.currentUserId,
-                          companies: widget.companies,
-                          tags: widget.tags,
-                          stores: widget.userStores,
-                          userTags: widget.userTags,
-                          setTags: widget.setTags,
-                          cart: widget.cart,
-                          cartFinished: widget.cartFinished,
-                          setCart: widget.setCart,
-                          setCartFinished: widget.setCartFinished,
-                          addToCartQty: widget.addToCartQty,
-                          removeFromCartAll: widget.removeFromCartAll,
-                          cartQuantities: widget.cartQuantities,
-                          searchTerm: widget.searchTerm,
-                          setSearchTerm: widget.setSearchTerm,
-                        );
-                      }));
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Could not save stores: $e')),
-                      );
-                    } finally {
-                      if (mounted) setState(() => _savingStores = false);
-                    }
-                  },
+            onPressed:
+                selectedStores.isEmpty || _savingStores ? null : _confirmStores,
             child: _savingStores
                 ? const SizedBox(
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : Text('Confirm Stores (${widget.userStores.length})'),
+                : Text('Confirm Stores (${selectedStores.length})'),
           ),
         ),
       ),
