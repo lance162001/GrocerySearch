@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Optional
 from urllib.request import Request, urlopen
 
@@ -30,6 +31,9 @@ _ALGOLIA_URL = (
 )
 
 _PAGE_SIZE = 100
+
+_WEGMANS_PREFIX_PATTERN = re.compile(r"^wegmans(?:\s+brand)?\b[\s,:-]*", re.IGNORECASE)
+_FAMILY_PACK_SUFFIX_PATTERN = re.compile(r"[\s,:-]*family\s+pack\s*$", re.IGNORECASE)
 
 WG_FALLBACK_IMAGE = (
     "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/"
@@ -141,6 +145,14 @@ def _fetch_all_products(store_code: int) -> list[dict]:
     return products
 
 
+def _normalize_wegmans_name(name: str) -> str:
+    """Strip Wegmans-specific branding markers from a cleaned product name."""
+    normalized = _WEGMANS_PREFIX_PATTERN.sub("", name.strip())
+    normalized = _FAMILY_PACK_SUFFIX_PATTERN.sub("", normalized)
+    normalized = re.sub(r"\s{2,}", " ", normalized).strip(" ,-/")
+    return normalized or name.strip()
+
+
 def _persist_product(
     raw: dict,
     store_id: int,
@@ -154,6 +166,7 @@ def _persist_product(
         return
 
     size, cleaned_name = extract_size_and_clean_name(raw_full_name)
+    cleaned_name = _normalize_wegmans_name(cleaned_name)
     cleaned_name = cleaned_name.title()
 
     prod = sess.query(Product).filter(

@@ -7,6 +7,7 @@ import logging
 from typing import Optional
 from urllib.request import Request, urlopen
 
+from curl_cffi import requests
 from sqlalchemy.orm import Session
 
 from models import Product, Product_Instance, PricePoint, Store, Tag_Instance
@@ -20,6 +21,9 @@ from .utils import (
 logger = logging.getLogger(__name__)
 
 _TJ_COMPANY_ID = 2
+_TJ_PRODUCTS_URL = "https://www.traderjoes.com/home/products"
+_TJ_GRAPHQL_URL = "https://www.traderjoes.com/api/graphql"
+_TJ_IMPERSONATE_BROWSER = "chrome"
 
 _TJ_GRAPHQL_QUERY = """\
 query SearchProducts($categoryId: String, $currentPage: Int, $pageSize: Int, \
@@ -131,10 +135,10 @@ def _fetch_all_products(store_code: int) -> list[dict]:
     """Page through the TJ GraphQL API and return all product dicts."""
     headers = {
         "User-Agent": DEFAULT_USER_AGENT,
-        "Host": "www.traderjoes.com",
+        "Content-Type": "application/json",
         "Origin": "https://www.traderjoes.com",
+        "Referer": _TJ_PRODUCTS_URL,
     }
-    url = "https://www.traderjoes.com/api/graphql"
     body = {
         "operationName": "SearchProducts",
         "query": _TJ_GRAPHQL_QUERY,
@@ -150,22 +154,29 @@ def _fetch_all_products(store_code: int) -> list[dict]:
     }
 
     products: list[dict] = []
-    while True:
-        try:
-            json_bytes = json.dumps(body).encode("utf-8")
-            req = Request(url, json_bytes, headers)
-            response = urlopen(req)
-            items = json.loads(response.read())["data"]["products"]["items"]
-        except Exception as exc:
-            logger.warning("TJ fetch failed (page=%d): %s", body["variables"]["currentPage"], exc)
-            break
+    session = requests.Session(impersonate=_TJ_IMPERSONATE_BROWSER)
+    try:
+        # Akamai blocks non-browser TLS fingerprints on this endpoint, so prime
+        # the session with the products page and reuse the impersonated client.
+        session.get(_TJ_PRODUCTS_URL, headers={"Referer": "https://www.traderjoes.com/"}, timeout=30)
 
-        if not items:
-            break
+        while True:
+            try:
+                response = session.post(_TJ_GRAPHQL_URL, headers=headers, json=body, timeout=30)
+                response.raise_for_status()
+                items = response.json()["data"]["products"]["items"]
+            except Exception as exc:
+                logger.warning("TJ fetch failed (page=%d): %s", body["variables"]["currentPage"], exc)
+                break
 
-        products.extend(items)
-        logger.debug("TJ page=%d fetched=%d", body["variables"]["currentPage"], len(items))
-        body["variables"]["currentPage"] += 1
+            if not items:
+                break
+
+            products.extend(items)
+            logger.debug("TJ page=%d fetched=%d", body["variables"]["currentPage"], len(items))
+            body["variables"]["currentPage"] += 1
+    finally:
+        session.close()
 
     return products
 
@@ -187,7 +198,7 @@ def _persist_product(
             brand="Trader Joes",
             name=name,
             company_id=_TJ_COMPANY_ID,
-            picture_url=f"traderjoes.com{raw.get('primary_image', '')}",
+            picture_url=f"https://traderjoes.com{raw.get('primary_image', '')}",
         )
         collector["products"].append(prod)
         sess.add(prod)
