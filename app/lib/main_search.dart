@@ -179,6 +179,37 @@ class _StoreSearchState extends State<StoreSearch> {
             icon: const Icon(Icons.route),
             onPressed: () => Navigator.pushNamed(context, AppRoutes.bundlePlan),
           ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'label') {
+                Navigator.pushNamed(context, AppRoutes.labelJudgement);
+              } else if (value == 'suggest_store') {
+                Navigator.pushNamed(context, AppRoutes.suggestStore);
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'label',
+                child: Row(
+                  children: [
+                    Icon(Icons.rate_review_outlined, size: 20),
+                    SizedBox(width: 12),
+                    Text('Help label products'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'suggest_store',
+                child: Row(
+                  children: [
+                    Icon(Icons.add_business, size: 20),
+                    SizedBox(width: 12),
+                    Text('Suggest a store'),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
       body: Column(

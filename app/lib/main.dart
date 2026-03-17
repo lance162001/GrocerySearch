@@ -14,6 +14,8 @@ import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'chart.dart';
 import 'package:flutter_front_end/bundle_plan.dart';
+import 'package:flutter_front_end/label_judgement.dart';
+import 'package:flutter_front_end/suggest_store.dart';
 import 'package:flutter_front_end/user_id_cache.dart' as user_cache;
 import 'package:provider/provider.dart';
 
@@ -632,6 +634,10 @@ class _MyAppState extends State<MyApp> {
               AppRoutes.chart: (context) => BarChartSample4(),
               AppRoutes.bundlePlan: (context) =>
                   BundlePlanPage(initialUserId: plannerUserId),
+              AppRoutes.labelJudgement: (context) =>
+                  const LabelJudgementPage(),
+              AppRoutes.suggestStore: (context) =>
+                  const SuggestStorePage(),
             },
             onUnknownRoute: (settings) =>
                 MaterialPageRoute(builder: (context) => homePage),

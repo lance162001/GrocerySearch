@@ -54,6 +54,7 @@ Product _product({
   String salePrice = '',
   String basePrice = '1.00',
   String size = '16 oz',
+  String? variationGroup,
 }) {
   return Product(
     id: id,
@@ -77,6 +78,7 @@ Product _product({
     ],
     companyId: 1,
     storeId: storeId,
+    variationGroup: variationGroup,
   );
 }
 
@@ -160,6 +162,7 @@ class TestGroceryApi extends GroceryApi {
     String search = '',
     List<Tag> tags = const <Tag>[],
     bool onSaleOnly = false,
+    bool spreadOnly = false,
     int page = 1,
     int size = 100,
     List<Product> toAdd = const <Product>[],
@@ -310,6 +313,21 @@ class TestGroceryApi extends GroceryApi {
           .toList();
     }
     return null;
+  }
+
+  @override
+  Future<List<Product>> fetchVariations(int productId, List<int> storeIds) async {
+    return allProducts
+        .where((p) {
+          if (p.id == productId) return false;
+          if (!storeIds.contains(p.storeId)) return false;
+          final source = allProducts.cast<Product?>().firstWhere(
+              (s) => s!.id == productId, orElse: () => null);
+          if (source == null) return false;
+          final vg = source.variationGroup;
+          return vg != null && vg.isNotEmpty && p.variationGroup == vg;
+        })
+        .toList();
   }
 }
 

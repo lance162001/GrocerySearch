@@ -20,6 +20,7 @@ class Product(Base,BaseModel):
     brand = Column(String(100))
     company_id = Column(Integer, ForeignKey("companies.id"))
     picture_url = Column(String(255))
+    variation_group = Column(String(200), nullable=True, index=True)
     tags = relationship('Tag_Instance', back_populates='product')
     
 class Product_Instance(Base, BaseModel):
@@ -37,3 +38,15 @@ class Tag_Instance(Base, BaseModel):
     product_id = Column(Integer, ForeignKey('products.id'), index=True)
     product = relationship("Product", back_populates='tags')
     tag_id = Column(Integer, ForeignKey("tags.id"))
+
+
+class LabelJudgement(Base, BaseModel):
+    __tablename__ = 'label_judgements'
+    user_id = Column(Integer, ForeignKey('users.id'), index=True)
+    product_id = Column(Integer, ForeignKey('products.id'), index=True)
+    judgement_type = Column(String(20))  # 'staple' or 'grouping'
+    staple_name = Column(String(50), nullable=True)  # which staple category (e.g. 'milk')
+    target_product_id = Column(Integer, ForeignKey('products.id'), nullable=True)
+    approved = Column(Boolean, nullable=False)
+    flavour = Column(String(50), nullable=True)  # 'flavour' when grouping is a flavor/variation
+    created_at = Column(DateTime, default=datetime.now)

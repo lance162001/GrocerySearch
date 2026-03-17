@@ -48,6 +48,10 @@ class BundleCreateRequest(BaseModel):
     name: str
 
 
+class LookupOrCreateRequest(BaseModel):
+    firebase_uid: str
+
+
 class BundleProductAddRequest(BaseModel):
     product_id: int
 

@@ -6,6 +6,7 @@ import json
 import logging
 import re
 from typing import Optional
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from sqlalchemy.orm import Session
@@ -17,6 +18,7 @@ from .utils import (
     DEFAULT_USER_AGENT,
     extract_size_and_clean_name,
     normalize_size_string,
+    strip_brand_from_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,13 +32,40 @@ _ALGOLIA_URL = (
     f"?x-algolia-api-key={_ALGOLIA_API_KEY}"
     f"&x-algolia-application-id={_ALGOLIA_APP_ID}"
 )
+_ALGOLIA_BROWSE_URL = (
+    f"https://{_ALGOLIA_APP_ID.lower()}-dsn.algolia.net/1/indexes/products/browse"
+    f"?x-algolia-api-key={_ALGOLIA_API_KEY}"
+    f"&x-algolia-application-id={_ALGOLIA_APP_ID}"
+)
 
+# Algolia caps paginated search at this many hits per query.
+_ALGOLIA_MAX_HITS = 1000
 _PAGE_SIZE = 100
 
 _WEGMANS_PREFIX_PATTERN = re.compile(r"^wegmans(?:\s+brand)?\b[\s,:-]*", re.IGNORECASE)
 _FAMILY_PACK_SUFFIX_PATTERN = re.compile(r"[\s,:-]*family\s+pack\s*$", re.IGNORECASE)
 _SOLD_BY_SUFFIX_PATTERN = re.compile(r"[\s,]+sold\s+by\s+the\s+\w+\s*$", re.IGNORECASE)
 _DUPLICATE_WORD_PATTERN = re.compile(r"\b(\w+)\s+\1\b", re.IGNORECASE)
+
+# Maps Wegmans certification strings to canonical tag names.
+_CERTIFICATION_TAG_MAP: dict[str, str] = {
+    "organic": "organic",
+    "usda organic": "organic",
+    "certified organic": "organic",
+    "kosher": "kosher",
+    "kosher certified": "kosher",
+    "kosher dairy": "kosher",
+    "kosher pareve": "kosher",
+    "vegan": "vegan",
+    "certified vegan": "vegan",
+    "vegetarian": "vegetarian",
+    "gluten free": "gluten free",
+    "gluten-free": "gluten free",
+    "certified gluten free": "gluten free",
+    "certified gluten-free": "gluten free",
+    "dairy free": "dairy free",
+    "dairy-free": "dairy free",
+}
 
 WG_FALLBACK_IMAGE = (
     "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/"
@@ -47,16 +76,29 @@ WG_FALLBACK_IMAGE = (
 _DEPARTMENT_MAP: dict[str, str] = {
     "Produce": "produce",
     "Dairy": "dairy-eggs",
+    "Cheese": "dairy-eggs",
+    "Eggs": "dairy-eggs",
     "Meat": "meat",
+    "Poultry": "meat",
     "Deli & Meals": "prepared-foods",
     "Prepared Foods": "prepared-foods",
     "Pantry": "pantry",
+    "International Foods": "pantry",
+    "Bulk": "pantry",
+    "Organic & Natural": "pantry",
     "Bakery": "bakery",
+    "Breads & Rolls": "bakery",
     "Desserts": "desserts",
+    "Cakes & Pies": "desserts",
     "Frozen": "frozen",
     "Snacks": "snacks",
     "Seafood": "seafood",
     "Beverages": "beverages",
+    "Beer & Wine": "beverages",
+    "Beer, Wine & Spirits": "beverages",
+    "Wine": "beverages",
+    "Beer": "beverages",
+    "Coffee & Tea": "beverages",
 }
 
 
@@ -84,49 +126,189 @@ def scrape_wegmans(
 # ---------------------------------------------------------------------------
 
 
-def _build_request_body(store_code: int, query: str, page: int) -> dict:
-    """Build the Algolia multi-query request body for a given page."""
-    filters = (
+def _store_filters(store_code: int) -> str:
+    return (
         f"storeNumber:{store_code} AND fulfilmentType:instore "
         f"AND excludeFromWeb:false AND isSoldAtStore:true"
     )
-    return {
-        "requests": [
-            {
-                "indexName": "products",
-                "analytics": False,
-                "attributesToHighlight": [],
-                "clickAnalytics": False,
-                "facets": ["department"],
-                "filters": filters,
-                "hitsPerPage": _PAGE_SIZE,
-                "page": page,
-                "query": query,
-            }
-        ]
+
+
+def _make_request(url: str, body: dict) -> dict:
+    """POST *body* to *url* and return parsed JSON. Propagates HTTP errors."""
+    json_bytes = json.dumps(body).encode("utf-8")
+    req = Request(url, json_bytes)
+    req.add_header("User-Agent", DEFAULT_USER_AGENT)
+    req.add_header("Content-Type", "application/json")
+    req.add_header("Origin", "https://www.wegmans.com")
+    req.add_header("Referer", "https://www.wegmans.com/")
+    return json.loads(urlopen(req).read())
+
+
+def _build_search_body(
+    store_code: int, query: str, page: int,
+    category_filter: Optional[str] = None,
+) -> dict:
+    """Build the Algolia multi-query request body for a paginated search."""
+    req_obj: dict = {
+        "indexName": "products",
+        "analytics": False,
+        "attributesToHighlight": [],
+        "clickAnalytics": False,
+        "facets": ["categoryPageId"],
+        "filters": _store_filters(store_code),
+        "hitsPerPage": _PAGE_SIZE,
+        "page": page,
+        "query": query,
     }
+    if category_filter is not None:
+        req_obj["facetFilters"] = [[f"categoryPageId:{category_filter}"]]
+    return {"requests": [req_obj]}
 
 
 def _fetch_all_products(store_code: int) -> list[dict]:
-    """Page through the Algolia API and return de-duped product dicts."""
+    """Return de-duped products for a store, maximising coverage.
+
+    Strategy:
+    1. Try the Algolia Browse API — no pagination cap, returns every record.
+    2. If the Browse API is unauthorized, fall back to department-partitioned
+       search queries (each capped at _ALGOLIA_MAX_HITS).  Departments with
+       more than _ALGOLIA_MAX_HITS products are further split by alpha prefix.
+    """
     products: list[dict] = []
     seen_skus: set[str] = set()
-    page = 0
+
+    if _fetch_via_browse(store_code, products, seen_skus):
+        logger.info("Wegmans: browse API returned %d products", len(products))
+        return products
+
+    logger.info("Wegmans: falling back to categoryPageId leaf-partitioned search")
+    leaf_categories = _get_leaf_categories(store_code)
+
+    if not leaf_categories:
+        logger.warning("Wegmans: no leaf categories found; falling back to blank query (capped at %d)", _ALGOLIA_MAX_HITS)
+        _fetch_search_pages(store_code, "", None, products, seen_skus)
+        return products
+
+    for cat, count in leaf_categories:
+        if count <= _ALGOLIA_MAX_HITS:
+            _fetch_search_pages(store_code, "", None, products, seen_skus, category_filter=cat)
+        else:
+            # Unlikely given 97%+ of leaves are <1000, but sub-partition by letter to be safe.
+            logger.info(
+                "Wegmans: leaf category '%s' has %d products; sub-partitioning by letter",
+                cat,
+                count,
+            )
+            for letter in "abcdefghijklmnopqrstuvwxyz0123456789":
+                _fetch_search_pages(store_code, letter, None, products, seen_skus, category_filter=cat)
+
+    logger.info(
+        "Wegmans: category-partitioned search returned %d products", len(products)
+    )
+    return products
+
+
+def _fetch_via_browse(
+    store_code: int, products: list[dict], seen_skus: set[str]
+) -> bool:
+    """Use the Algolia Browse API (cursor-based, no hit cap) to fetch all products.
+
+    Returns True on success, False if the API is unavailable/unauthorized.
+    """
+    cursor: Optional[str] = None
 
     while True:
-        body = _build_request_body(store_code, "", page)
+        body: dict = {
+            "query": "",
+            "filters": _store_filters(store_code),
+            "hitsPerPage": _PAGE_SIZE,
+        }
+        if cursor:
+            body["cursor"] = cursor
+
         try:
-            json_bytes = json.dumps(body).encode("utf-8")
-            req = Request(_ALGOLIA_URL, json_bytes)
-            req.add_header("User-Agent", DEFAULT_USER_AGENT)
-            req.add_header("Content-Type", "application/json")
-            req.add_header("Origin", "https://www.wegmans.com")
-            req.add_header("Referer", "https://www.wegmans.com/")
-            response = urlopen(req)
-            result = json.loads(response.read())["results"][0]
+            result = _make_request(_ALGOLIA_BROWSE_URL, body)
+        except HTTPError as exc:
+            if exc.code in (401, 403):
+                logger.info(
+                    "Wegmans browse API not authorized (HTTP %d); falling back",
+                    exc.code,
+                )
+                return False
+            logger.warning("Wegmans browse API HTTP %d: %s", exc.code, exc)
+            # Treat a partial result as a successful-enough run.
+            return len(products) > 0
+        except Exception as exc:
+            logger.warning("Wegmans browse API error: %s", exc)
+            return len(products) > 0
+
+        hits = result.get("hits", [])
+        for hit in hits:
+            sku = hit.get("sku") or hit.get("objectID", "")
+            if sku and sku not in seen_skus:
+                seen_skus.add(sku)
+                products.append(hit)
+
+        logger.debug(
+            "Wegmans browse: fetched=%d running_total=%d", len(hits), len(products)
+        )
+        cursor = result.get("cursor")
+        if not cursor or not hits:
+            break
+
+    return True
+
+
+def _get_leaf_categories(store_code: int) -> list[tuple[str, int]]:
+    """Return (category_path, count) pairs for leaf-level categories.
+
+    Leaf categories are `categoryPageId` paths that have no child paths in the
+    returned facet set — i.e. no other path starts with "<this path> > ".
+    Every leaf category has at most *_ALGOLIA_MAX_HITS* products so it can be
+    fetched in a single paginated search sequence.
+    """
+    body = _build_search_body(store_code, "", 0)
+    body["requests"][0]["hitsPerPage"] = 0  # only need facet counts
+    try:
+        result = _make_request(_ALGOLIA_URL, body)["results"][0]
+        all_cats: dict[str, int] = result.get("facets", {}).get("categoryPageId", {})
+    except Exception as exc:
+        logger.warning("Wegmans: failed to fetch category counts: %s", exc)
+        return []
+
+    cat_set = set(all_cats)
+    leaves = [
+        (cat, count)
+        for cat, count in all_cats.items()
+        if not any(other.startswith(cat + " > ") for other in cat_set)
+    ]
+    logger.info("Wegmans: found %d leaf categories (from %d total)", len(leaves), len(all_cats))
+    return leaves
+
+
+def _fetch_search_pages(
+    store_code: int,
+    query: str,
+    dept_filter: Optional[str],  # kept for back-compat; ignored — use category_filter
+    products: list[dict],
+    seen_skus: set[str],
+    category_filter: Optional[str] = None,
+) -> None:
+    """Paginate through Algolia search results (≤ _ALGOLIA_MAX_HITS per query)."""
+    page = 0
+    while True:
+        body = _build_search_body(store_code, query, page, category_filter)
+        try:
+            result = _make_request(_ALGOLIA_URL, body)["results"][0]
             hits = result.get("hits", [])
         except Exception as exc:
-            logger.warning("Wegmans fetch failed (page=%d): %s", page, exc)
+            logger.warning(
+                "Wegmans search failed (category=%r, query=%r, page=%d): %s",
+                category_filter,
+                query,
+                page,
+                exc,
+            )
             break
 
         if not hits:
@@ -138,14 +320,10 @@ def _fetch_all_products(store_code: int) -> list[dict]:
                 seen_skus.add(sku)
                 products.append(hit)
 
-        logger.debug("Wegmans page=%d fetched=%d total=%d", page, len(hits), len(products))
-
         nb_pages = result.get("nbPages", 0)
         page += 1
         if page >= nb_pages:
             break
-
-    return products
 
 
 def _normalize_wegmans_name(name: str) -> str:
@@ -172,6 +350,9 @@ def _persist_product(
 
     size, cleaned_name = extract_size_and_clean_name(raw_full_name)
     cleaned_name = _normalize_wegmans_name(cleaned_name)
+    brand_raw = raw.get("consumerBrandName") or raw.get("brand") or "Wegmans"
+    # Strip brand prefix from product name so cross-store product matching works.
+    cleaned_name = strip_brand_from_name(cleaned_name, brand_raw)
     cleaned_name = cleaned_name.title()
 
     prod = sess.query(Product).filter(
@@ -183,7 +364,7 @@ def _persist_product(
     image = images[0] if images else WG_FALLBACK_IMAGE
 
     if prod is None:
-        brand = (raw.get("consumerBrandName") or raw.get("brand") or "Wegmans").title()
+        brand = brand_raw.title()
 
         prod = Product(
             company_id=_WG_COMPANY_ID,
@@ -199,20 +380,43 @@ def _persist_product(
 
         # Diet / characteristic tags
         tag_instances: list[Tag_Instance] = []
-        name_lower = raw_full_name.lower()
+        added_tags: set[str] = set()
+        # Normalize hyphens so "Gluten-Free" matches the "gluten free" tag.
+        name_lower_normalized = raw_full_name.lower().replace("-", " ")
         for diet in DIET_TYPES:
-            if diet in name_lower:
+            if diet in name_lower_normalized and diet not in added_tags:
                 tag_instances.append(Tag_Instance(product_id=prod.id, tag_id=tags[diet]))
+                added_tags.add(diet)
 
+        # popularTags from Algolia — normalize hyphens before lookup.
         popular_tags = raw.get("popularTags") or []
         for ptag in popular_tags:
-            tag_id = tags.get(ptag.lower())
-            if tag_id is not None:
+            normalized = ptag.lower().replace("-", " ")
+            tag_id = tags.get(normalized)
+            if tag_id is not None and normalized not in added_tags:
                 tag_instances.append(Tag_Instance(product_id=prod.id, tag_id=tag_id))
+                added_tags.add(normalized)
 
-        # Department → canonical category tag
+        # Certifications list (e.g. "USDA Organic", "Kosher Certified").
+        certifications = raw.get("certifications") or []
+        for cert in certifications:
+            mapped = _CERTIFICATION_TAG_MAP.get(cert.lower().strip())
+            if mapped and mapped not in added_tags:
+                tag_id = tags.get(mapped)
+                if tag_id is not None:
+                    tag_instances.append(Tag_Instance(product_id=prod.id, tag_id=tag_id))
+                    added_tags.add(mapped)
+
+        # Local tag.
+        if raw.get("isLocal") and "local" in tags:
+            tag_instances.append(Tag_Instance(product_id=prod.id, tag_id=tags["local"]))
+
+        # Department → canonical category tag; fall back to subDepartment.
         department = raw.get("department", "")
         canonical = _DEPARTMENT_MAP.get(department)
+        if canonical is None:
+            sub_dept = raw.get("subDepartment", "")
+            canonical = _DEPARTMENT_MAP.get(sub_dept)
         if canonical and canonical in tags:
             tag_instances.append(Tag_Instance(product_id=prod.id, tag_id=tags[canonical]))
 

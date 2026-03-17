@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_front_end/config/app_environment.dart';
 import 'package:flutter_front_end/models/grocery_models.dart';
 import 'package:flutter_front_end/user_id_cache.dart' as user_cache;
@@ -69,6 +70,29 @@ class GroceryApi {
   }
 
   Future<int> fetchOrCreateUserId() async {
+    // If a Firebase user is signed in, resolve the backend user by their UID so
+    // that the same account always maps to the same bundles on any device.
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+    if (firebaseUser != null) {
+      final response = await post(
+        buildUri('/users/lookup-or-create'),
+        body: jsonEncode({'firebase_uid': firebaseUser.uid}),
+      );
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Failed to resolve user: ${response.statusCode} ${response.body}',
+        );
+      }
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final userId = decoded['id'];
+      if (userId is! int || userId <= 0) {
+        throw Exception('Backend returned invalid user id');
+      }
+      await user_cache.writeCachedUserId(userId);
+      return userId;
+    }
+
+    // Anonymous fallback: use locally cached ID or create a new one.
     final cachedUserId = await user_cache.readCachedUserId();
     if (cachedUserId != null && cachedUserId > 0) {
       return cachedUserId;
@@ -101,6 +125,7 @@ class GroceryApi {
     String search = '',
     List<Tag> tags = const [],
     bool onSaleOnly = false,
+    bool spreadOnly = false,
     int page = 1,
     int size = 100,
     List<Product> toAdd = const [],
@@ -110,6 +135,7 @@ class GroceryApi {
       'size': '$size',
       if (search.isNotEmpty) 'search': search,
       if (onSaleOnly) 'on_sale': 'true',
+      if (spreadOnly) 'has_spread': 'true',
     };
     final response = await post(
       buildUri('/stores/product_search', queryParams),
@@ -256,7 +282,7 @@ class GroceryApi {
     final results = <String, List<Product>>{};
     final futures = <String, Future<List<Product>>>{};
     for (final name in stapleNames) {
-      futures[name] = fetchProducts(storeIds, search: name, size: 20);
+      futures[name] = fetchProducts(storeIds, search: name, size: 50);
     }
     for (final entry in futures.entries) {
       try {
@@ -276,5 +302,121 @@ class GroceryApi {
       return json;
     }
     return const [];
+  }
+
+  /// Fetch random products to judge as staple or grouping.
+  Future<List<JudgementCandidate>> fetchJudgementCandidates({
+    required String judgementType,
+    required int userId,
+    int count = 5,
+  }) async {
+    final response = await get(buildUri('/products/judgement-candidates', {
+      'judgement_type': judgementType,
+      'user_id': '$userId',
+      'count': '$count',
+    }));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load judgement candidates: ${response.statusCode}');
+    }
+    final decoded = jsonDecode(response.body) as List<dynamic>;
+    return decoded
+        .map((e) => JudgementCandidate.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  /// Submit a staple or grouping judgement.
+  Future<void> submitJudgement({
+    required int userId,
+    required int productId,
+    required String judgementType,
+    required bool approved,
+    int? targetProductId,
+    String? stapleName,
+    String? flavour,
+  }) async {
+    final body = <String, dynamic>{
+      'user_id': userId,
+      'product_id': productId,
+      'judgement_type': judgementType,
+      'approved': approved,
+    };
+    if (targetProductId != null) {
+      body['target_product_id'] = targetProductId;
+    }
+    if (stapleName != null) {
+      body['staple_name'] = stapleName;
+    }
+    if (flavour != null) {
+      body['flavour'] = flavour;
+    }
+    final response = await post(
+      buildUri('/products/judgement'),
+      body: jsonEncode(body),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit judgement: ${response.statusCode}');
+    }
+  }
+
+  /// Fetch aggregated staple judgements across all users.
+  Future<List<StapleJudgementSummary>> fetchStapleJudgements() async {
+    final list = await getObjectList('/products/staple-judgements');
+    if (list == null) return [];
+    return list.map((e) => StapleJudgementSummary.fromJson(e)).toList();
+  }
+
+  /// Fetch aggregated grouping judgements across all users.
+  Future<List<GroupingJudgementSummary>> fetchGroupingJudgements() async {
+    final list = await getObjectList('/products/grouping-judgements');
+    if (list == null) return [];
+    return list.map((e) => GroupingJudgementSummary.fromJson(e)).toList();
+  }
+
+  /// Fetch heuristic staple scores inferred from existing user labels.
+  Future<List<StapleHeuristic>> fetchStapleHeuristics() async {
+    final list = await getObjectList('/products/staple-heuristics');
+    if (list == null) return [];
+    return list.map((e) => StapleHeuristic.fromJson(e)).toList();
+  }
+
+  /// Fetch other products in the same variation group.
+  Future<List<Product>> fetchVariations(int productId, List<int> storeIds) async {
+    final uri = buildUri('/products/$productId/variations').replace(
+      queryParameters: {
+        'store_ids': storeIds.map((id) => '$id').toList(),
+      },
+    );
+    final response = await get(uri);
+    if (response.statusCode != 200) {
+      return [];
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! List) return [];
+    return decoded
+        .map((e) => Product.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  /// Submit a new store suggestion.
+  Future<void> suggestStore({
+    required int companyId,
+    required String address,
+    required String town,
+    required String state,
+    required String zipcode,
+  }) async {
+    final response = await post(
+      buildUri('/stores/suggest'),
+      body: jsonEncode({
+        'company_id': companyId,
+        'address': address,
+        'town': town,
+        'state': state,
+        'zipcode': zipcode,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to suggest store: ${response.statusCode}');
+    }
   }
 }

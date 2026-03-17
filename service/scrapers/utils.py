@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Tuple
 
@@ -16,10 +17,28 @@ from models.base import Base, engine
 # ---------------------------------------------------------------------------
 
 WF_CATEGORIES = [
-    "produce", "dairy-eggs", "meat", "prepared-foods",
+    "produce", "dairy-eggs", "meat", "seafood", "prepared-foods",
     "pantry-essentials", "breads-rolls-bakery", "desserts",
-    "frozen-foods", "snacks-chips-salsas-dips", "seafood", "beverages",
+    "frozen-foods", "snacks-chips-salsas-dips", "beverages",
+    "beer-wine-spirits", "floral-plants",
 ]
+
+# Explicit WF-slug → canonical-category mapping (used instead of fragile index arithmetic).
+WF_CATEGORY_TO_CANONICAL: dict[str, str] = {
+    "produce": "produce",
+    "dairy-eggs": "dairy-eggs",
+    "meat": "meat",
+    "seafood": "seafood",
+    "prepared-foods": "prepared-foods",
+    "pantry-essentials": "pantry",
+    "breads-rolls-bakery": "bakery",
+    "desserts": "desserts",
+    "frozen-foods": "frozen",
+    "snacks-chips-salsas-dips": "snacks",
+    "beverages": "beverages",
+    "beer-wine-spirits": "beverages",
+    "floral-plants": "produce",
+}
 
 TJ_CATEGORIES = [
     "Fresh Fruits and Veggies", "Dairy & Eggs",
@@ -28,6 +47,51 @@ TJ_CATEGORIES = [
     ["Chips, Crackers & Crunchy Bites", "Nuts, Dried Fruits, Seeds",
      "Bars, Jerky &... Surprises"],
 ]
+
+# Maps TJ category names (at any hierarchy level) to canonical categories.
+# Walking the full hierarchy catches both department names ("Dairy & Eggs") and
+# leaf names ("Cheese") so every product gets a category tag.
+TJ_CATEGORY_TO_CANONICAL: dict[str, str] = {
+    # Department level (hierarchy[1])
+    "Fresh Fruits and Veggies": "produce",
+    "Flowers & Plants": "produce",
+    "Dairy & Eggs": "dairy-eggs",
+    "Meat, Seafood & Plant-based": "meat",
+    "For the Pantry": "pantry",
+    "Bakery": "bakery",
+    "Candies & Cookies": "desserts",
+    "Sweets, Snacks & Pantry": "snacks",
+    "From The Freezer": "frozen",
+    "Beverages": "beverages",
+    "Coffee & Tea": "beverages",
+    "Wine, Beer & Spirits": "beverages",
+    "Health & Beauty": "pantry",
+    "Household": "pantry",
+    # Sub-department / leaf level (hierarchy[2])
+    "Cheese": "dairy-eggs",
+    "Milk, Cream & More": "dairy-eggs",
+    "Eggs": "dairy-eggs",
+    "Meat & Poultry": "meat",
+    "Seafood": "seafood",
+    "Fish": "seafood",
+    "Plant-Based Proteins": "meat",
+    "Fresh Bread & Rolls": "bakery",
+    "Chips, Crackers & Crunchy Bites": "snacks",
+    "Nuts, Dried Fruits, Seeds": "snacks",
+    "Bars, Jerky &... Surprises": "snacks",
+    "Frozen Meals & Sides": "frozen",
+    "Frozen Appetizers & Snacks": "frozen",
+    "Frozen Desserts": "frozen",
+    "Frozen Breakfast": "frozen",
+    "Frozen Meat, Seafood & Poultry": "frozen",
+    "Frozen Vegetables & Fruit": "frozen",
+    "Frozen Pizza & Pasta": "frozen",
+    "Juice & Ciders": "beverages",
+    "Water, Soda & Sparkling": "beverages",
+    "Wine": "beverages",
+    "Beer": "beverages",
+    "Spirits": "beverages",
+}
 
 CANONICAL_CATEGORIES = [
     "produce", "dairy-eggs", "meat", "prepared-foods", "pantry",
@@ -120,6 +184,31 @@ def normalize_size_string(size: str) -> str:
     return f"{m.group('value')} {unit}"
 
 
+def strip_brand_from_name(name: str, brand: str) -> str:
+    """Remove a leading brand prefix from a cleaned product name.
+
+    Handles both ``"Brand, Product Name"`` (comma-separated, common at Whole
+    Foods) and ``"Brand Product Name"`` (space-separated, common at Wegmans).
+    Returns *name* unchanged if no matching prefix is found or stripping
+    would leave an empty string.
+    """
+    if not brand or not name:
+        return name
+    brand_lower = brand.lower()
+    name_lower = name.lower()
+    # Comma-separated: "Brand, Product" or "Brand,Product"
+    if name_lower.startswith(brand_lower + ","):
+        stripped = name[len(brand) + 1:].lstrip()
+        if stripped:
+            return stripped
+    # Space-separated: "Brand Product"
+    elif name_lower.startswith(brand_lower + " "):
+        stripped = name[len(brand) + 1:]
+        if stripped:
+            return stripped
+    return name
+
+
 # ---------------------------------------------------------------------------
 # Database seed data
 # ---------------------------------------------------------------------------
@@ -172,3 +261,138 @@ def setup_seed_data(sess: Session) -> tuple[list, dict[str, int]]:
 def load_existing_tags(sess: Session) -> dict[str, int]:
     """Load the tag-name→id mapping from an already-seeded database."""
     return {t.name: t.id for t in sess.query(Tag).all()}
+
+
+# ---------------------------------------------------------------------------
+# Variation-group computation
+# ---------------------------------------------------------------------------
+
+def _variation_base_name(name: str) -> str:
+    """Extract the base product type from a product name.
+
+    The heuristic keeps the longest *suffix* of the name that is likely
+    the product-type noun phrase, stripping leading flavour / style
+    modifiers.  The result is lower-cased and whitespace-normalised.
+    """
+    # Strip punctuation from each word for cleaner matching.
+    words = [w.strip(",.;:") for w in name.lower().split()]
+    words = [w for w in words if w]
+    if len(words) <= 1:
+        return name.lower().strip()
+    # Return the last two words for names with 3+ words,
+    # the last word for 2-word names.
+    if len(words) >= 3:
+        return " ".join(words[-2:])
+    return words[-1]
+
+
+def _variation_pre_comma_base(name: str) -> str | None:
+    """If *name* contains a comma and the text before it has 2+ words,
+    return that prefix as a base-name candidate.  Handles the common
+    ``"Cheese Crackers, Original"`` naming convention.
+    """
+    if "," not in name:
+        return None
+    pre = name.split(",")[0].strip().lower()
+    if len(pre.split()) >= 2:
+        return pre
+    return None
+
+
+def compute_variation_groups(sess: Session, *, batch_size: int = 5000) -> int:
+    """Assign ``variation_group`` to products that are flavour / style
+    variations of each other.
+
+    Two products share a variation group when they have the **same brand**
+    (case-insensitive, at least 2 chars) and the same *base product name*.
+
+    The algorithm uses two strategies layered together:
+    1. **Last-2-words**: groups products whose names end with the same two
+       words (e.g. "… Energy Drink").
+    2. **Pre-comma prefix**: for products not already grouped, groups those
+       whose names share the same text before the first comma (e.g.
+       "Cheese Crackers, Original" and "Cheese Crackers, Extra Toasty").
+
+    Groups with only one member are cleared back to ``NULL`` so the column
+    is only set when true variations exist.
+
+    Returns the number of products updated.
+    """
+    from collections import defaultdict
+    from models.products import Product
+
+    logger = logging.getLogger(__name__)
+
+    # 1. Load all products with a usable brand.
+    products = (
+        sess.query(Product)
+        .filter(Product.brand.isnot(None), Product.brand != "")
+        .all()
+    )
+    logger.info("variation-groups: processing %d branded products", len(products))
+
+    # 2. Group by brand.
+    by_brand: dict[str, list] = defaultdict(list)
+    for prod in products:
+        brand = prod.brand.strip()
+        if len(brand) < 2:
+            continue
+        by_brand[brand.lower()].append(prod)
+
+    # 3. For each brand, assign variation groups with two passes.
+    assigned: dict[int, str] = {}  # product_id -> group key
+
+    for brand, prods in by_brand.items():
+        if len(prods) < 2:
+            continue
+
+        # Pass 1: last-2-words strategy.
+        l2w_buckets: dict[str, list] = defaultdict(list)
+        for prod in prods:
+            base = _variation_base_name(prod.name or "")
+            if base:
+                l2w_buckets[base].append(prod)
+        for base, members in l2w_buckets.items():
+            if len(members) >= 2:
+                key = f"{brand}::{base}"
+                for prod in members:
+                    assigned[prod.id] = key
+
+        # Pass 2: pre-comma prefix for products not yet assigned.
+        pc_buckets: dict[str, list] = defaultdict(list)
+        for prod in prods:
+            if prod.id in assigned:
+                continue
+            pc_base = _variation_pre_comma_base(prod.name or "")
+            if pc_base:
+                pc_buckets[pc_base].append(prod)
+        for base, members in pc_buckets.items():
+            if len(members) >= 2:
+                key = f"{brand}::{base}"
+                for prod in members:
+                    assigned[prod.id] = key
+
+    # 4. Apply assignments.
+    updated = 0
+    for prod in products:
+        target = assigned.get(prod.id)
+        if prod.variation_group != target:
+            prod.variation_group = target
+            updated += 1
+
+    # 5. Clear variation_group for products with no brand (safety sweep).
+    cleared = (
+        sess.query(Product)
+        .filter(
+            Product.variation_group.isnot(None),
+            (Product.brand.is_(None) | (Product.brand == "")),
+        )
+        .all()
+    )
+    for prod in cleared:
+        prod.variation_group = None
+        updated += 1
+
+    sess.commit()
+    logger.info("variation-groups: updated %d products", updated)
+    return updated

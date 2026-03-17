@@ -36,6 +36,15 @@ class ProductBox extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  if (p.brand.isNotEmpty) ...[  
+                    SizedBox(height: 2),
+                    Text(
+                      p.brand,
+                      style: TextStyle(fontSize: 11, color: Colors.grey),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                   SizedBox(height: 6),
                   if (p.size != "")
                     Text(

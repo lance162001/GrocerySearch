@@ -25,3 +25,14 @@ class Company(Base, BaseModel):
     logo_url = Column(String(255))
     name = Column(String(100))
 
+
+class StoreSuggestion(Base, BaseModel):
+    __tablename__ = 'store_suggestions'
+    company_id = Column(Integer, ForeignKey('companies.id'), nullable=False)
+    address = Column(String(50))
+    town = Column(String(50))
+    state = Column(String(25))
+    zipcode = Column(String(5))
+    status = Column(String(20), default='todo')  # 'todo', 'done', 'rejected'
+    created_at = Column(DateTime, default=datetime.now)
+

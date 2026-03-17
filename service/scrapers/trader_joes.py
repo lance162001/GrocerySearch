@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from typing import Optional
 from urllib.request import Request, urlopen
 
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session
 from models import Product, Product_Instance, PricePoint, Store, Tag_Instance
 from .utils import (
     TJ_CATEGORIES,
+    TJ_CATEGORY_TO_CANONICAL,
     CANONICAL_CATEGORIES,
     DEFAULT_USER_AGENT,
     extract_size_and_clean_name,
@@ -170,7 +172,7 @@ def _fetch_all_products(store_code: int, session: requests.Session) -> list[dict
             "availability": "1",
             "categoryId": 8,
             "characteristics": [],
-            "currentPage": 0,
+            "currentPage": 1,
             "pageSize": 100,
             "published": "1",
             "storeCode": str(store_code),
@@ -178,25 +180,47 @@ def _fetch_all_products(store_code: int, session: requests.Session) -> list[dict
     }
 
     products: list[dict] = []
+    total_pages: int | None = None
     # Akamai blocks non-browser TLS fingerprints on this endpoint, so prime
     # the session with the products page and reuse the impersonated client.
     session.get(_TJ_PRODUCTS_URL, headers={"Referer": "https://www.traderjoes.com/"}, timeout=30)
 
     while True:
-        try:
-            response = session.post(_TJ_GRAPHQL_URL, headers=headers, json=body, timeout=30)
-            response.raise_for_status()
-            items = response.json()["data"]["products"]["items"]
-        except Exception as exc:
-            logger.warning("TJ fetch failed (page=%d): %s", body["variables"]["currentPage"], exc)
+        current_page = body["variables"]["currentPage"]
+        data = None
+        for attempt in range(3):
+            try:
+                response = session.post(_TJ_GRAPHQL_URL, headers=headers, json=body, timeout=30)
+                response.raise_for_status()
+                data = response.json()["data"]["products"]
+                break
+            except Exception as exc:
+                if attempt < 2:
+                    time.sleep(2 ** attempt)
+                else:
+                    logger.warning("TJ fetch failed after 3 attempts (page=%d): %s", current_page, exc)
+
+        if data is None:
             break
+
+        items = data.get("items") or []
+        if total_pages is None:
+            total_pages = (data.get("pageInfo") or {}).get("totalPages")
+            total_count = data.get("total_count", "?")
+            logger.info("TJ store=%s: %s products across %s pages", store_code, total_count, total_pages)
 
         if not items:
             break
 
         products.extend(items)
-        logger.debug("TJ page=%d fetched=%d", body["variables"]["currentPage"], len(items))
+        logger.debug("TJ page=%d/%s fetched=%d cumulative=%d", current_page, total_pages, len(items), len(products))
+
+        if total_pages is not None and current_page >= total_pages:
+            break
         body["variables"]["currentPage"] += 1
+
+    if total_pages is not None and len(products) == 0:
+        logger.warning("TJ store=%s: no products returned", store_code)
 
     return products
 
@@ -238,30 +262,25 @@ def _persist_product(
         sess.add(prod)
         sess.flush()
 
-        # Characteristic tags
+        # Characteristic tags — normalise to lower-case with spaces so strings
+        # like "Gluten-Free" and "gluten free" both match the tag keys.
         tag_instances = []
         characteristics = raw.get("item_characteristics") or []
         for char in characteristics:
-            tag_id = tags.get(char.lower())
+            normalised = str(char).lower().replace("-", " ").strip()
+            tag_id = tags.get(normalised)
             if tag_id is not None:
                 tag_instances.append(Tag_Instance(product_id=prod.id, tag_id=tag_id))
 
-        # Category tag
-        try:
-            hierarchy_name = raw["category_hierarchy"][2]["name"]
-        except (KeyError, IndexError):
-            hierarchy_name = ""
-
-        for index, tj_cat in enumerate(TJ_CATEGORIES):
-            if isinstance(tj_cat, list):
-                if hierarchy_name in tj_cat:
-                    tag_instances.append(
-                        Tag_Instance(product_id=prod.id, tag_id=tags[CANONICAL_CATEGORIES[index]])
-                    )
-            elif hierarchy_name == tj_cat:
-                tag_instances.append(
-                    Tag_Instance(product_id=prod.id, tag_id=tags[CANONICAL_CATEGORIES[index]])
-                )
+        # Category tag — walk the full hierarchy from most-specific to most-general
+        # so every product gets a tag even when a leaf name isn't in the map.
+        canonical_cat: str | None = None
+        for node in reversed(raw.get("category_hierarchy") or []):
+            canonical_cat = TJ_CATEGORY_TO_CANONICAL.get(node.get("name", ""))
+            if canonical_cat:
+                break
+        if canonical_cat and canonical_cat in tags:
+            tag_instances.append(Tag_Instance(product_id=prod.id, tag_id=tags[canonical_cat]))
 
         sess.add_all(tag_instances)
 

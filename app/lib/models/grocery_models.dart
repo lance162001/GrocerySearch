@@ -94,6 +94,7 @@ class Product {
     required this.priceHistory,
     required this.companyId,
     required this.storeId,
+    this.variationGroup,
     this.inCart = false,
   });
 
@@ -110,6 +111,7 @@ class Product {
   final List<PricePoint> priceHistory;
   final int companyId;
   final int storeId;
+  final String? variationGroup;
   final bool inCart;
 
   PricePoint toPricePoint() {
@@ -176,6 +178,7 @@ class Product {
       priceHistory: priceHistory,
       companyId: productJson['company_id'] as int,
       storeId: instanceJson['store_id'] as int,
+      variationGroup: productJson['variation_group']?.toString(),
     );
   }
 }
@@ -216,6 +219,128 @@ class Store {
       state: json['state']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
       zipcode: json['zipcode']?.toString() ?? '',
+    );
+  }
+}
+
+/// A product (and optional target) presented for user judgement.
+class JudgementCandidate {
+  const JudgementCandidate({
+    required this.productId,
+    required this.productName,
+    required this.productBrand,
+    required this.productPictureUrl,
+    this.stapleName,
+    this.targetProductId,
+    this.targetProductName,
+    this.targetProductBrand,
+    this.targetProductPictureUrl,
+    this.heuristicScore,
+  });
+
+  final int productId;
+  final String productName;
+  final String productBrand;
+  final String productPictureUrl;
+  final String? stapleName;
+  final int? targetProductId;
+  final String? targetProductName;
+  final String? targetProductBrand;
+  final String? targetProductPictureUrl;
+  final double? heuristicScore;
+
+  factory JudgementCandidate.fromJson(Map<String, dynamic> json) {
+    final product = Map<String, dynamic>.from(json['product'] as Map);
+    final target = json['target_product'] != null
+        ? Map<String, dynamic>.from(json['target_product'] as Map)
+        : null;
+    return JudgementCandidate(
+      productId: product['id'] as int,
+      productName: product['name']?.toString() ?? '',
+      productBrand: product['brand']?.toString() ?? '',
+      productPictureUrl: product['picture_url']?.toString() ?? '',
+      stapleName: json['staple_name']?.toString(),
+      targetProductId: target?['id'] as int?,
+      targetProductName: target?['name']?.toString(),
+      targetProductBrand: target?['brand']?.toString(),
+      targetProductPictureUrl: target?['picture_url']?.toString(),
+      heuristicScore: (json['heuristic_score'] as num?)?.toDouble(),
+    );
+  }
+}
+
+/// Aggregated staple judgement for a product.
+class StapleJudgementSummary {
+  const StapleJudgementSummary({
+    required this.productId,
+    required this.stapleName,
+    required this.approvals,
+    required this.denials,
+  });
+
+  final int productId;
+  final String stapleName;
+  final int approvals;
+  final int denials;
+
+  /// Net score: positive = likely staple, negative = likely not.
+  int get netScore => approvals - denials;
+
+  factory StapleJudgementSummary.fromJson(Map<String, dynamic> json) {
+    return StapleJudgementSummary(
+      productId: json['product_id'] as int,
+      stapleName: json['staple_name']?.toString() ?? '',
+      approvals: json['approvals'] as int,
+      denials: json['denials'] as int,
+    );
+  }
+}
+
+/// Aggregated grouping judgement for a product pair.
+class GroupingJudgementSummary {
+  const GroupingJudgementSummary({
+    required this.productId,
+    required this.targetProductId,
+    required this.approvals,
+    required this.denials,
+  });
+
+  final int productId;
+  final int targetProductId;
+  final int approvals;
+  final int denials;
+
+  int get netScore => approvals - denials;
+
+  factory GroupingJudgementSummary.fromJson(Map<String, dynamic> json) {
+    return GroupingJudgementSummary(
+      productId: json['product_id'] as int,
+      targetProductId: json['target_product_id'] as int,
+      approvals: json['approvals'] as int,
+      denials: json['denials'] as int,
+    );
+  }
+}
+
+/// Heuristic staple score inferred from existing user labels.
+class StapleHeuristic {
+  const StapleHeuristic({
+    required this.productId,
+    required this.stapleName,
+    required this.score,
+  });
+
+  final int productId;
+  final String stapleName;
+
+  /// 0 = likely not a staple, 1 = likely a staple.
+  final double score;
+
+  factory StapleHeuristic.fromJson(Map<String, dynamic> json) {
+    return StapleHeuristic(
+      productId: json['product_id'] as int,
+      stapleName: json['staple_name'] as String,
+      score: (json['score'] as num).toDouble(),
     );
   }
 }

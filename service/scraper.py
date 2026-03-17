@@ -16,7 +16,7 @@ import emailer
 from models import Company, Store, Tag
 from models.base import Base, engine
 from scrapers import scrape_whole_foods, scrape_trader_joes, scrape_wegmans
-from scrapers.utils import setup_seed_data, load_existing_tags
+from scrapers.utils import setup_seed_data, load_existing_tags, compute_variation_groups
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -111,6 +111,13 @@ def scheduled_job() -> None:
         collector["companies"] = sess.query(Company).all()
 
         _scrape_stores(stores, tags, collector, only=only_ids)
+
+        # Assign variation groups based on brand + product-type suffix.
+        variation_sess = _new_session()
+        try:
+            compute_variation_groups(variation_sess)
+        finally:
+            variation_sess.close()
 
         summary = (
             f"GS Scraper Daily Run\n"

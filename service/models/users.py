@@ -7,6 +7,7 @@ from datetime import datetime
 class User(Base, BaseModel):
     __tablename__ = 'users'
     recent_zipcode = Column(String(5))
+    firebase_uid = Column(String(128), unique=True, nullable=True, index=True)
     bundles = relationship("Product_Bundle", back_populates="user", order_by="Product_Bundle.created_at.desc()")
 
 class Saved_Store(Base):

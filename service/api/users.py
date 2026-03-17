@@ -53,6 +53,26 @@ async def create_user(sess: Session = Depends(get_db)):
     return schemas.User(id=int(user.id), recent_zipcode=str(user.recent_zipcode))
 
 
+@user_router.post("/users/lookup-or-create", response_model=schemas.User)
+async def lookup_or_create_user(
+    payload: schemas.LookupOrCreateRequest,
+    sess: Session = Depends(get_db),
+):
+    """Return the backend user for the given Firebase UID, creating one if needed."""
+    firebase_uid = payload.firebase_uid.strip()
+    if not firebase_uid:
+        raise HTTPException(400, detail="firebase_uid is required")
+
+    user = sess.query(models.User).filter(models.User.firebase_uid == firebase_uid).first()
+    if user is None:
+        user = models.User(recent_zipcode="00000", firebase_uid=firebase_uid)
+        sess.add(user)
+        sess.commit()
+        sess.refresh(user)
+
+    return schemas.User(id=int(user.id), recent_zipcode=str(user.recent_zipcode))
+
+
 @user_router.post("/users/{user_id}/bundles", response_model=schemas.BundleSummary)
 async def create_bundle(
     user_id: int,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import Optional
 from urllib.request import Request, urlopen
 
@@ -12,11 +13,12 @@ from sqlalchemy.orm import Session
 from models import Product, Product_Instance, PricePoint, Tag_Instance
 from .utils import (
     WF_CATEGORIES,
-    CANONICAL_CATEGORIES,
+    WF_CATEGORY_TO_CANONICAL,
     DIET_TYPES,
     DEFAULT_USER_AGENT,
     extract_size_and_clean_name,
     normalize_size_string,
+    strip_brand_from_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -64,13 +66,23 @@ def _fetch_category(store_code: int, category: str, seen_slugs: set[str]) -> lis
     offset = 0
 
     while True:
-        try:
-            req = Request(base_url + str(offset))
-            req.add_header("User-Agent", DEFAULT_USER_AGENT)
-            response = urlopen(req)
-            results = json.loads(response.read()).get("results", [])
-        except Exception as exc:
-            logger.warning("WF fetch failed (category=%s, offset=%d): %s", category, offset, exc)
+        results = None
+        for attempt in range(3):
+            try:
+                req = Request(base_url + str(offset))
+                req.add_header("User-Agent", DEFAULT_USER_AGENT)
+                response = urlopen(req, timeout=20)
+                results = json.loads(response.read()).get("results", [])
+                break
+            except Exception as exc:
+                if attempt < 2:
+                    time.sleep(2 ** attempt)
+                else:
+                    logger.warning(
+                        "WF fetch failed after 3 attempts (category=%s, offset=%d): %s",
+                        category, offset, exc,
+                    )
+        if results is None:
             break
 
         if not results:
@@ -105,12 +117,8 @@ def _persist_product(
     if cleaned_name.startswith("PB") and brand_raw == "Renpure" and len(cleaned_name) >= 5:
         size = cleaned_name[-5]
 
-    # Strip store-brand prefix embedded in the name (e.g. "365 By Whole Foods
-    # Market, Butter, Salted" → "Butter, Salted") so cross-store grouping works.
-    if brand_raw and cleaned_name.lower().startswith(brand_raw.lower() + ","):
-        stripped = cleaned_name[len(brand_raw) + 1:].lstrip(" ")
-        if stripped:
-            cleaned_name = stripped
+    # Strip brand prefix from the name so cross-store product grouping works.
+    cleaned_name = strip_brand_from_name(cleaned_name, brand_raw)
 
     cleaned_name = cleaned_name.title()
 
@@ -132,21 +140,24 @@ def _persist_product(
         sess.add(prod)
         sess.flush()
 
-        # Diet / characteristic tags
+        # Diet / characteristic tags — check both product name and explicit API attributes.
         name_lower = raw_full_name.lower()
+        api_attrs: set[str] = {
+            str(a).lower().replace("-", " ")
+            for a in (raw.get("attributes") or raw.get("dietaryFlags") or [])
+        }
         tag_instances = []
         for diet in DIET_TYPES:
-            if diet in name_lower:
+            if diet in name_lower or diet in api_attrs:
                 tag_instances.append(Tag_Instance(product_id=prod.id, tag_id=tags[diet]))
 
         if raw.get("isLocal"):
             tag_instances.append(Tag_Instance(product_id=prod.id, tag_id=tags["local"]))
 
-        # Category tag
-        cat_index = WF_CATEGORIES.index(category)
-        tag_instances.append(
-            Tag_Instance(product_id=prod.id, tag_id=tags[CANONICAL_CATEGORIES[cat_index]])
-        )
+        # Category tag — use explicit dict instead of fragile index arithmetic.
+        canonical = WF_CATEGORY_TO_CANONICAL.get(category)
+        if canonical and canonical in tags:
+            tag_instances.append(Tag_Instance(product_id=prod.id, tag_id=tags[canonical]))
         sess.add_all(tag_instances)
 
     # Upsert product instance

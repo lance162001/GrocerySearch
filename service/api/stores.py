@@ -79,6 +79,7 @@ async def full_product_search(
     tags: List[int] | None = None,
     search: str | None = "",
     on_sale: bool = False,
+    has_spread: bool = False,
     sess: Session = Depends(get_db),
 ):
     s = (
@@ -90,7 +91,19 @@ async def full_product_search(
     tags = tags or []
 
     if search:
-        s = s.where(models.Product.name.like(f"%{search}%"))
+        s = s.where(
+            or_(
+                models.Product.name.like(f"%{search}%"),
+                models.Product.brand.like(f"%{search}%"),
+                models.Product.tags.any(
+                    models.Tag_Instance.tag_id.in_(
+                        select(models.Tag.id).where(
+                            func.lower(models.Tag.name) == search.lower()
+                        )
+                    )
+                ),
+            )
+        )
 
     for tag_id in tags:
         s = s.where(models.Product.tags.any(models.Tag_Instance.tag_id == tag_id))
@@ -114,8 +127,58 @@ async def full_product_search(
             .exists()
         )
 
+    if has_spread:
+        # Find product names (case-insensitive) that appear in stores from more
+        # than one company among the selected store IDs.  These are the products
+        # most likely to form cross-store price-spread pairs on the Flutter side.
+        multi_company_names = (
+            select(func.lower(models.Product.name).label("nm"))
+            .join(
+                models.Product_Instance,
+                models.Product_Instance.product_id == models.Product.id,
+            )
+            .where(models.Product_Instance.store_id.in_(ids))
+            .group_by(func.lower(models.Product.name))
+            .having(func.count(func.distinct(models.Product.company_id)) > 1)
+        )
+        s = s.where(func.lower(models.Product.name).in_(multi_company_names))
+
     s = s.order_by(func.length(models.Product.name))
     return paginate(sess, s)
+
+
+@store_router.post("/stores/suggest", response_model=schemas.StoreSuggestionResponse)
+async def suggest_store(
+    payload: schemas.StoreSuggestionRequest,
+    sess: Session = Depends(get_db),
+):
+    """Save a user-submitted store suggestion flagged as TODO."""
+    company = sess.get(models.Company, payload.company_id)
+    if not company:
+        raise HTTPException(404, detail=f"Company {payload.company_id} not found")
+
+    suggestion = models.StoreSuggestion(
+        company_id=payload.company_id,
+        address=payload.address,
+        town=payload.town,
+        state=payload.state,
+        zipcode=payload.zipcode,
+        status="todo",
+    )
+    sess.add(suggestion)
+    sess.commit()
+    sess.refresh(suggestion)
+
+    return schemas.StoreSuggestionResponse(
+        id=int(suggestion.id),
+        company_id=int(suggestion.company_id),
+        address=str(suggestion.address),
+        town=str(suggestion.town),
+        state=str(suggestion.state),
+        zipcode=str(suggestion.zipcode),
+        status=str(suggestion.status),
+        created_at=suggestion.created_at,
+    )
 
 
 add_pagination(store_router)

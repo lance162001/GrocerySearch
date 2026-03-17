@@ -4,6 +4,7 @@ import 'package:flutter_front_end/check_out.dart';
 import 'package:flutter_front_end/models/grocery_models.dart';
 import 'package:flutter_front_end/product_box.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
+import 'package:flutter_front_end/utils/product_grouping.dart';
 import 'package:flutter_front_end/utils/product_recommendation_sort.dart';
 import 'package:flutter_front_end/state/app_state.dart';
 import 'package:flutter_front_end/utils/price_utils.dart';
@@ -11,125 +12,7 @@ import 'package:flutter_front_end/utils/scroll_utils.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
 import 'package:provider/provider.dart';
 
-const double _priceComparisonEpsilon = 0.01;
-
-double? _productPrice(Product product) {
-  return parsePriceString(product.memberPrice) ??
-      parsePriceString(product.salePrice) ??
-      parsePriceString(product.basePrice);
-}
-
 String _formatAmount(double amount) => '\$${amount.toStringAsFixed(2)}';
-
-bool _pricesMatch(double left, double right) {
-  return (left - right).abs() < _priceComparisonEpsilon;
-}
-
-int _compareProductsByPrice(Product left, Product right) {
-  final leftPrice = _productPrice(left);
-  final rightPrice = _productPrice(right);
-  if (leftPrice == null && rightPrice == null) {
-    final nameComparison =
-        left.name.toLowerCase().compareTo(right.name.toLowerCase());
-    if (nameComparison != 0) {
-      return nameComparison;
-    }
-    return left.storeId.compareTo(right.storeId);
-  }
-  if (leftPrice == null) {
-    return 1;
-  }
-  if (rightPrice == null) {
-    return -1;
-  }
-
-  final priceComparison = leftPrice.compareTo(rightPrice);
-  if (priceComparison != 0) {
-    return priceComparison;
-  }
-
-  final nameComparison =
-      left.name.toLowerCase().compareTo(right.name.toLowerCase());
-  if (nameComparison != 0) {
-    return nameComparison;
-  }
-  return left.storeId.compareTo(right.storeId);
-}
-
-String _singularize(String word) {
-  if (word.endsWith('ies') && word.length > 3) {
-    return '${word.substring(0, word.length - 3)}y';
-  }
-  if (word.endsWith('oes') && word.length > 3) {
-    return word.substring(0, word.length - 2);
-  }
-  if (word.endsWith('es') && word.length > 2) {
-    final stem = word.substring(0, word.length - 2);
-    if (stem.endsWith('ch') ||
-        stem.endsWith('sh') ||
-        stem.endsWith('s') ||
-        stem.endsWith('x') ||
-        stem.endsWith('z')) {
-      return stem;
-    }
-  }
-  if (word.endsWith('s') && !word.endsWith('ss') && word.length > 1) {
-    return word.substring(0, word.length - 1);
-  }
-  return word;
-}
-
-String _mergeKeyName(String name) {
-  return name
-      .toLowerCase()
-      .trim()
-      .split(RegExp(r'\s+'))
-      .map(_singularize)
-      .join(' ');
-}
-
-String _normalizeSizeKey(String size) {
-  final lower = size.toLowerCase().trim();
-  if (lower.isEmpty || lower == 'n/a' || lower == '1 each' || lower == 'none') {
-    return '';
-  }
-  return lower
-      .replaceAll('ounce', 'oz')
-      .replaceAll('pound', 'lb')
-      .replaceAll(RegExp(r'\s+'), ' ');
-}
-
-List<_ProductGroup> _mergeSimilarGroups(List<_ProductGroup> groups) {
-  final mergeMap = <String, List<_ProductGroup>>{};
-  for (final group in groups) {
-    final product = group.primaryProduct;
-    final nameKey = _mergeKeyName(product.name);
-    final sizeKey = _normalizeSizeKey(product.size);
-    final key = '$nameKey\x00$sizeKey';
-    mergeMap.putIfAbsent(key, () => <_ProductGroup>[]).add(group);
-  }
-
-  final result = <_ProductGroup>[];
-  for (final entry in mergeMap.values) {
-    if (entry.length == 1) {
-      result.add(entry.first);
-      continue;
-    }
-    final byStore = <int, Product>{};
-    for (final group in entry) {
-      for (final option in group.options) {
-        final existing = byStore[option.storeId];
-        if (existing == null ||
-            _compareProductsByPrice(option, existing) < 0) {
-          byStore[option.storeId] = option;
-        }
-      }
-    }
-    final merged = byStore.values.toList()..sort(_compareProductsByPrice);
-    result.add(_ProductGroup(options: merged));
-  }
-  return result;
-}
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key, this.bundleId, this.bundleName});
@@ -158,6 +41,8 @@ class _SearchPageState extends State<SearchPage> {
   bool _isLoadingMore = false;
   bool _hasMore = true;
   Future<List<Product>>? _productsFuture;
+  Set<(int, int)> _confirmedPairs = {};
+  Set<(int, int)> _deniedPairs = {};
 
   @override
   void didChangeDependencies() {
@@ -172,7 +57,32 @@ class _SearchPageState extends State<SearchPage> {
       scrollController: scrollController,
       onAtBottom: _loadMoreProducts,
     );
+    _loadGroupingJudgements();
     _initialized = true;
+  }
+
+  Future<void> _loadGroupingJudgements() async {
+    try {
+      final api = context.read<GroceryApi>();
+      final summaries = await api.fetchGroupingJudgements();
+      if (!mounted) return;
+      final confirmed = <(int, int)>{};
+      final denied = <(int, int)>{};
+      for (final s in summaries) {
+        final pair = (s.productId, s.targetProductId);
+        if (s.netScore > 0) {
+          confirmed.add(pair);
+        } else if (s.netScore < 0) {
+          denied.add(pair);
+        }
+      }
+      setState(() {
+        _confirmedPairs = confirmed;
+        _deniedPairs = denied;
+      });
+    } catch (_) {
+      // Best-effort; grouping works without judgements.
+    }
   }
 
   @override
@@ -211,7 +121,7 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   double? _effectivePrice(Product product) {
-    return _productPrice(product);
+    return productEffectivePrice(product);
   }
 
   bool _hasSalePrice(Product product) {
@@ -225,29 +135,17 @@ class _SearchPageState extends State<SearchPage> {
     return hasValue(product.salePrice) || hasValue(product.memberPrice);
   }
 
-  List<_ProductGroup> _groupProducts(List<Product> products, String searchTerm) {
-    final groupedByProduct = <int, Map<int, Product>>{};
-    for (final product in products) {
-      final byStore =
-          groupedByProduct.putIfAbsent(product.id, () => <int, Product>{});
-      final existing = byStore[product.storeId];
-      if (existing == null || _compareProductsByPrice(product, existing) < 0) {
-        byStore[product.storeId] = product;
-      }
-    }
-
-    final idGroups = groupedByProduct.values
-        .map((byStore) {
-          final options = byStore.values.toList()..sort(_compareProductsByPrice);
-          return _ProductGroup(options: options);
-        })
-        .toList(growable: false);
-    final groups = _mergeSimilarGroups(idGroups);
+  List<ProductGroup> _groupProducts(List<Product> products, String searchTerm) {
+    final groups = groupProductsById(
+      products,
+      confirmedPairs: _confirmedPairs,
+      deniedPairs: _deniedPairs,
+    );
     final sortedProducts = sortProductsByRecommendation(
       groups.map((group) => group.primaryProduct).toList(growable: false),
       searchTerm,
     );
-    final groupsByProductId = <int, _ProductGroup>{
+    final groupsByProductId = <int, ProductGroup>{
       for (final group in groups) group.primaryProduct.id: group,
     };
     return sortedProducts
@@ -255,7 +153,7 @@ class _SearchPageState extends State<SearchPage> {
         .toList(growable: false);
   }
 
-  List<_ProductGroup> _applyViewFilters(
+  List<ProductGroup> _applyViewFilters(
     List<Product> products,
     String searchTerm,
   ) {
@@ -273,7 +171,7 @@ class _SearchPageState extends State<SearchPage> {
     return groups;
   }
 
-  int _groupCartQuantity(_ProductGroup group, AppState appState) {
+  int _groupCartQuantity(ProductGroup group, AppState appState) {
     var total = 0;
     for (final option in group.options) {
       total += appState.quantityFor(option);
@@ -281,11 +179,11 @@ class _SearchPageState extends State<SearchPage> {
     return total;
   }
 
-  int _groupRequestedQuantity(_ProductGroup group) {
+  int _groupRequestedQuantity(ProductGroup group) {
     return quantities[group.primaryProduct.instanceId] ?? 1;
   }
 
-  void _toggleGroupedProduct(_ProductGroup group, AppState appState) {
+  void _toggleGroupedProduct(ProductGroup group, AppState appState) {
     _toggleProduct(group.primaryProduct, appState);
   }
 
@@ -326,6 +224,7 @@ class _SearchPageState extends State<SearchPage> {
           search: appState.searchTerm,
           tags: appState.userTags,
           onSaleOnly: showOnlySale,
+          spreadOnly: showOnlySpread,
           page: targetPage ?? page,
           size: pageLength,
           toAdd: toAdd,
@@ -429,7 +328,7 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  Widget _buildBestStoreChip(_ProductGroup group) {
+  Widget _buildBestStoreChip(ProductGroup group) {
     final bestOption = group.primaryProduct;
     final store = _storeForId(bestOption.storeId);
     final logoUrl = _companyForId(bestOption.companyId)?.logoUrl ?? '';
@@ -450,7 +349,7 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  Widget _buildOtherStoresChip(_ProductGroup group) {
+  Widget _buildOtherStoresChip(ProductGroup group) {
     final lowestAlternatePrice = group.lowestAlternatePrice;
     final label = lowestAlternatePrice == null
         ? group.otherStoreCount == 1
@@ -470,7 +369,7 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Widget _buildStoreOptionComparisonChip(
-    _ProductGroup group,
+    ProductGroup group,
     Product option,
   ) {
     final bestPrice = group.minPrice;
@@ -488,7 +387,7 @@ class _SearchPageState extends State<SearchPage> {
         backgroundColor = Colors.blueGrey.shade50;
         borderColor = Colors.blueGrey.shade200;
         textColor = Colors.blueGrey.shade900;
-      } else if (_pricesMatch(optionPrice, bestPrice)) {
+      } else if (productPricesMatch(optionPrice, bestPrice)) {
         label = 'Same as lowest';
         backgroundColor = Colors.indigo.shade50;
         borderColor = Colors.indigo.shade200;
@@ -510,7 +409,7 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Widget _buildStoreOptionCard(
-    _ProductGroup group,
+    ProductGroup group,
     Product option,
     AppState appState,
   ) {
@@ -521,89 +420,100 @@ class _SearchPageState extends State<SearchPage> {
     final storeLabel =
         store == null ? 'Store ${option.storeId}' : '${store.town}, ${store.state}';
 
-    return Container(
+    return InkWell(
       key: ValueKey<String>('product-option-${option.instanceId}'),
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: quantity > 0 ? Colors.lightBlue.shade50 : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: quantity > 0 ? Colors.lightBlue.shade200 : Colors.grey.shade300,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (logoUrl.isNotEmpty)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: ProductImage(url: logoUrl, width: 24, height: 24),
-                ),
-              if (logoUrl.isNotEmpty) const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      storeLabel,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    if (store != null && store.address.isNotEmpty)
-                      Text(
-                        store.address,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.grey[700],
-                          fontSize: 12,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Flexible(child: _buildStoreOptionComparisonChip(group, option)),
-            ],
+      onTap: () => _showStorePriceHistory(context, option, storeLabel),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: quantity > 0 ? Colors.lightBlue.shade50 : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: quantity > 0 ? Colors.lightBlue.shade200 : Colors.grey.shade300,
           ),
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _displayPrice(option),
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                    if (details != null)
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (logoUrl.isNotEmpty)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: ProductImage(url: logoUrl, width: 24, height: 24),
+                  ),
+                if (logoUrl.isNotEmpty) const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        details,
-                        style: TextStyle(
-                          color: Colors.grey[700],
-                          fontSize: 12,
-                        ),
+                        storeLabel,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
-                    if (option.size.isNotEmpty)
-                      Text(
-                        option.size,
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 12,
+                      if (store != null && store.address.isNotEmpty)
+                        Text(
+                          store.address,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.grey[700],
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                Flexible(child: _buildStoreOptionComparisonChip(group, option)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _displayPrice(option),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      if (details != null)
+                        Text(
+                          details,
+                          style: TextStyle(
+                            color: Colors.grey[700],
+                            fontSize: 12,
+                          ),
+                        ),
+                      if (option.brand.isNotEmpty)
+                        Text(
+                          option.brand,
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                          ),
+                        ),
+                      if (option.size.isNotEmpty)
+                        Text(
+                          option.size,
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               if (quantity > 0)
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -634,12 +544,67 @@ class _SearchPageState extends State<SearchPage> {
           ),
         ],
       ),
+    ),
+    );
+  }
+
+  void _showStorePriceHistory(
+    BuildContext context,
+    Product option,
+    String storeLabel,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  storeLabel,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                if (option.brand.isNotEmpty) ...
+                [
+                  const SizedBox(height: 2),
+                  Text(
+                    option.brand,
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                const Text(
+                  'Price history',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 220,
+                  child: PriceHistoryChart(pricepoints: option.priceHistory),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
   Future<void> _showProductDetails(
     BuildContext context,
-    _ProductGroup group,
+    ProductGroup group,
     AppState appState,
   ) async {
     final product = group.primaryProduct;
@@ -754,6 +719,22 @@ class _SearchPageState extends State<SearchPage> {
                       ...group.options.map(
                         (option) => _buildStoreOptionCard(group, option, appState),
                       ),
+                      if (product.variationGroup != null &&
+                          product.variationGroup!.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.style_outlined),
+                          label: const Text('See flavors / variations'),
+                          onPressed: () {
+                            final storeIds = context
+                                .read<AppState>()
+                                .userStores
+                                .map((s) => s.id)
+                                .toList();
+                            _showVariations(context, product, storeIds);
+                          },
+                        ),
+                      ],
                       const SizedBox(height: 12),
                       const Text(
                         'Price history',
@@ -858,6 +839,133 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
+  void _showVariations(
+    BuildContext context,
+    Product product,
+    List<int> storeIds,
+  ) {
+    final api = context.read<GroceryApi>();
+    final future = api.fetchVariations(product.id, storeIds);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return FractionallySizedBox(
+          heightFactor: 0.7,
+          child: FutureBuilder<List<Product>>(
+            future: future,
+            builder: (context, snapshot) {
+              final title = '${product.brand} variations';
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 16),
+                    Text(title,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 24),
+                    const CircularProgressIndicator(),
+                  ],
+                );
+              }
+              final variations = snapshot.data ?? [];
+              if (variations.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(title,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16)),
+                      const SizedBox(height: 16),
+                      const Text('No other variations found.'),
+                    ],
+                  ),
+                );
+              }
+              final groups = groupProductsById(
+                variations,
+                confirmedPairs: _confirmedPairs,
+                deniedPairs: _deniedPairs,
+              );
+              return Consumer<AppState>(
+                builder: (context, appState, _) {
+                  return ListView(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 36,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${groups.length} other flavors / styles',
+                        style: TextStyle(
+                            fontSize: 13, color: Colors.grey.shade600),
+                      ),
+                      const Divider(height: 20),
+                      ...groups.map((group) {
+                        final p = group.primaryProduct;
+                        final price = productEffectivePrice(p);
+                        final inCart = appState.quantityFor(p) > 0;
+                        return ListTile(
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: ProductImage(
+                                url: p.pictureUrl, width: 44, height: 44),
+                          ),
+                          title: Text(p.name,
+                              maxLines: 2, overflow: TextOverflow.ellipsis),
+                          subtitle: Text(
+                            [
+                              if (p.size.isNotEmpty) p.size,
+                              if (price != null) _formatAmount(price),
+                            ].join(' • '),
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey.shade600),
+                          ),
+                          trailing: IconButton(
+                            icon: Icon(
+                              inCart
+                                  ? Icons.check_circle
+                                  : Icons.add_circle_outline,
+                              color: inCart ? Colors.green : null,
+                            ),
+                            onPressed: () {
+                              if (inCart) {
+                                appState.removeFromCartAll(p);
+                              } else {
+                                _addToCart(p, 1);
+                              }
+                            },
+                          ),
+                        );
+                      }),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildFilterSheet(AppState appState) {
     return StatefulBuilder(
       builder: (context, modalSetState) {
@@ -902,7 +1010,7 @@ class _SearchPageState extends State<SearchPage> {
                       value: showOnlySpread,
                       onChanged: (value) {
                         modalSetState(() => showOnlySpread = value);
-                        setState(() {});
+                        _reloadProducts();
                       },
                     ),
                   ],
@@ -1200,86 +1308,5 @@ class _SearchPageState extends State<SearchPage> {
         },
       ),
     );
-  }
-}
-
-class _ProductGroup {
-  _ProductGroup({required List<Product> options})
-      : options = List<Product>.unmodifiable(options);
-
-  final List<Product> options;
-
-  Product get primaryProduct => options.first;
-
-  int get storeCount => options.length;
-
-  int get otherStoreCount => storeCount > 0 ? storeCount - 1 : 0;
-
-  double? get minPrice => _productPrice(primaryProduct);
-
-  double? get maxPrice {
-    double? currentMax;
-    for (final option in options) {
-      final optionPrice = _productPrice(option);
-      if (optionPrice == null) {
-        continue;
-      }
-      if (currentMax == null || optionPrice > currentMax) {
-        currentMax = optionPrice;
-      }
-    }
-    return currentMax;
-  }
-
-  double? get priceSpread {
-    final lowestPrice = minPrice;
-    final highestPrice = maxPrice;
-    if (lowestPrice == null || highestPrice == null) {
-      return null;
-    }
-    final spread = highestPrice - lowestPrice;
-    return spread >= _priceComparisonEpsilon ? spread : null;
-  }
-
-  bool get hasPriceSpread => priceSpread != null;
-
-  double? get lowestAlternatePrice {
-    for (final option in options.skip(1)) {
-      final optionPrice = _productPrice(option);
-      if (optionPrice != null) {
-        return optionPrice;
-      }
-    }
-    return null;
-  }
-
-  int get equalPriceStoreCount {
-    final lowestPrice = minPrice;
-    if (lowestPrice == null) {
-      return 0;
-    }
-    var count = 0;
-    for (final option in options.skip(1)) {
-      final optionPrice = _productPrice(option);
-      if (optionPrice != null && _pricesMatch(optionPrice, lowestPrice)) {
-        count++;
-      }
-    }
-    return count;
-  }
-
-  int get higherPricedStoreCount {
-    final lowestPrice = minPrice;
-    if (lowestPrice == null) {
-      return 0;
-    }
-    var count = 0;
-    for (final option in options.skip(1)) {
-      final optionPrice = _productPrice(option);
-      if (optionPrice != null && !_pricesMatch(optionPrice, lowestPrice)) {
-        count++;
-      }
-    }
-    return count;
   }
 }
