@@ -16,6 +16,7 @@ from .utils import (
     DIET_TYPES,
     DEFAULT_USER_AGENT,
     extract_size_and_clean_name,
+    normalize_size_string,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,8 @@ _PAGE_SIZE = 100
 
 _WEGMANS_PREFIX_PATTERN = re.compile(r"^wegmans(?:\s+brand)?\b[\s,:-]*", re.IGNORECASE)
 _FAMILY_PACK_SUFFIX_PATTERN = re.compile(r"[\s,:-]*family\s+pack\s*$", re.IGNORECASE)
+_SOLD_BY_SUFFIX_PATTERN = re.compile(r"[\s,]+sold\s+by\s+the\s+\w+\s*$", re.IGNORECASE)
+_DUPLICATE_WORD_PATTERN = re.compile(r"\b(\w+)\s+\1\b", re.IGNORECASE)
 
 WG_FALLBACK_IMAGE = (
     "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/"
@@ -149,6 +152,8 @@ def _normalize_wegmans_name(name: str) -> str:
     """Strip Wegmans-specific branding markers from a cleaned product name."""
     normalized = _WEGMANS_PREFIX_PATTERN.sub("", name.strip())
     normalized = _FAMILY_PACK_SUFFIX_PATTERN.sub("", normalized)
+    normalized = _SOLD_BY_SUFFIX_PATTERN.sub("", normalized)
+    normalized = _DUPLICATE_WORD_PATTERN.sub(r"\1", normalized)
     normalized = re.sub(r"\s{2,}", " ", normalized).strip(" ,-/")
     return normalized or name.strip()
 
@@ -242,9 +247,15 @@ def _persist_product(
         sale_price = member_price
         member_price = None
 
-    # Use the size extracted from the name; fall back to Algolia field
+    # Use the size extracted from the name; fall back to Algolia field.
+    # For items sold by weight the packSize is an approximate "1 lb." placeholder —
+    # replace it with "per lb" to accurately reflect pricing.
     if size == "N/A":
-        size = raw.get("packSize") or "N/A"
+        if raw.get("isSoldByWeight"):
+            size = "per lb"
+        else:
+            raw_pack = raw.get("packSize") or ""
+            size = normalize_size_string(raw_pack) if raw_pack else "N/A"
 
     pricepoint = PricePoint(
         base_price=base_price,

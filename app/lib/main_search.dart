@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_front_end/config/app_routes.dart';
 import 'package:flutter_front_end/models/grocery_models.dart';
-import 'package:flutter_front_end/product_search.dart';
+import 'package:flutter_front_end/staples_overview.dart';
+import 'package:flutter_front_end/services/auth_service.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
@@ -39,6 +40,11 @@ class _StoreSearchState extends State<StoreSearch> {
 
   void _clearSelectedStores() {
     context.read<AppState>().clearSelectedStores();
+  }
+
+  static String _userInitial(String name) {
+    if (name.isEmpty) return '?';
+    return name[0].toUpperCase();
   }
 
   void _searchStores(String text) {
@@ -87,7 +93,7 @@ class _StoreSearchState extends State<StoreSearch> {
     }
 
     await navigator.push(
-      MaterialPageRoute(builder: (context) => const SearchPage()),
+      MaterialPageRoute(builder: (context) => const StaplesOverview()),
     );
   }
 
@@ -133,27 +139,38 @@ class _StoreSearchState extends State<StoreSearch> {
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.person, size: 16),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${appState.currentUserId ?? 0}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
+              child: Builder(
+                builder: (context) {
+                  final authService = context.watch<AuthService>();
+                  final photoUrl = authService.photoUrl;
+                  final displayName = authService.displayName ?? authService.email ?? '';
+                  return PopupMenuButton<String>(
+                    tooltip: displayName,
+                    onSelected: (value) {
+                      if (value == 'sign_out') {
+                        authService.signOut();
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        enabled: false,
+                        child: Text(
+                          displayName,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
+                      const PopupMenuDivider(),
+                      const PopupMenuItem(
+                        value: 'sign_out',
+                        child: Text('Sign out'),
+                      ),
+                    ],
+                    child: _ProfileAvatar(
+                      photoUrl: photoUrl,
+                      initial: _userInitial(displayName),
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
           ),
@@ -348,6 +365,47 @@ class _StoreSearchState extends State<StoreSearch> {
                   )
                 : Text('Confirm Stores (${selectedStores.length})'),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileAvatar extends StatelessWidget {
+  const _ProfileAvatar({required this.photoUrl, required this.initial});
+  final String? photoUrl;
+  final String initial;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = photoUrl;
+    if (url == null) {
+      return _fallback(context);
+    }
+    return ClipOval(
+      child: SizedBox(
+        width: 32,
+        height: 32,
+        child: Image.network(
+          url,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _fallback(context),
+        ),
+      ),
+    );
+  }
+
+  Widget _fallback(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return CircleAvatar(
+      radius: 16,
+      backgroundColor: colorScheme.primaryContainer,
+      child: Text(
+        initial,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: colorScheme.onPrimaryContainer,
         ),
       ),
     );

@@ -132,7 +132,13 @@ List<_ProductGroup> _mergeSimilarGroups(List<_ProductGroup> groups) {
 }
 
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key});
+  const SearchPage({super.key, this.bundleId, this.bundleName});
+
+  /// When set, the page operates in bundle-add mode: every product added to
+  /// cart is also queued to be added to this bundle, and the checkout button
+  /// is replaced with a Done button.
+  final int? bundleId;
+  final String? bundleName;
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -178,6 +184,10 @@ class _SearchPageState extends State<SearchPage> {
 
   void _addToCart(Product product, int qty) {
     context.read<AppState>().addToCartQty(product, qty);
+    final bundleId = widget.bundleId;
+    if (bundleId != null) {
+      context.read<GroceryApi>().addProductToBundle(bundleId, product.id);
+    }
   }
 
   void _removeFromCart(Product product) {
@@ -979,21 +989,27 @@ class _SearchPageState extends State<SearchPage> {
               );
             },
           ),
-          Row(
-            children: [
-              Text(appState.cartTotalItems.toString()),
-              IconButton(
-                icon: const Icon(Icons.shopping_cart_checkout),
-                iconSize: 32,
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const CheckOut()),
-                  );
-                },
-              ),
-            ],
-          ),
+          if (widget.bundleId != null)
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Done'),
+            )
+          else
+            Row(
+              children: [
+                Text(appState.cartTotalItems.toString()),
+                IconButton(
+                  icon: const Icon(Icons.shopping_cart_checkout),
+                  iconSize: 32,
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const CheckOut()),
+                    );
+                  },
+                ),
+              ],
+            ),
         ],
       ),
       body: FutureBuilder<List<Product>>(

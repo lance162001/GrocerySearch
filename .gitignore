@@ -131,6 +131,11 @@ dmypy.json
 # DB
 app.db
 app.db-journal
+app.db-shm
+app.db-wal
+
+# Scraped static assets
+service/static/products/tj_*.png
 
 # VENV
 service/pyvenv.cfg

@@ -249,6 +249,25 @@ class GroceryApi {
     }
   }
 
+  Future<Map<String, List<Product>>> fetchStapleProducts(
+    List<int> storeIds,
+    List<String> stapleNames,
+  ) async {
+    final results = <String, List<Product>>{};
+    final futures = <String, Future<List<Product>>>{};
+    for (final name in stapleNames) {
+      futures[name] = fetchProducts(storeIds, search: name, size: 20);
+    }
+    for (final entry in futures.entries) {
+      try {
+        results[entry.key] = await entry.value;
+      } catch (_) {
+        results[entry.key] = [];
+      }
+    }
+    return results;
+  }
+
   List<dynamic> _extractItemsPage(dynamic json) {
     if (json is Map<String, dynamic> && json['items'] is List<dynamic>) {
       return json['items'] as List<dynamic>;

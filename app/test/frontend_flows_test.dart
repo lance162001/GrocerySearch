@@ -8,6 +8,8 @@ import 'package:flutter_front_end/main_search.dart';
 import 'package:flutter_front_end/models/grocery_models.dart';
 import 'package:flutter_front_end/product_box.dart';
 import 'package:flutter_front_end/product_search.dart';
+import 'package:flutter_front_end/staples_overview.dart';
+import 'package:flutter_front_end/services/auth_service.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -337,6 +339,22 @@ AppState _seededState(
   return state;
 }
 
+class _TestAuthService extends AuthService {
+  _TestAuthService() : super.test();
+
+  @override
+  bool get isSignedIn => true;
+
+  @override
+  String? get displayName => 'Test User';
+
+  @override
+  String? get email => 'test@example.com';
+
+  @override
+  String? get photoUrl => null;
+}
+
 Widget _buildTestApp({
   required Widget home,
   required TestGroceryApi api,
@@ -346,6 +364,7 @@ Widget _buildTestApp({
     providers: [
       Provider<AppEnvironment>.value(value: AppEnvironment.local),
       Provider<GroceryApi>.value(value: api),
+      ChangeNotifierProvider<AuthService>.value(value: _TestAuthService()),
       ChangeNotifierProvider<AppState>.value(value: appState),
     ],
     child: MaterialApp(home: home),
@@ -468,8 +487,13 @@ void main() {
         await tester.tap(find.text('Confirm Stores (1)'));
         await _pumpUi(tester, frames: 8);
 
-        expect(find.byType(SearchPage), findsOneWidget);
+        expect(find.byType(StaplesOverview), findsOneWidget);
         expect(api.savedStoreCalls.single['storeId'], _austinStore.id);
+
+        await tester.tap(find.byIcon(Icons.search).first);
+        await _pumpUi(tester, frames: 8);
+
+        expect(find.byType(SearchPage), findsOneWidget);
 
         await tester.tap(find.byType(TextField).first);
         await tester.enterText(find.byType(TextField).first, 'App');
@@ -515,7 +539,7 @@ void main() {
         await _pumpUi(tester, frames: 10);
 
         expect(find.byType(BundlePlanPage), findsOneWidget);
-        expect(find.text('User & Bundle Planner'), findsOneWidget);
+        expect(find.text('Bundle Planner'), findsOneWidget);
         expect(api.createBundleCalls, hasLength(1));
         expect(api.addProductCalls, hasLength(1));
         expect(api.addProductCalls.single['productId'], apples.id);
@@ -807,6 +831,11 @@ void main() {
         await tester.tap(find.text('Confirm Stores (1)'));
         await _pumpUi(tester, frames: 8);
 
+        expect(find.byType(StaplesOverview), findsOneWidget);
+
+        await tester.tap(find.byIcon(Icons.search).first);
+        await _pumpUi(tester, frames: 8);
+
         expect(find.byType(SearchPage), findsOneWidget);
 
         await tester.tap(find.byIcon(Icons.more_vert));
@@ -824,10 +853,9 @@ void main() {
         await tester.pageBack();
         await _pumpUi(tester, frames: 8);
 
-        expect(find.byType(StoreSearch), findsOneWidget);
-        expect(find.text('Confirm Stores (1)'), findsOneWidget);
+        expect(find.byType(StaplesOverview), findsOneWidget);
 
-        await tester.tap(find.text('Confirm Stores (1)'));
+        await tester.tap(find.byIcon(Icons.search).first);
         await _pumpUi(tester, frames: 8);
 
         expect(find.byType(SearchPage), findsOneWidget);
@@ -936,7 +964,7 @@ void main() {
           ),
         },
       );
-      final appState = _seededState(api);
+      final appState = _seededState(api, userStores: const <Store>[_austinStore]);
 
       await tester.pumpWidget(
         _buildTestApp(
@@ -951,13 +979,19 @@ void main() {
       expect(find.text('Olive Oil'), findsOneWidget);
       expect(find.text('Price Points by Store'), findsOneWidget);
       expect(find.text('Austin, TX'), findsOneWidget);
+      expect(find.text('Add items to bundle'), findsOneWidget);
 
-      await tester.enterText(find.byType(TextField).last, '77');
-      await tester.tap(find.text('Add product'));
+      await tester.tap(find.text('Add items to bundle'));
       await _pumpUi(tester, frames: 8);
 
+      expect(find.byType(SearchPage), findsOneWidget);
+
+      await tester.tap(find.text('Olive Oil').first);
+      await _pumpUi(tester, frames: 4);
+
+      expect(api.addProductCalls, hasLength(1));
       expect(api.addProductCalls.last['bundleId'], 900);
-      expect(api.addProductCalls.last['productId'], 77);
+      expect(api.addProductCalls.last['productId'], 9);
     });
   });
 }

@@ -102,6 +102,24 @@ def extract_size_and_clean_name(raw_name: str | None) -> Tuple[str, str]:
     return f"{value} {normalized_unit}", cleaned
 
 
+def normalize_size_string(size: str) -> str:
+    """Normalize a bare size string from an API field through the unit alias table.
+
+    Converts values like ``"10 ounce"``, ``"1 Lb"``, ``"7.8 Oz"`` to the
+    canonical forms used by ``extract_size_and_clean_name`` (``"10 oz"``,
+    ``"1 lb"``, ``"7.8 oz"``), making sizes comparable across stores.
+    Returns the original string unchanged if no known unit is found.
+    """
+    if not size or size in ("N/A", "n/a"):
+        return size
+    m = _SIZE_PATTERN.search(size)
+    if m is None:
+        return size
+    unit_raw = m.group("unit").lower().replace(".", "")
+    unit = _UNIT_ALIASES.get(unit_raw, unit_raw)
+    return f"{m.group('value')} {unit}"
+
+
 # ---------------------------------------------------------------------------
 # Database seed data
 # ---------------------------------------------------------------------------

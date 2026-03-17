@@ -266,5 +266,128 @@ void main() {
         <String>['Oat Milk', 'Organic Oat Milk'],
       );
     });
+
+    test(
+        'treats fresh and large limes as the staple ahead of named lime varieties',
+        () {
+      expect(
+        _sortedNames('lime', <String>[
+          'Lime Juice',
+          'Key Lime',
+          'Organic Lime',
+          'Large Fresh Limes',
+          'Lime',
+        ]),
+        <String>[
+          'Lime',
+          'Large Fresh Limes',
+          'Key Lime',
+          'Organic Lime',
+          'Lime Juice',
+        ],
+      );
+    });
+
+    test(
+        'treats pasteurized milk as the standard form ahead of fat-reduced milk',
+        () {
+      expect(
+        _sortedNames('milk', <String>[
+          'Oat Milk',
+          'Pasteurized Milk',
+          '2% Milk',
+          'Chocolate Milk',
+        ]),
+        <String>[
+          'Pasteurized Milk',
+          '2% Milk',
+          'Chocolate Milk',
+          'Oat Milk',
+        ],
+      );
+    });
+
+    test('treats fresh eggs as standard even without a size label', () {
+      expect(
+        _sortedNames('eggs', <String>[
+          'Cage Free Eggs',
+          'Fresh Eggs',
+          'Egg Bites',
+        ]),
+        <String>[
+          'Fresh Eggs',
+          'Cage Free Eggs',
+          'Egg Bites',
+        ],
+      );
+    });
+
+    test(
+        'treats fresh sliced bread as the standard loaf ahead of specialty breads',
+        () {
+      expect(
+        _sortedNames('bread', <String>[
+          'Garlic Bread',
+          'Fresh Sliced Bread',
+          'Gluten Free Bread',
+        ]),
+        <String>[
+          'Fresh Sliced Bread',
+          'Garlic Bread',
+          'Gluten Free Bread',
+        ],
+      );
+    });
+
+    test('treats dry pasta as the standard form ahead of alternative pastas',
+        () {
+      expect(
+        _sortedNames('pasta', <String>[
+          'Mac and Cheese Pasta',
+          'Chickpea Pasta',
+          'Dry Pasta',
+        ]),
+        <String>[
+          'Dry Pasta',
+          'Chickpea Pasta',
+          'Mac and Cheese Pasta',
+        ],
+      );
+    });
+
+    test('treats iodized salt as the standard form ahead of specialty salts',
+        () {
+      expect(
+        _sortedNames('salt', <String>[
+          'Himalayan Pink Salt',
+          'Kosher Salt',
+          'Iodized Salt',
+          'Sea Salt',
+        ]),
+        <String>[
+          'Iodized Salt',
+          'Kosher Salt',
+          'Sea Salt',
+          'Himalayan Pink Salt',
+        ],
+      );
+    });
+
+    test(
+        'treats creamery butter as the standard form ahead of flavored and alternative butters',
+        () {
+      expect(
+        _sortedNames('butter', <String>[
+          'Garlic Butter',
+          'Creamery Butter',
+          'Vegan Butter',
+        ]),
+        <String>[
+          'Creamery Butter',
+          'Garlic Butter',
+          'Vegan Butter',
+        ],
+      );
+    });
   });
 }

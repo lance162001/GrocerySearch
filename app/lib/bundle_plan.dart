@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_front_end/product_search.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/utils/price_utils.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
@@ -164,21 +165,13 @@ class BundlePlanPage extends StatefulWidget {
 }
 
 class _BundlePlanPageState extends State<BundlePlanPage> {
-  late final TextEditingController _userIdController;
   final TextEditingController _bundleNameController =
       TextEditingController(text: 'Weekly Essentials');
-  final TextEditingController _productIdController = TextEditingController();
-  final TextEditingController _storeIdController = TextEditingController();
-  bool _memberFlag = false;
 
   bool _loading = false;
   String? _error;
-  String? _status;
 
-  // User data
-  Map<String, dynamic>? _dashboard;
   List<_BundleSummary> _userBundles = [];
-  List<Map<String, dynamic>> _userSavedStores = [];
   final Map<int, String> _storeLabels = {};
 
   // Selected bundle detail
@@ -189,7 +182,6 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
   @override
   void initState() {
     super.initState();
-    _userIdController = TextEditingController(text: '${widget.initialUserId}');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _loadUser();
@@ -199,10 +191,7 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
 
   @override
   void dispose() {
-    _userIdController.dispose();
     _bundleNameController.dispose();
-    _productIdController.dispose();
-    _storeIdController.dispose();
     super.dispose();
   }
 
@@ -210,20 +199,8 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
   // Helpers
   // ---------------------------------------------------------------------------
 
-  int? _parsePositiveInt(String value) {
-    final parsed = int.tryParse(value.trim());
-    if (parsed == null || parsed <= 0) return null;
-    return parsed;
-  }
-
   void _setError(String message) => setState(() {
         _error = message;
-        _status = null;
-      });
-
-  void _setStatus(String message) => setState(() {
-        _status = message;
-        _error = null;
       });
 
   String _money(num? value) {
@@ -269,50 +246,32 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
   // Core data loading
   // ---------------------------------------------------------------------------
 
-  /// Load user dashboard, bundles, saved stores.
+  /// Load user bundles.
   Future<void> _loadUser() async {
-    final userId = _parsePositiveInt(_userIdController.text);
-    if (userId == null) {
-      _setError('Enter a valid user id');
-      return;
-    }
+    final userId = widget.initialUserId;
 
     setState(() {
       _loading = true;
       _error = null;
-      _status = null;
       _selectedBundle = null;
     });
 
     try {
       await _ensureStoreLabels();
 
-      final results = await Future.wait([
-        _getObject('/users/$userId/dashboard'),
-        _getList('/users/$userId/bundles'),
-        _getList('/users/$userId/saved-stores'),
-      ]);
-
-      final dashboard = results[0] as Map<String, dynamic>?;
-      final bundlesRaw = results[1] as List<Map<String, dynamic>>?;
-      final stores = results[2] as List<Map<String, dynamic>>?;
-
+      final bundlesRaw = await _getList('/users/$userId/bundles');
       final bundles = (bundlesRaw ?? []).map((b) => _BundleSummary.fromJson(b)).toList();
 
       setState(() {
-        _dashboard = dashboard;
         _userBundles = bundles;
-        _userSavedStores = stores ?? _userSavedStores;
       });
 
       // Auto-open if we were given an initial bundle id
       if (widget.initialBundleId != null && widget.initialBundleId! > 0) {
         await _openBundle(widget.initialBundleId!);
       }
-
-      _setStatus('User data loaded \u2014 ${bundles.length} bundle(s)');
     } catch (e) {
-      _setError('Failed to load user data: $e');
+      _setError('Failed to load bundles: $e');
     } finally {
       setState(() => _loading = false);
     }
@@ -335,7 +294,6 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
       }
       setState(() {
         _selectedBundle = _BundleDetail.fromJson(data);
-        _status = null;
       });
     } catch (e) {
       _setError('Error loading bundle: $e');
@@ -349,12 +307,8 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
   // ---------------------------------------------------------------------------
 
   Future<void> _createBundle() async {
-    final userId = _parsePositiveInt(_userIdController.text);
+    final userId = widget.initialUserId;
     final name = _bundleNameController.text.trim();
-    if (userId == null) {
-      _setError('Enter a valid user id');
-      return;
-    }
     if (name.isEmpty) {
       _setError('Enter a bundle name');
       return;
@@ -363,7 +317,6 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
     setState(() => _loading = true);
     try {
       await _api.createBundle(userId, name);
-      _setStatus('Bundle created');
       await _loadUser();
     } catch (e) {
       _setError('Create bundle failed: $e');
@@ -372,102 +325,16 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
     }
   }
 
-  Future<void> _addProductToBundle() async {
-    if (_selectedBundle == null) {
-      _setError('Open a bundle first');
-      return;
-    }
-    final productId = _parsePositiveInt(_productIdController.text);
-    if (productId == null) {
-      _setError('Enter a valid product id');
-      return;
-    }
-
-    setState(() => _loading = true);
-    try {
-      final bundleId = _selectedBundle!.id;
-      await _api.addProductToBundle(bundleId, productId);
-      _setStatus('Product added');
-      await _openBundle(bundleId);
-    } catch (e) {
-      _setError('Add product failed: $e');
-    } finally {
-      setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _saveStoreForUser() async {
-    final userId = _parsePositiveInt(_userIdController.text);
-    final storeId = _parsePositiveInt(_storeIdController.text);
-    if (userId == null || storeId == null) {
-      _setError('Enter valid user id and store id');
-      return;
-    }
-
-    setState(() => _loading = true);
-    try {
-      await _api.saveStoreForUser(userId, storeId, member: _memberFlag);
-      _setStatus('Store saved');
-      await _loadUser();
-    } catch (e) {
-      _setError('Save store failed: $e');
-    } finally {
-      setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _createDemoBundle() async {
-    final userId = _parsePositiveInt(_userIdController.text);
-    if (userId == null) {
-      _setError('Enter a valid user id');
-      return;
-    }
-    setState(() {
-      _loading = true;
-      _error = null;
-      _selectedBundle = null;
-    });
-
-    try {
-      final bundleId = await _api.createBundle(
-        userId,
-        'Demo Bundle ${DateTime.now().toIso8601String().substring(0, 19)}',
-      );
-
-      final productsPage = await _api.getObject(
-        '/products',
-        queryParameters: const {'page': '1', 'size': '8'},
-      );
-      if (productsPage != null) {
-        final items = (productsPage['items'] as List<dynamic>? ?? []);
-        int added = 0;
-        for (final item in items) {
-          final m = item as Map<String, dynamic>;
-          final id = m['id'];
-          if (id is int) {
-            await _api.addProductToBundle(bundleId, id);
-            added++;
-            if (added >= 5) break;
-          }
-        }
-      }
-
-      final stores = await _api.fetchAllStores();
-      if (stores.isNotEmpty) {
-        int savedCount = 0;
-        for (final store in stores) {
-          await _api.saveStoreForUser(userId, store.id);
-          savedCount++;
-          if (savedCount >= 3) break;
-        }
-      }
-
-      await _loadUser();
-      await _openBundle(bundleId);
-    } catch (e) {
-      _setError('Failed to create demo bundle: $e');
-    } finally {
-      setState(() => _loading = false);
+  Future<void> _addItemsToBundle(int bundleId, String bundleName) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            SearchPage(bundleId: bundleId, bundleName: bundleName),
+      ),
+    );
+    if (mounted) {
+      _openBundle(bundleId);
     }
   }
 
@@ -481,7 +348,7 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('User & Bundle Planner'),
+        title: const Text('Bundle Planner'),
         actions: [
           if (_selectedBundle != null)
             IconButton(
@@ -493,44 +360,6 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
       ),
       body: Column(
         children: [
-          // ---- Top bar: user id + load ----
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _userIdController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'User ID',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                FilledButton.tonal(
-                  onPressed: _loading ? null : _loadUser,
-                  child: const Text('Load user'),
-                ),
-              ],
-            ),
-          ),
-
-          // ---- Status / error banners ----
-          if (_status != null)
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                border: Border.all(color: Colors.green.shade200),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(_status!, style: TextStyle(color: Colors.green.shade800, fontSize: 13)),
-            ),
           if (_error != null)
             Container(
               width: double.infinity,
@@ -549,34 +378,6 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
               padding: EdgeInsets.all(16),
               child: Center(child: CircularProgressIndicator()),
             ),
-
-          // ---- Dashboard summary ----
-          if (_dashboard != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
-                  border: Border.all(color: Colors.amber.shade100),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Wrap(
-                  spacing: 14,
-                  runSpacing: 6,
-                  children: [
-                    const Text('Dashboard', style: TextStyle(fontWeight: FontWeight.w700)),
-                    Text('Bundles: ${_dashboard!['bundle_count'] ?? '-'}'),
-                    Text('Saved stores: ${_dashboard!['saved_store_count'] ?? '-'}'),
-                    Text('Visits: ${_dashboard!['visit_count'] ?? '-'}'),
-                    Text('Recent zip: ${_dashboard!['recent_zipcode'] ?? '-'}'),
-                  ],
-                ),
-              ),
-            ),
-
-          const SizedBox(height: 8),
 
           // ---- Main content ----
           Expanded(
@@ -597,76 +398,30 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       children: [
-        // ---- Quick actions ----
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            SizedBox(
-              width: 200,
-              child: TextField(
-                controller: _bundleNameController,
-                decoration: const InputDecoration(
-                  labelText: 'New bundle name',
-                  border: OutlineInputBorder(),
-                  isDense: true,
+        // ---- Create bundle ----
+        Padding(
+          padding: const EdgeInsets.only(top: 12, bottom: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _bundleNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'New bundle name',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
                 ),
               ),
-            ),
-            FilledButton.tonal(
-              onPressed: _loading ? null : _createBundle,
-              child: const Text('Create bundle'),
-            ),
-            SizedBox(
-              width: 140,
-              child: TextField(
-                controller: _storeIdController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Store ID',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
+              const SizedBox(width: 8),
+              FilledButton.tonal(
+                onPressed: _loading ? null : _createBundle,
+                child: const Text('Create bundle'),
               ),
-            ),
-            FilterChip(
-              label: const Text('Member'),
-              selected: _memberFlag,
-              onSelected: _loading ? null : (v) => setState(() => _memberFlag = v),
-            ),
-            FilledButton.tonal(
-              onPressed: _loading ? null : _saveStoreForUser,
-              child: const Text('Save store'),
-            ),
-            TextButton.icon(
-              onPressed: _loading ? null : _createDemoBundle,
-              icon: const Icon(Icons.auto_awesome, size: 18),
-              label: const Text('Demo bundle'),
-            ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 12),
-
-        // ---- Saved stores ----
-        if (_userSavedStores.isNotEmpty) ...[
-          Text('Saved Stores', style: TextStyle(fontWeight: FontWeight.bold, color: cs.onSurface)),
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            children: _userSavedStores.map((s) {
-              final storeId = s['store_id'];
-              final label = _storeName(storeId);
-              final isMember = s['member'] == true;
-              return Chip(
-                avatar: Icon(isMember ? Icons.star : Icons.store, size: 16),
-                label: Text(label, style: const TextStyle(fontSize: 13)),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 12),
-        ],
 
         // ---- Bundles ----
         Text(
@@ -765,26 +520,14 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
         ),
         const SizedBox(height: 8),
 
-        // ---- Add product ----
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _productIdController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Product ID to add',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.tonal(
-              onPressed: _loading ? null : _addProductToBundle,
-              child: const Text('Add product'),
-            ),
-          ],
+        // ---- Add items ----
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton.icon(
+            icon: const Icon(Icons.add_shopping_cart, size: 18),
+            label: const Text('Add items to bundle'),
+            onPressed: _loading ? null : () => _addItemsToBundle(bundle.id, bundle.name),
+          ),
         ),
         const SizedBox(height: 12),
 

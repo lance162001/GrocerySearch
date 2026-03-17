@@ -16,6 +16,7 @@ from .utils import (
     DIET_TYPES,
     DEFAULT_USER_AGENT,
     extract_size_and_clean_name,
+    normalize_size_string,
 )
 
 logger = logging.getLogger(__name__)
@@ -103,6 +104,13 @@ def _persist_product(
     brand_raw = raw.get("brand", "")
     if cleaned_name.startswith("PB") and brand_raw == "Renpure" and len(cleaned_name) >= 5:
         size = cleaned_name[-5]
+
+    # Strip store-brand prefix embedded in the name (e.g. "365 By Whole Foods
+    # Market, Butter, Salted" → "Butter, Salted") so cross-store grouping works.
+    if brand_raw and cleaned_name.lower().startswith(brand_raw.lower() + ","):
+        stripped = cleaned_name[len(brand_raw) + 1:].lstrip(" ")
+        if stripped:
+            cleaned_name = stripped
 
     cleaned_name = cleaned_name.title()
 

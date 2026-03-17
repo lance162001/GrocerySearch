@@ -157,7 +157,7 @@ final List<_StapleProfile> _stapleProfiles = <_StapleProfile>[
   _StapleProfile(
     aliases: <String>{'milk'},
     variantPatterns: _compilePatterns(<String>[
-      r'\bwhole\b|\bvitamin d\b|\bfull cream\b',
+      r'\bwhole\b|\bvitamin d\b|\bfull cream\b|\bfresh\b|\bpasteurized\b',
       r'\b2%\b|\b2 percent\b|\breduced fat\b|\breducedfat\b',
       r'\b1%\b|\b1 percent\b|\blow fat\b|\blowfat\b',
       r'\bskim\b|\bnonfat\b|\bnon fat\b|\bfat free\b|\bfatfree\b',
@@ -178,7 +178,7 @@ final List<_StapleProfile> _stapleProfiles = <_StapleProfile>[
   _StapleProfile(
     aliases: <String>{'egg', 'eggs'},
     variantPatterns: _compilePatterns(<String>[
-      r'\blarge\b|\bgrade a\b',
+      r'\blarge\b|\bgrade a\b|\bfresh\b|\bconventional\b',
       r'\bextra large\b|\bx large\b',
       r'\bjumbo\b',
       r'\bmedium\b',
@@ -198,7 +198,7 @@ final List<_StapleProfile> _stapleProfiles = <_StapleProfile>[
   _StapleProfile(
     aliases: <String>{'bread'},
     variantPatterns: _compilePatterns(<String>[
-      r'\bwhite\b|\bsandwich\b|\bclassic\b|\bplain\b',
+      r'\bwhite\b|\bsandwich\b|\bclassic\b|\bplain\b|\bfresh\b|\bsliced\b',
       r'\bwhole wheat\b|\bwholegrain\b|\bwhole grain\b|\bwheat\b',
       r'\bsourdough\b',
       r'\bmultigrain\b|\bmultiseed\b',
@@ -244,7 +244,7 @@ final List<_StapleProfile> _stapleProfiles = <_StapleProfile>[
   _StapleProfile(
     aliases: <String>{'pasta'},
     variantPatterns: _compilePatterns(<String>[
-      r'\bspaghetti\b',
+      r'\bspaghetti\b|\bdry\b|\bsemolina\b|\bdurum\b',
       r'\bpenne\b',
       r'\bmacaroni\b|\belbow\b',
       r'\brotini\b',
@@ -307,7 +307,7 @@ final List<_StapleProfile> _stapleProfiles = <_StapleProfile>[
   _StapleProfile(
     aliases: <String>{'salt'},
     variantPatterns: _compilePatterns(<String>[
-      r'\btable\b',
+      r'\btable\b|\biodized\b|\bfine\b',
       r'\bkosher\b',
       r'\bsea\b',
     ]),
@@ -324,7 +324,7 @@ final List<_StapleProfile> _stapleProfiles = <_StapleProfile>[
   _StapleProfile(
     aliases: <String>{'butter'},
     variantPatterns: _compilePatterns(<String>[
-      r'\bsalted\b',
+      r'\bsalted\b|\bfresh\b|\bcreamery\b',
       r'\bunsalted\b',
       r'\bsweet cream\b',
     ]),
@@ -424,6 +424,23 @@ final List<_StapleProfile> _stapleProfiles = <_StapleProfile>[
     ]),
     otherFormPatterns: _compilePatterns(<String>[
       r'\bspray\b|\bdressing\b|\bmarinade\b',
+    ]),
+  ),
+  _StapleProfile(
+    aliases: <String>{'lime', 'limes'},
+    variantPatterns: _compilePatterns(<String>[
+      // Standard grocery-store lime (Persian/regular) — includes plain size and
+      // freshness descriptors so "Large Fresh Limes" is treated as the staple
+      // rather than a specialty variant when it is the only lime a store carries.
+      r'\bpersian\b|\bfresh\b|\blarge\b|\bsmall\b|\bseedless\b',
+      r'\bkey\b|\bmexican\b',
+      r'\bkaffir\b|\bmakrut\b',
+    ]),
+    specialtyPatterns: _compilePatterns(<String>[
+      r'\borganic\b',
+    ]),
+    otherFormPatterns: _compilePatterns(<String>[
+      r'\bjuice\b|\bzest\b|\bextract\b|\bpickled\b|\bpreserved\b|\bdried\b|\bpowder\b',
     ]),
   ),
 ];

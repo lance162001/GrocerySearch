@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Optional
 from urllib.request import Request, urlopen
 
@@ -16,6 +17,7 @@ from .utils import (
     CANONICAL_CATEGORIES,
     DEFAULT_USER_AGENT,
     extract_size_and_clean_name,
+    normalize_size_string,
 )
 
 logger = logging.getLogger(__name__)
@@ -24,6 +26,7 @@ _TJ_COMPANY_ID = 2
 _TJ_PRODUCTS_URL = "https://www.traderjoes.com/home/products"
 _TJ_GRAPHQL_URL = "https://www.traderjoes.com/api/graphql"
 _TJ_IMPERSONATE_BROWSER = "chrome"
+_TJ_PRODUCTS_STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "products")
 
 _TJ_GRAPHQL_QUERY = """\
 query SearchProducts($categoryId: String, $currentPage: Int, $pageSize: Int, \
@@ -74,12 +77,14 @@ def scrape_trader_joes(
     if collector is None:
         collector = {"products": [], "product_instances": [], "price_points": []}
 
-    raw_products = _fetch_all_products(store_code)
-
-    for raw in raw_products:
-        _persist_product(raw, store_id, sess, tags, collector)
-
-    sess.commit()
+    img_session = requests.Session(impersonate=_TJ_IMPERSONATE_BROWSER)
+    try:
+        raw_products = _fetch_all_products(store_code, img_session)
+        for raw in raw_products:
+            _persist_product(raw, store_id, sess, tags, collector, img_session)
+        sess.commit()
+    finally:
+        img_session.close()
 
 
 def search_for_store(search_term: str, existing_stores: list[Store], sess: Session) -> bool:
@@ -131,7 +136,26 @@ def search_for_store(search_term: str, existing_stores: list[Store], sess: Sessi
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _fetch_all_products(store_code: int) -> list[dict]:
+def _download_tj_image(sku: str, image_path: str, session: requests.Session) -> Optional[str]:
+    """Download a TJ product image and return the local static URL, or None on failure."""
+    os.makedirs(_TJ_PRODUCTS_STATIC_DIR, exist_ok=True)
+    filename = f"tj_{sku}.png"
+    filepath = os.path.join(_TJ_PRODUCTS_STATIC_DIR, filename)
+    if os.path.exists(filepath):
+        return f"/static/products/{filename}"
+    url = f"https://www.traderjoes.com{image_path}"
+    try:
+        response = session.get(url, timeout=15)
+        response.raise_for_status()
+        with open(filepath, "wb") as f:
+            f.write(response.content)
+        return f"/static/products/{filename}"
+    except Exception as exc:
+        logger.warning("TJ image download failed (sku=%s): %s", sku, exc)
+        return None
+
+
+def _fetch_all_products(store_code: int, session: requests.Session) -> list[dict]:
     """Page through the TJ GraphQL API and return all product dicts."""
     headers = {
         "User-Agent": DEFAULT_USER_AGENT,
@@ -154,29 +178,25 @@ def _fetch_all_products(store_code: int) -> list[dict]:
     }
 
     products: list[dict] = []
-    session = requests.Session(impersonate=_TJ_IMPERSONATE_BROWSER)
-    try:
-        # Akamai blocks non-browser TLS fingerprints on this endpoint, so prime
-        # the session with the products page and reuse the impersonated client.
-        session.get(_TJ_PRODUCTS_URL, headers={"Referer": "https://www.traderjoes.com/"}, timeout=30)
+    # Akamai blocks non-browser TLS fingerprints on this endpoint, so prime
+    # the session with the products page and reuse the impersonated client.
+    session.get(_TJ_PRODUCTS_URL, headers={"Referer": "https://www.traderjoes.com/"}, timeout=30)
 
-        while True:
-            try:
-                response = session.post(_TJ_GRAPHQL_URL, headers=headers, json=body, timeout=30)
-                response.raise_for_status()
-                items = response.json()["data"]["products"]["items"]
-            except Exception as exc:
-                logger.warning("TJ fetch failed (page=%d): %s", body["variables"]["currentPage"], exc)
-                break
+    while True:
+        try:
+            response = session.post(_TJ_GRAPHQL_URL, headers=headers, json=body, timeout=30)
+            response.raise_for_status()
+            items = response.json()["data"]["products"]["items"]
+        except Exception as exc:
+            logger.warning("TJ fetch failed (page=%d): %s", body["variables"]["currentPage"], exc)
+            break
 
-            if not items:
-                break
+        if not items:
+            break
 
-            products.extend(items)
-            logger.debug("TJ page=%d fetched=%d", body["variables"]["currentPage"], len(items))
-            body["variables"]["currentPage"] += 1
-    finally:
-        session.close()
+        products.extend(items)
+        logger.debug("TJ page=%d fetched=%d", body["variables"]["currentPage"], len(items))
+        body["variables"]["currentPage"] += 1
 
     return products
 
@@ -187,19 +207,33 @@ def _persist_product(
     sess: Session,
     tags: dict[str, int],
     collector: dict,
+    img_session: Optional[requests.Session] = None,
 ) -> None:
     """Upsert a single TJ product + instance + price-point."""
     name = raw.get("item_title", "")
+    sku = str(raw.get("sku", ""))
+    image_path = raw.get("primary_image", "")
 
     prod = sess.query(Product).filter(Product.name == name, Product.company_id == _TJ_COMPANY_ID).first()
 
+    is_new = prod is None
     if prod is None:
+        if img_session is not None and image_path:
+            picture_url = _download_tj_image(sku, image_path, img_session) or f"https://traderjoes.com{image_path}"
+        else:
+            picture_url = f"https://traderjoes.com{image_path}"
         prod = Product(
             brand="Trader Joes",
             name=name,
             company_id=_TJ_COMPANY_ID,
-            picture_url=f"https://traderjoes.com{raw.get('primary_image', '')}",
+            picture_url=picture_url,
         )
+    elif img_session is not None and image_path and isinstance(prod.picture_url, str) and prod.picture_url.startswith("https://traderjoes.com"):
+        local_url = _download_tj_image(sku, image_path, img_session)
+        if local_url:
+            prod.picture_url = local_url
+
+    if is_new:
         collector["products"].append(prod)
         sess.add(prod)
         sess.flush()
@@ -243,11 +277,12 @@ def _persist_product(
         sess.add(inst)
         sess.flush()
 
+    raw_size = f"{raw.get('sales_size', '')} {raw.get('sales_uom_description', '')}".strip()
     pricepoint = PricePoint(
         base_price=raw.get("retail_price"),
         sale_price=None,
         member_price=None,
-        size=f"{raw.get('sales_size', '')} {raw.get('sales_uom_description', '')}".strip(),
+        size=normalize_size_string(raw_size) or raw_size,
         instance_id=inst.id,
     )
     collector["price_points"].append(pricepoint)

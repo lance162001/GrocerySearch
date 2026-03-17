@@ -1,10 +1,13 @@
 import 'dart:convert';
 import 'dart:core';
 import 'dart:io';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_front_end/config/app_environment.dart';
 import 'package:flutter_front_end/config/app_routes.dart';
+import 'package:flutter_front_end/firebase_options.dart';
 import 'package:flutter_front_end/main_search.dart';
+import 'package:flutter_front_end/services/auth_service.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
 import 'package:http/http.dart' as http;
@@ -491,7 +494,11 @@ Widget getImage(String url, double width, double height) {
   );
 }
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(MyApp());
 }
 
@@ -539,7 +546,13 @@ class _MyAppState extends State<MyApp> {
       : userStores.add(store));
   void setSearchTerm(String term) => setState(() => searchTerm = term);
 
-  Widget _buildHomePage(AppState appState) {
+  Widget _buildHomePage(BuildContext context, AppState appState) {
+    final authService = context.watch<AuthService>();
+
+    if (!authService.isSignedIn) {
+      return _SignInPage(authService: authService);
+    }
+
     if (appState.bootstrappingUser) {
       return const Scaffold(
         body: Center(
@@ -600,6 +613,9 @@ class _MyAppState extends State<MyApp> {
         Provider<GroceryApi>(
           create: (_) => GroceryApi(environment: environment),
         ),
+        ChangeNotifierProvider<AuthService>(
+          create: (_) => AuthService(),
+        ),
         ChangeNotifierProvider<AppState>(
           create: (context) =>
               AppState(api: context.read<GroceryApi>())..initialize(),
@@ -609,7 +625,7 @@ class _MyAppState extends State<MyApp> {
         builder: (context) {
           final appState = context.watch<AppState>();
           final plannerUserId = appState.currentUserId ?? 1;
-          final homePage = _buildHomePage(appState);
+          final homePage = _buildHomePage(context, appState);
           return MaterialApp(
             home: homePage,
             routes: {
@@ -641,6 +657,80 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
+class _SignInPage extends StatefulWidget {
+  const _SignInPage({required this.authService});
+  final AuthService authService;
+
+  @override
+  State<_SignInPage> createState() => _SignInPageState();
+}
+
+class _SignInPageState extends State<_SignInPage> {
+  bool _signingIn = false;
+  String? _error;
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() {
+      _signingIn = true;
+      _error = null;
+    });
+    try {
+      final result = await widget.authService.signInWithGoogle();
+      if (result != null && mounted) {
+        context.read<AppState>().initialize(force: true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = '$e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _signingIn = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.shopping_cart, size: 64, color: Colors.indigo),
+              const SizedBox(height: 16),
+              Text(
+                'GrocerySearch',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 32),
+              if (_signingIn)
+                const CircularProgressIndicator()
+              else
+                FilledButton.icon(
+                  onPressed: _handleGoogleSignIn,
+                  icon: const Icon(Icons.login),
+                  label: const Text('Sign in with Google'),
+                ),
+              if (_error != null) ...[
+                const SizedBox(height: 16),
+                Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.red.shade700),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 
 class StoreRow extends StatelessWidget {
