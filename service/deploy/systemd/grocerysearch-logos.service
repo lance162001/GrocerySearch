@@ -1,0 +1,9 @@
+[Unit]
+Description=Refresh GrocerySearch company logos once
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/grocerysearch/service
+ExecStart=/opt/grocerysearch/service/deploy/run_job.sh logos

@@ -1,0 +1,82 @@
+name: grocerysearch
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-grocerysearch}
+      POSTGRES_USER: ${POSTGRES_USER:-grocerysearch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-grocerysearch} -d ${POSTGRES_DB:-grocerysearch}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-grocerysearch}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-grocerysearch}}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-20}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://yourdomain.com}
+      DISABLE_DOCS: ${DISABLE_DOCS:-1}
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
+      UVICORN_PORT: 8000
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - static_data:/app/static
+
+  scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["jobs"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-grocerysearch}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-grocerysearch}}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-20}
+      ALGOLIA_APP_ID: ${ALGOLIA_APP_ID:-QGPPR19V8V}
+      ALGOLIA_API_KEY: ${ALGOLIA_API_KEY:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAIL_RECEIVER: ${EMAIL_RECEIVER:-}
+    command: ["python", "scraper.py", "--debug"]
+    volumes:
+      - static_data:/app/static
+
+  logo_refresh:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["jobs"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-grocerysearch}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-grocerysearch}}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-20}
+    command: ["python", "logo_downloader.py"]
+    volumes:
+      - static_data:/app/static
+
+volumes:
+  postgres_data:
+  static_data:

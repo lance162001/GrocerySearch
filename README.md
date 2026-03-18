@@ -11,6 +11,7 @@ Whole Foods and Trader Joe's with more stores planned.
 ## Quick Links
 
 - Service: [service](service)
+- Service deployment runbook: [service/DEPLOYMENT.md](service/DEPLOYMENT.md)
 - Flutter front end: [app](app)
 
 ## Features
@@ -45,9 +46,9 @@ will send a daily summary when it runs. To run a one-off immediate scrape or to
 test behavior, use the debug flag which runs the scraping job immediately:
 
 ```bash
-python service/scraper.py debug
+python service/scraper.py --debug
 # or short form
-python service/scraper.py d
+python service/scraper.py -d
 ```
 
 When run without the debug flag, the scraper runs in a loop and executes the

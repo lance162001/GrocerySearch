@@ -1,0 +1,10 @@
+[Unit]
+Description=Run GrocerySearch scraper daily
+
+[Timer]
+OnCalendar=*-*-* 10:30:00
+Persistent=true
+RandomizedDelaySec=5m
+
+[Install]
+WantedBy=timers.target

@@ -1,6 +1,11 @@
 # Backend
 Data is served over [FastAPI](https://fastapi.tiangolo.com/), an ASGI framework for fast REST APIs in Python.
 
+## Deployment
+
+Production deployment (API + scraper + scheduled jobs) is documented in
+`service/DEPLOYMENT.md`.
+
 ## Installation
 Activate the VENV with 
 ```bash

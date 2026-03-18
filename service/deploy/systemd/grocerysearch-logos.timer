@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh GrocerySearch company logos daily
+
+[Timer]
+OnCalendar=*-*-* 11:15:00
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

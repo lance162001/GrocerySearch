@@ -103,6 +103,10 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
+!.env.example
+!service/.env.example
+!service/.env.prod.example
 .venv
 env/
 venv/
