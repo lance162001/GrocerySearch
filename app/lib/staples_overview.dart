@@ -503,7 +503,7 @@ class _StapleCard extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            color: Colors.blueGrey.shade50,
+            color: const Color(0xFFFAFAFA),
             child: Text(
               stapleName[0].toUpperCase() + stapleName.substring(1),
               style: const TextStyle(
@@ -589,7 +589,7 @@ class _StapleProductTile extends StatelessWidget {
       onLongPress: () => _showProductDetail(context),
       child: Container(
         decoration: BoxDecoration(
-          color: inCart ? Colors.green.shade50 : null,
+          color: inCart ? const Color(0xFFF5F3FF) : null,
           border: Border(
             bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
           ),
@@ -653,7 +653,7 @@ class _StapleProductTile extends StatelessWidget {
                           '+${group.otherStoreCount} more',
                           style: TextStyle(
                             fontSize: 11,
-                            color: Colors.blueGrey.shade400,
+                            color: const Color(0xFFA1A1AA),
                           ),
                         ),
                       ],
@@ -669,14 +669,14 @@ class _StapleProductTile extends StatelessWidget {
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
-                  color: inCart ? Colors.green.shade700 : null,
+                  color: inCart ? const Color(0xFF4F46E5) : null,
                 ),
               ),
             const SizedBox(width: 4),
             Icon(
               inCart ? Icons.check_circle : Icons.add_circle_outline,
               size: 20,
-              color: inCart ? Colors.green : Colors.blueGrey,
+              color: inCart ? const Color(0xFF6366F1) : const Color(0xFFA1A1AA),
             ),
           ],
         ),
@@ -888,7 +888,7 @@ class _StapleProductTile extends StatelessWidget {
                           label: const Text('Yes',
                               style: TextStyle(color: Colors.white)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green.shade600,
+                            backgroundColor: const Color(0xFF18181B),
                           ),
                           onPressed: () {
                             _submitStapleJudgement(

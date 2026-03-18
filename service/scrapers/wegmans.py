@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from typing import Optional
 from urllib.error import HTTPError
@@ -25,8 +26,8 @@ logger = logging.getLogger(__name__)
 
 _WG_COMPANY_ID = 3
 
-_ALGOLIA_APP_ID = "QGPPR19V8V"
-_ALGOLIA_API_KEY = "9a10b1401634e9a6e55161c3a60c200d"
+_ALGOLIA_APP_ID = os.environ.get("ALGOLIA_APP_ID", "QGPPR19V8V")
+_ALGOLIA_API_KEY = os.environ["ALGOLIA_API_KEY"]
 _ALGOLIA_URL = (
     f"https://{_ALGOLIA_APP_ID.lower()}-dsn.algolia.net/1/indexes/*/queries"
     f"?x-algolia-api-key={_ALGOLIA_API_KEY}"

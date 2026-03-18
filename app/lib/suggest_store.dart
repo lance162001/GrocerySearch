@@ -50,7 +50,7 @@ class _SuggestStorePageState extends State<SuggestStorePage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to submit: $e')),
+        const SnackBar(content: Text('Failed to submit. Please try again.')),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -84,7 +84,7 @@ class _SuggestStorePageState extends State<SuggestStorePage> {
                   ),
                   const SizedBox(height: 24),
                   DropdownButtonFormField<int>(
-                    value: _selectedCompanyId,
+                    initialValue: _selectedCompanyId,
                     decoration: const InputDecoration(
                       labelText: 'Company',
                       border: OutlineInputBorder(),

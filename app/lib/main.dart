@@ -12,6 +12,7 @@ import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'chart.dart';
 import 'package:flutter_front_end/bundle_plan.dart';
 import 'package:flutter_front_end/label_judgement.dart';
@@ -35,13 +36,8 @@ Future<int> fetchOrCreateUserId() async {
   final uri = Uri.http('$hostname:$port', '/users/create');
   final headers = {HttpHeaders.contentTypeHeader: 'application/json'};
   final response = await http.post(uri, headers: headers);
-  if (response.statusCode == 404) {
-    const fallbackUserId = 1;
-    await user_cache.writeCachedUserId(fallbackUserId);
-    return fallbackUserId;
-  }
   if (response.statusCode != 200) {
-    throw Exception('Failed to create user: ${response.statusCode} ${response.body}');
+    throw Exception('Failed to create user: ${response.statusCode}');
   }
 
   final decoded = jsonDecode(response.body) as Map<String, dynamic>;
@@ -101,7 +97,6 @@ Future<List<Product>> fetchProducts(List<int> storeIds,
           .cast<Product>()
     ];
   } else {
-    print(response.body);
     // If the server did not return a 200 OK response,
     // then throw an exception.
     throw Exception('Failed to load products');
@@ -645,14 +640,114 @@ class _MyAppState extends State<MyApp> {
             title: 'GrocerySearch',
             theme: ThemeData(
               useMaterial3: true,
-              colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-              primaryColor: Colors.indigo,
-              scaffoldBackgroundColor: Colors.grey[50],
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xFF6366F1),
+                brightness: Brightness.light,
+              ),
+              primaryColor: const Color(0xFF4F46E5),
+              scaffoldBackgroundColor: const Color(0xFFFAFAFA),
+              appBarTheme: const AppBarTheme(
+                backgroundColor: Color(0xFF18181B),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                scrolledUnderElevation: 0,
+                iconTheme: IconThemeData(color: Colors.white),
+                actionsIconTheme: IconThemeData(color: Colors.white),
+                titleTextStyle: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: -0.2,
+                ),
+              ),
               cardTheme: CardThemeData(
-                elevation: 2,
-                margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                elevation: 0,
+                margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 8),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(color: Color(0xFFE4E4E7)),
+                ),
+                color: Colors.white,
+              ),
+              dividerTheme: const DividerThemeData(
+                color: Color(0xFFE4E4E7),
+                thickness: 1,
+              ),
+              elevatedButtonTheme: ElevatedButtonThemeData(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF18181B),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  textStyle: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              outlinedButtonTheme: OutlinedButtonThemeData(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF18181B),
+                  side: const BorderSide(color: Color(0xFFD4D4D8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  textStyle: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              textButtonTheme: TextButtonThemeData(
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF4F46E5),
+                  textStyle: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              inputDecorationTheme: InputDecorationTheme(
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFD4D4D8)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFD4D4D8)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.5),
+                ),
+                hintStyle: const TextStyle(color: Color(0xFFA1A1AA), fontSize: 14),
+              ),
+              chipTheme: ChipThemeData(
+                backgroundColor: const Color(0xFFF4F4F5),
+                selectedColor: const Color(0xFFEEF2FF),
+                side: const BorderSide(color: Color(0xFFE4E4E7)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                labelStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              tabBarTheme: const TabBarThemeData(
+                labelColor: Colors.white,
+                unselectedLabelColor: Color(0xFF71717A),
+                indicatorColor: Color(0xFF6366F1),
+              ),
+              snackBarTheme: SnackBarThemeData(
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
             ),
@@ -671,9 +766,39 @@ class _SignInPage extends StatefulWidget {
   State<_SignInPage> createState() => _SignInPageState();
 }
 
-class _SignInPageState extends State<_SignInPage> {
+class _SignInPageState extends State<_SignInPage>
+    with SingleTickerProviderStateMixin {
   bool _signingIn = false;
   String? _error;
+  late final AnimationController _fadeController;
+  late final Animation<double> _fadeAnimation;
+  late final Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..forward();
+    _fadeAnimation = CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeOut,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeOut,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    super.dispose();
+  }
 
   Future<void> _handleGoogleSignIn() async {
     setState(() {
@@ -696,43 +821,343 @@ class _SignInPageState extends State<_SignInPage> {
     }
   }
 
+  Future<void> _openGithubProfile() async {
+    const githubUri = 'https://github.com/lance162001';
+    final opened = await launchUrl(Uri.parse(githubUri));
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open github.com/lance162001')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
     return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.shopping_cart, size: 64, color: Colors.indigo),
-              const SizedBox(height: 16),
-              Text(
-                'GrocerySearch',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              const SizedBox(height: 32),
-              if (_signingIn)
-                const CircularProgressIndicator()
-              else
-                FilledButton.icon(
-                  onPressed: _handleGoogleSignIn,
-                  icon: const Icon(Icons.login),
-                  label: const Text('Sign in with Google'),
-                ),
-              if (_error != null) ...[
-                const SizedBox(height: 16),
-                Text(
-                  _error!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.red.shade700),
-                ),
-              ],
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF09090B), // zinc-950
+              Color(0xFF18181B), // zinc-900
+              Color(0xFF27272A), // zinc-800
             ],
+            stops: [0.0, 0.5, 1.0],
           ),
         ),
+        child: Stack(
+          children: [
+            // Decorative background circles
+            Positioned(
+              top: -size.height * 0.12,
+              right: -size.width * 0.18,
+              child: Container(
+                width: size.width * 0.6,
+                height: size.width * 0.6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.06),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -size.height * 0.08,
+              left: -size.width * 0.2,
+              child: Container(
+                width: size.width * 0.7,
+                height: size.width * 0.7,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.04),
+                ),
+              ),
+            ),
+            // Main content
+            SafeArea(
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: size.height -
+                            MediaQuery.of(context).padding.top -
+                            MediaQuery.of(context).padding.bottom,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 28, vertical: 52),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            // Logo circle
+                            Container(
+                              width: 108,
+                              height: 108,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Color(0xFF6366F1),
+                                    Color(0xFF818CF8),
+                                  ],
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF6366F1)
+                                        .withValues(alpha: 0.35),
+                                    blurRadius: 32,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.shopping_basket_rounded,
+                                size: 54,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 28),
+                            // Title
+                            Text(
+                              'GrocerySearch',
+                              style: TextStyle(
+                                fontSize: 36,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                letterSpacing: -0.8,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color:
+                                      Colors.white.withValues(alpha: 0.12),
+                                ),
+                              ),
+                              child: const Text(
+                                'Smart shopping. Better prices.',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFFA1A1AA),
+                                  fontWeight: FontWeight.w500,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 48),
+                            // Feature cards
+                            _LandingFeatureCard(
+                              icon: Icons.compare_arrows_rounded,
+                              iconColor: const Color(0xFF818CF8),
+                              title: 'Compare Prices',
+                              description:
+                                  'Side-by-side prices from Whole Foods, Wegmans, Trader Joe\'s, and more.',
+                            ),
+                            const SizedBox(height: 10),
+                            _LandingFeatureCard(
+                              icon: Icons.local_offer_rounded,
+                              iconColor: const Color(0xFFFBBF24),
+                              title: 'Spot the Best Deals',
+                              description:
+                                  'Sale and member pricing clearly surfaced so you never overpay.',
+                            ),
+                            const SizedBox(height: 10),
+                            _LandingFeatureCard(
+                              icon: Icons.inventory_2_rounded,
+                              iconColor: const Color(0xFFA78BFA),
+                              title: 'Bundle & Plan',
+                              description:
+                                  'Build shopping bundles and track your pantry staples over time.',
+                            ),
+                            const SizedBox(height: 52),
+                            // CTA button
+                            if (_signingIn)
+                              const SizedBox(
+                                width: 40,
+                                height: 40,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 3,
+                                ),
+                              )
+                            else
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: _handleGoogleSignIn,
+                                  icon: const Icon(Icons.login_rounded,
+                                      size: 20),
+                                  label: const Text(
+                                    'Sign in with Google',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.2,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF6366F1),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    elevation: 0,
+                                  ),
+                                ),
+                              ),
+                            if (_error != null) ...[
+                              const SizedBox(height: 16),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                      color: Colors.red.withValues(alpha: 0.4)),
+                                ),
+                                child: Text(
+                                  _error!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                      color: Colors.white70, fontSize: 13),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 36),
+                            DefaultTextStyle(
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white.withValues(alpha: 0.3),
+                                letterSpacing: 0.4,
+                              ),
+                              child: Wrap(
+                                alignment: WrapAlignment.center,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 4,
+                                runSpacing: 2,
+                                children: [
+                                  const Text('made with'),
+                                  Icon(
+                                    Icons.favorite_rounded,
+                                    size: 14,
+                                    color: Colors.redAccent.withValues(alpha: 0.8),
+                                  ),
+                                  const Text('by'),
+                                  TextButton(
+                                    onPressed: _openGithubProfile,
+                                    style: TextButton.styleFrom(
+                                      foregroundColor:
+                                          Colors.white.withValues(alpha: 0.65),
+                                      padding: EdgeInsets.zero,
+                                      minimumSize: Size.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: const Text(
+                                      'github.com/lance162001',
+                                      style: TextStyle(
+                                        decoration: TextDecoration.underline,
+                                        decorationThickness: 1.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LandingFeatureCard extends StatelessWidget {
+  const _LandingFeatureCard({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.description,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.08),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: iconColor, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  description,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

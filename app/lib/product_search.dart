@@ -306,9 +306,9 @@ class _SearchPageState extends State<SearchPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: backgroundColor ?? Colors.blueGrey.shade50,
+        color: backgroundColor ?? const Color(0xFFF4F4F5),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: borderColor ?? Colors.blueGrey.shade100),
+        border: Border.all(color: borderColor ?? const Color(0xFFE4E4E7)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -318,7 +318,7 @@ class _SearchPageState extends State<SearchPage> {
           Text(
             label,
             style: TextStyle(
-              color: textColor ?? Colors.blueGrey.shade900,
+              color: textColor ?? const Color(0xFF27272A),
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
@@ -337,15 +337,15 @@ class _SearchPageState extends State<SearchPage> {
         ? Icon(
             Icons.storefront_outlined,
             size: 16,
-            color: Colors.indigo.shade700,
+            color: const Color(0xFF4F46E5),
           )
         : ProductImage(url: logoUrl, width: 18, height: 18);
     return _buildSummaryChip(
       label: label,
       leading: leading,
-      backgroundColor: Colors.indigo.shade50,
-      borderColor: Colors.indigo.shade100,
-      textColor: Colors.indigo.shade900,
+      backgroundColor: const Color(0xFFEEF2FF),
+      borderColor: const Color(0xFFC7D2FE),
+      textColor: const Color(0xFF3730A3),
     );
   }
 
@@ -363,7 +363,7 @@ class _SearchPageState extends State<SearchPage> {
       leading: Icon(
         Icons.local_offer_outlined,
         size: 16,
-        color: Colors.blueGrey.shade700,
+        color: const Color(0xFF71717A),
       ),
     );
   }
@@ -377,21 +377,21 @@ class _SearchPageState extends State<SearchPage> {
     final isBestOption = option.instanceId == group.primaryProduct.instanceId;
 
     var label = 'Lowest price';
-    var backgroundColor = Colors.green.shade50;
-    var borderColor = Colors.green.shade200;
-    var textColor = Colors.green.shade900;
+    var backgroundColor = const Color(0xFFEEF2FF);
+    var borderColor = const Color(0xFFC7D2FE);
+    var textColor = const Color(0xFF3730A3);
 
     if (!isBestOption) {
       if (bestPrice == null || optionPrice == null) {
         label = 'Price unavailable';
-        backgroundColor = Colors.blueGrey.shade50;
-        borderColor = Colors.blueGrey.shade200;
-        textColor = Colors.blueGrey.shade900;
+        backgroundColor = const Color(0xFFF4F4F5);
+        borderColor = const Color(0xFFE4E4E7);
+        textColor = const Color(0xFF52525B);
       } else if (productPricesMatch(optionPrice, bestPrice)) {
         label = 'Same as lowest';
-        backgroundColor = Colors.indigo.shade50;
-        borderColor = Colors.indigo.shade200;
-        textColor = Colors.indigo.shade900;
+        backgroundColor = const Color(0xFFEEF2FF);
+        borderColor = const Color(0xFFC7D2FE);
+        textColor = const Color(0xFF3730A3);
       } else {
         label = '+${_formatAmount(optionPrice - bestPrice)} vs lowest';
         backgroundColor = Colors.orange.shade50;
@@ -411,8 +411,9 @@ class _SearchPageState extends State<SearchPage> {
   Widget _buildStoreOptionCard(
     ProductGroup group,
     Product option,
-    AppState appState,
-  ) {
+    AppState appState, {
+    VoidCallback? onHistoryTap,
+  }) {
     final store = _storeForId(option.storeId);
     final logoUrl = _companyForId(option.companyId)?.logoUrl ?? '';
     final quantity = appState.quantityFor(option);
@@ -422,16 +423,16 @@ class _SearchPageState extends State<SearchPage> {
 
     return InkWell(
       key: ValueKey<String>('product-option-${option.instanceId}'),
-      onTap: () => _showStorePriceHistory(context, option, storeLabel),
-      borderRadius: BorderRadius.circular(14),
+      onTap: onHistoryTap ?? () => _showStorePriceHistory(context, option, storeLabel),
+      borderRadius: BorderRadius.circular(10),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: quantity > 0 ? Colors.lightBlue.shade50 : Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          color: quantity > 0 ? const Color(0xFFEEF2FF) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: quantity > 0 ? Colors.lightBlue.shade200 : Colors.grey.shade300,
+            color: quantity > 0 ? const Color(0xFFC7D2FE) : const Color(0xFFE4E4E7),
           ),
         ),
         child: Column(
@@ -475,6 +476,17 @@ class _SearchPageState extends State<SearchPage> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                if (option.pictureUrl.isNotEmpty) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: ProductImage(
+                      url: option.pictureUrl,
+                      width: 48,
+                      height: 48,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -609,6 +621,7 @@ class _SearchPageState extends State<SearchPage> {
   ) async {
     final product = group.primaryProduct;
     final bestStore = _storeForId(product.storeId);
+    final selectedForHistory = ValueNotifier<Product>(product);
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -619,9 +632,15 @@ class _SearchPageState extends State<SearchPage> {
             child: Material(
               color: Theme.of(context).scaffoldBackgroundColor,
               child: AnimatedBuilder(
-                animation: appState,
+                animation: Listenable.merge([appState, selectedForHistory]),
                 builder: (context, _) {
                   final groupQuantity = _groupCartQuantity(group, appState);
+                  final historyProduct = selectedForHistory.value;
+                  final isDefaultHistory =
+                      historyProduct.instanceId == product.instanceId;
+                  final historyStore = isDefaultHistory
+                      ? bestStore
+                      : _storeForId(historyProduct.storeId);
                   return ListView(
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
                     children: [
@@ -661,7 +680,7 @@ class _SearchPageState extends State<SearchPage> {
                                   '${_displayPrice(product)} at ${bestStore?.town ?? 'Store ${product.storeId}'}',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w700,
-                                    color: Theme.of(context).colorScheme.primary,
+                                    color: const Color(0xFF18181B),
                                   ),
                                 ),
                               ],
@@ -674,16 +693,16 @@ class _SearchPageState extends State<SearchPage> {
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.lightBlue.shade50,
+                                color: const Color(0xFFEEF2FF),
                                 borderRadius: BorderRadius.circular(999),
                                 border: Border.all(
-                                  color: Colors.lightBlue.shade200,
+                                  color: const Color(0xFFC7D2FE),
                                 ),
                               ),
                               child: Text(
                                 '$groupQuantity in cart',
-                                style: TextStyle(
-                                  color: Colors.lightBlue.shade900,
+                                style: const TextStyle(
+                                  color: Color(0xFF3730A3),
                                   fontWeight: FontWeight.w700,
                                   fontSize: 12,
                                 ),
@@ -708,6 +727,63 @@ class _SearchPageState extends State<SearchPage> {
                         ],
                       ),
                       const SizedBox(height: 16),
+                      // ── Price history ──────────────────────────────────
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Price history',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                if (!isDefaultHistory)
+                                  Text(
+                                    historyStore != null
+                                        ? historyStore.town
+                                        : 'Selected store',
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          if (!isDefaultHistory)
+                            TextButton(
+                              onPressed: () =>
+                                  selectedForHistory.value = product,
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                minimumSize: Size.zero,
+                                tapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: const Text(
+                                'Show best store',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 200,
+                        child: PriceHistoryChart(
+                          pricepoints: historyProduct.priceHistory,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // ── Store options ───────────────────────────────────
                       Text(
                         'Available at ${group.storeCount} selected stores',
                         style: const TextStyle(
@@ -715,9 +791,24 @@ class _SearchPageState extends State<SearchPage> {
                           fontSize: 14,
                         ),
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tap a store to view its price history',
+                        style: TextStyle(
+                          color: Colors.grey[500],
+                          fontSize: 11,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       ...group.options.map(
-                        (option) => _buildStoreOptionCard(group, option, appState),
+                        (option) => _buildStoreOptionCard(
+                          group,
+                          option,
+                          appState,
+                          onHistoryTap: () {
+                            selectedForHistory.value = option;
+                          },
+                        ),
                       ),
                       if (product.variationGroup != null &&
                           product.variationGroup!.isNotEmpty) ...[
@@ -735,19 +826,6 @@ class _SearchPageState extends State<SearchPage> {
                           },
                         ),
                       ],
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Price history',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        height: 220,
-                        child: PriceHistoryChart(pricepoints: product.priceHistory),
-                      ),
                     ],
                   );
                 },
@@ -757,6 +835,7 @@ class _SearchPageState extends State<SearchPage> {
         );
       },
     );
+    selectedForHistory.dispose();
   }
 
   Widget _buildStatusPill(BuildContext context, Product product) {
@@ -799,11 +878,11 @@ class _SearchPageState extends State<SearchPage> {
   }) {
     final amountLabel = _formatAmount(amount);
     final foregroundColor =
-        isBestPrice ? Colors.green.shade800 : Colors.orange.shade900;
+        isBestPrice ? const Color(0xFF4F46E5) : Colors.orange.shade900;
     final backgroundColor =
-        isBestPrice ? Colors.green.shade50 : Colors.orange.shade50;
+        isBestPrice ? const Color(0xFFEEF2FF) : Colors.orange.shade50;
     final borderColor =
-        isBestPrice ? Colors.green.shade200 : Colors.orange.shade200;
+        isBestPrice ? const Color(0xFFC7D2FE) : Colors.orange.shade200;
     final icon =
         isBestPrice ? Icons.savings_outlined : Icons.trending_up_rounded;
     final label = isBestPrice ? 'Save $amountLabel' : '+$amountLabel';
@@ -1063,7 +1142,7 @@ class _SearchPageState extends State<SearchPage> {
           height: 40,
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(5),
+            borderRadius: BorderRadius.circular(8),
           ),
           child: TextField(
             onSubmitted: (text) {
@@ -1072,17 +1151,19 @@ class _SearchPageState extends State<SearchPage> {
             },
             controller: searchFieldController,
             decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF71717A)),
               suffixIcon: IconButton(
-                icon: const Icon(Icons.clear),
+                icon: const Icon(Icons.clear, color: Color(0xFF71717A)),
                 onPressed: () {
                   searchFieldController.clear();
                   appState.setSearchTerm('');
                   _reloadProducts();
                 },
               ),
-              hintText: 'Search By Product...',
+              hintText: 'Search by product...',
               border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
             ),
           ),
         ),
@@ -1171,11 +1252,11 @@ class _SearchPageState extends State<SearchPage> {
 
                 return Card(
                   color: groupQuantity > 0
-                      ? Colors.lightBlue[100]
+                      ? const Color(0xFFF5F3FF)
                       : Colors.white,
                   clipBehavior: Clip.hardEdge,
                   child: InkWell(
-                    splashColor: Colors.blue.withAlpha(30),
+                    splashColor: const Color(0xFF6366F1).withAlpha(20),
                     onTap: () {
                       _toggleGroupedProduct(group, appState);
                     },

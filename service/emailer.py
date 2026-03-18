@@ -18,9 +18,9 @@ from models.base import engine
 load_dotenv()
 
 _SMTP_PORT = 465
-_PASSWORD = os.getenv("password")
-_SENDER = os.getenv("username")
-_RECEIVER = "lancegruber2@gmail.com"
+_PASSWORD = os.getenv("SMTP_PASSWORD")
+_SENDER = os.getenv("SMTP_USERNAME")
+_RECEIVER = os.getenv("EMAIL_RECEIVER")
 
 _TEMPLATE_ENV = Environment(loader=FileSystemLoader("templates/"))
 _NEWSLETTER_HTML = _TEMPLATE_ENV.get_template("newsletter.html")

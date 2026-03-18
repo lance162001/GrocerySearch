@@ -688,9 +688,12 @@ void main() {
       );
 
       await tester.longPress(milkResult.first);
-      await _pumpUi(tester, frames: 8);
+      await tester.pumpAndSettle();
 
       expect(find.text('Available at 3 selected stores'), findsOneWidget);
+      // Scroll down so the remaining store option cards enter the viewport.
+      await tester.drag(find.byType(ListView).last, const Offset(0, -300));
+      await tester.pumpAndSettle();
       expect(find.text('+\$1.00 vs lowest'), findsOneWidget);
       expect(find.text('+\$2.00 vs lowest'), findsOneWidget);
 

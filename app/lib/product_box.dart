@@ -74,7 +74,7 @@ class ProductBox extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
+                          color: const Color(0xFF4F46E5),
                         ),
                       ),
                     ),
@@ -117,7 +117,7 @@ class ProductBox extends StatelessWidget {
                     Container(
                       padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
+                        color: const Color(0xFFF4F4F5),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text('Qty: $qty', style: TextStyle(fontSize: 12)),

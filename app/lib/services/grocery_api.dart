@@ -21,8 +21,10 @@ class GroceryApi {
     return environment.uri(path, queryParameters);
   }
 
+  static const _timeout = Duration(seconds: 15);
+
   Future<http.Response> get(Uri uri, {Map<String, String>? headers}) {
-    return _client.get(uri, headers: headers ?? jsonHeaders);
+    return _client.get(uri, headers: headers ?? jsonHeaders).timeout(_timeout);
   }
 
   Future<http.Response> post(
@@ -30,7 +32,9 @@ class GroceryApi {
     Object? body,
     Map<String, String>? headers,
   }) {
-    return _client.post(uri, headers: headers ?? jsonHeaders, body: body);
+    return _client
+        .post(uri, headers: headers ?? jsonHeaders, body: body)
+        .timeout(_timeout);
   }
 
   Future<Map<String, dynamic>?> getObject(
@@ -80,7 +84,7 @@ class GroceryApi {
       );
       if (response.statusCode != 200) {
         throw Exception(
-          'Failed to resolve user: ${response.statusCode} ${response.body}',
+          'Failed to resolve user: ${response.statusCode}',
         );
       }
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
@@ -99,15 +103,8 @@ class GroceryApi {
     }
 
     final response = await post(buildUri('/users/create'));
-    if (response.statusCode == 404) {
-      const fallbackUserId = 1;
-      await user_cache.writeCachedUserId(fallbackUserId);
-      return fallbackUserId;
-    }
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to create user: ${response.statusCode} ${response.body}',
-      );
+      throw Exception('Failed to create user: ${response.statusCode}');
     }
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;

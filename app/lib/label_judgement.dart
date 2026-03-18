@@ -281,45 +281,46 @@ class _StapleJudgementCard extends StatelessWidget {
         ? candidate.stapleName![0].toUpperCase() +
             candidate.stapleName!.substring(1)
         : 'grocery staple';
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 400),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Is this $displayName?',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
+    return SingleChildScrollView(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Is this $displayName?',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
               const SizedBox(height: 8),
               Text(
                 'Should this product appear under "$displayName" in the staples screen?',
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
               ),
               if (candidate.heuristicScore != null &&
-                  (candidate.heuristicScore! - 0.5).abs() < 0.25)
+                  (candidate.heuristicScore! - 0.5).abs() < 0.05)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.amber.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.amber.shade200),
+                      color: const Color(0xFFFFFBEB),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFFDE68A)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.help_outline,
-                            size: 14, color: Colors.amber.shade700),
+                            size: 14, color: const Color(0xFFD97706)),
                         const SizedBox(width: 6),
                         Text(
                           'We\'re unsure about this one',
                           style: TextStyle(
-                              fontSize: 12, color: Colors.amber.shade800),
+                              fontSize: 12, color: const Color(0xFF92400E)),
                         ),
                       ],
                     ),
@@ -338,7 +339,7 @@ class _StapleJudgementCard extends StatelessWidget {
                     child: _JudgeButton(
                       icon: Icons.thumb_down_outlined,
                       label: 'Not a staple',
-                      color: Colors.red.shade400,
+                      color: const Color(0xFF71717A),
                       onPressed: () => onJudge(false),
                     ),
                   ),
@@ -347,7 +348,7 @@ class _StapleJudgementCard extends StatelessWidget {
                     child: _JudgeButton(
                       icon: Icons.thumb_up_outlined,
                       label: 'Staple',
-                      color: Colors.green.shade600,
+                      color: const Color(0xFF4F46E5),
                       onPressed: () => onJudge(true),
                     ),
                   ),
@@ -357,13 +358,14 @@ class _StapleJudgementCard extends StatelessWidget {
               _JudgeButton(
                 icon: Icons.help_outline,
                 label: 'Unsure',
-                color: Colors.grey.shade500,
+                color: const Color(0xFFA1A1AA),
                 onPressed: onSkip,
               ),
             ],
           ),
         ),
       ),
+    ),
     );
   }
 }
@@ -432,7 +434,7 @@ class _GroupingJudgementCard extends StatelessWidget {
                     child: _JudgeButton(
                       icon: Icons.close,
                       label: 'Different',
-                      color: Colors.red.shade400,
+                      color: const Color(0xFF71717A),
                       onPressed: () => onJudge(false),
                     ),
                   ),
@@ -441,7 +443,7 @@ class _GroupingJudgementCard extends StatelessWidget {
                     child: _JudgeButton(
                       icon: Icons.check,
                       label: 'Same product',
-                      color: Colors.green.shade600,
+                      color: const Color(0xFF4F46E5),
                       onPressed: () => onJudge(true),
                     ),
                   ),
@@ -454,7 +456,7 @@ class _GroupingJudgementCard extends StatelessWidget {
                     child: _JudgeButton(
                       icon: Icons.style_outlined,
                       label: 'Flavor / Variation',
-                      color: Colors.orange.shade600,
+                      color: const Color(0xFFD97706),
                       onPressed: onFlavour,
                     ),
                   ),
@@ -463,7 +465,7 @@ class _GroupingJudgementCard extends StatelessWidget {
                     child: _JudgeButton(
                       icon: Icons.help_outline,
                       label: 'Unsure',
-                      color: Colors.grey.shade500,
+                      color: const Color(0xFFA1A1AA),
                       onPressed: onSkip,
                     ),
                   ),
@@ -491,7 +493,11 @@ class _ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 3,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: const BorderSide(color: Color(0xFFE4E4E7)),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -560,7 +566,7 @@ class _JudgeButton extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(10),
           ),
         ),
       ),

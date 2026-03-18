@@ -12,7 +12,7 @@ class AppEnvironment {
       String.fromEnvironment('LOCAL_BACKEND_PORT', defaultValue: _defaultLocalPort);
 
   static const AppEnvironment current =
-      AppEnvironment._(useLocalBackend: bool.fromEnvironment('USE_LOCAL_BACKEND', defaultValue: true));
+      AppEnvironment._(useLocalBackend: bool.fromEnvironment('USE_LOCAL_BACKEND'));
   static const AppEnvironment local = AppEnvironment._(useLocalBackend: true);
   static const AppEnvironment remote = AppEnvironment._(useLocalBackend: false);
 
@@ -38,6 +38,9 @@ class AppEnvironment {
   String get port => useLocalBackend ? _localPortOverride : _remotePort;
 
   Uri uri(String path, [Map<String, String>? queryParameters]) {
+    if (!useLocalBackend) {
+      return Uri.https('$hostname:$port', path, queryParameters);
+    }
     return Uri.http('$hostname:$port', path, queryParameters);
   }
 
@@ -45,9 +48,10 @@ class AppEnvironment {
     if (rawUrl.startsWith('http')) {
       return rawUrl;
     }
+    final scheme = useLocalBackend ? 'http' : 'https';
     if (rawUrl.startsWith('/')) {
-      return 'http://$hostname:$port$rawUrl';
+      return '$scheme://$hostname:$port$rawUrl';
     }
-    return 'http://$hostname:$port/$rawUrl';
+    return '$scheme://$hostname:$port/$rawUrl';
   }
 }

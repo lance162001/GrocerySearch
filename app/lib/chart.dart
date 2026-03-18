@@ -5,9 +5,9 @@ import 'package:flutter_front_end/models/grocery_models.dart';
 class BarChartSample4 extends StatefulWidget {
   BarChartSample4({super.key});
 
-  final Color dark = Colors.cyan.shade800;
-  final Color normal = Colors.cyan.shade500;
-  final Color light = Colors.cyan.shade200;
+  final Color dark = const Color(0xFF312E81);
+  final Color normal = const Color(0xFF6366F1);
+  final Color light = const Color(0xFFC7D2FE);
   @override
   State<StatefulWidget> createState() => BarChartSample4State();
 }
@@ -109,7 +109,26 @@ class PriceHistoryChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (pricepoints.isEmpty) {
-      return Center(child: Text('No price history'));
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.show_chart, size: 36, color: Colors.grey.shade300),
+              const SizedBox(height: 8),
+              Text(
+                'No price history yet',
+                style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     // Aggregate by UTC calendar day so each day has exactly one data point.
@@ -154,88 +173,161 @@ class PriceHistoryChart extends StatelessWidget {
       if (aggDates.isNotEmpty) aggDates.length - 1,
     };
 
-    // Small padding so line doesn't sit on graph edge
-    final yPadding = (maxY - minY) * 0.1;
-    final minYDisplay = (minY.isFinite) ? (minY - yPadding) : 0.0;
-    final maxYDisplay = (maxY.isFinite) ? (maxY + yPadding) : 1.0;
+    // Ensure a minimum y-range so the chart renders correctly with very few
+    // data points (e.g. a single reading where minY == maxY).
+    final yRange = maxY - minY;
+    final yPadding = yRange > 0.001
+        ? yRange * 0.2
+        : (maxY > 0 ? maxY * 0.1 : 0.5);
+    final minYDisplay =
+        minY.isFinite ? (minY - yPadding).clamp(0.0, double.infinity) : 0.0;
+    final maxYDisplay = maxY.isFinite ? (maxY + yPadding) : 1.0;
 
-    return AspectRatio(
-      aspectRatio: 1.8,
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: LineChart(
-          LineChartData(
-            lineTouchData: LineTouchData(
-              enabled: true,
-              touchTooltipData: LineTouchTooltipData(
-                tooltipBgColor: Colors.grey.shade800.withValues(alpha: 0.9),
-                getTooltipItems: (touchedSpots) => touchedSpots.map((t) {
-                  final pp = aggEntries[t.x.toInt()];
-                  final metric = _metricForPoint(pp);
-                  final date = aggDates[t.x.toInt()];
-                  final unitText = metric.unit != null ? '/${metric.unit}' : '';
-                  final label = "${_formatCurrency(t.y)}$unitText\n${date.month}/${date.day}/${date.year}";
-                  return LineTooltipItem(label, const TextStyle(color: Colors.white, fontSize: 12));
-                }).toList(),
-              ),
+    // For very sparse data show a subtle label beneath the chart.
+    final isSparse = aggEntries.length <= 3;
+    final sparseNote = isSparse
+        ? '${aggEntries.length} reading${aggEntries.length == 1 ? '' : 's'} available'
+        : null;
+
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    // Show larger dots and a wider line when there are few data points so
+    // the chart has clear visual weight even with minimal data.
+    final barWidth = isSparse ? 2.5 : 2.0;
+    final showDots = spots.length <= 30;
+
+    Widget chart = Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 8, 4),
+      child: LineChart(
+        LineChartData(
+          lineTouchData: LineTouchData(
+            enabled: true,
+            touchTooltipData: LineTouchTooltipData(
+              getTooltipColor: (_) =>
+                  Colors.grey.shade800.withValues(alpha: 0.9),
+              getTooltipItems: (touchedSpots) => touchedSpots.map((t) {
+                final pp = aggEntries[t.x.toInt()];
+                final metric = _metricForPoint(pp);
+                final date = aggDates[t.x.toInt()];
+                final unitText = metric.unit != null ? '/${metric.unit}' : '';
+                final label =
+                    '${_formatCurrency(t.y)}$unitText\n${date.month}/${date.day}/${date.year}';
+                return LineTooltipItem(
+                  label,
+                  const TextStyle(color: Colors.white, fontSize: 12),
+                );
+              }).toList(),
             ),
-            gridData: FlGridData(show: true, drawVerticalLine: false),
-            titlesData: FlTitlesData(
-              bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 42,
-                  interval: labelStep.toDouble(),
-                  getTitlesWidget: (value, meta) {
-                    final i = value.round();
-                    if ((value - i).abs() > 0.001) return const SizedBox.shrink();
-                    if (i < 0 || i >= aggDates.length) return const SizedBox.shrink();
-                    if (!labeledIndexes.contains(i)) return const SizedBox.shrink();
-                    final d = aggDates[i];
-                    return SideTitleWidget(
-                      axisSide: meta.axisSide,
-                      angle: -0.6,
-                      child: Text(
-                        '${d.month}/${d.day}',
-                        style: const TextStyle(fontSize: 10),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 60,
-                  getTitlesWidget: (value, meta) {
-                    return SideTitleWidget(
-                      axisSide: meta.axisSide,
-                      child: Text(_formatCurrency(value), style: const TextStyle(fontSize: 10)),
-                    );
-                  },
-                ),
-              ),
-              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            ),
-            minY: minYDisplay,
-            maxY: maxYDisplay,
-            minX: 0,
-            maxX: (spots.length - 1).toDouble(),
-            lineBarsData: [
-              LineChartBarData(
-                spots: spots,
-                isCurved: true,
-                dotData: FlDotData(show: true),
-                belowBarData: BarAreaData(show: true, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)),
-                color: Theme.of(context).colorScheme.primary,
-                barWidth: 2,
-              )
-            ],
           ),
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            getDrawingHorizontalLine: (value) => FlLine(
+              color: Colors.grey.shade200,
+              strokeWidth: 1,
+            ),
+          ),
+          borderData: FlBorderData(
+            show: true,
+            border: Border(
+              bottom: BorderSide(color: Colors.grey.shade300),
+              left: BorderSide(color: Colors.grey.shade300),
+            ),
+          ),
+          titlesData: FlTitlesData(
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 36,
+                interval: labelStep.toDouble(),
+                getTitlesWidget: (value, meta) {
+                  final i = value.round();
+                  if ((value - i).abs() > 0.001) return const SizedBox.shrink();
+                  if (i < 0 || i >= aggDates.length) {
+                    return const SizedBox.shrink();
+                  }
+                  if (!labeledIndexes.contains(i)) {
+                    return const SizedBox.shrink();
+                  }
+                  final d = aggDates[i];
+                  return SideTitleWidget(
+                    meta: meta,
+                    angle: -0.5,
+                    child: Text(
+                      '${d.month}/${d.day}',
+                      style: const TextStyle(fontSize: 10),
+                    ),
+                  );
+                },
+              ),
+            ),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 56,
+                getTitlesWidget: (value, meta) {
+                  return SideTitleWidget(
+                    meta: meta,
+                    child: Text(
+                      _formatCurrency(value),
+                      style: const TextStyle(fontSize: 10),
+                    ),
+                  );
+                },
+              ),
+            ),
+            topTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false)),
+          ),
+          minY: minYDisplay,
+          maxY: maxYDisplay,
+          minX: 0,
+          maxX: spots.length <= 1
+              ? 1.0
+              : (spots.length - 1).toDouble(),
+          lineBarsData: [
+            LineChartBarData(
+              spots: spots,
+              isCurved: spots.length > 2,
+              curveSmoothness: 0.25,
+              dotData: FlDotData(
+                show: showDots,
+                getDotPainter: (spot, percent, barData, index) =>
+                    FlDotCirclePainter(
+                  radius: isSparse ? 4 : 2.5,
+                  color: primaryColor,
+                  strokeWidth: 1.5,
+                  strokeColor: Colors.white,
+                ),
+              ),
+              belowBarData: BarAreaData(
+                show: true,
+                color: primaryColor.withValues(alpha: 0.12),
+              ),
+              color: primaryColor,
+              barWidth: barWidth,
+            ),
+          ],
         ),
       ),
     );
+
+    if (sparseNote != null) {
+      return Column(
+        children: [
+          Expanded(child: chart),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              sparseNote,
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 10),
+            ),
+          ),
+        ],
+      );
+    }
+    return chart;
   }
 }
 
@@ -264,7 +356,7 @@ class BarChartSample4State extends State<BarChartSample4> {
         break;
     }
     return SideTitleWidget(
-      axisSide: meta.axisSide,
+      meta: meta,
       child: Text(text, style: style),
     );
   }
@@ -277,7 +369,7 @@ class BarChartSample4State extends State<BarChartSample4> {
       fontSize: 10,
     );
     return SideTitleWidget(
-      axisSide: meta.axisSide,
+      meta: meta,
       child: Text(
         meta.formattedValue,
         style: style,

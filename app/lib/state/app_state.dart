@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show ChangeNotifier, debugPrint, kDebugMode;
 import 'package:flutter_front_end/models/grocery_models.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 
@@ -69,7 +69,9 @@ class AppState extends ChangeNotifier {
       }
       notifyListeners();
     } catch (error) {
-      debugPrint('Could not load saved stores for user $userId: $error');
+      if (kDebugMode) {
+        debugPrint('Could not load saved stores for user $userId: $error');
+      }
     }
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_front_end/config/app_routes.dart';
 import 'package:flutter_front_end/models/grocery_models.dart';
@@ -21,6 +23,7 @@ class _StoreSearchState extends State<StoreSearch> {
   bool _initialized = false;
   bool showSelectedOnly = false;
   bool _savingStores = false;
+  Timer? _debounce;
 
   @override
   void didChangeDependencies() {
@@ -34,6 +37,7 @@ class _StoreSearchState extends State<StoreSearch> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     storeSearchController.dispose();
     super.dispose();
   }
@@ -48,8 +52,11 @@ class _StoreSearchState extends State<StoreSearch> {
   }
 
   void _searchStores(String text) {
-    setState(() {
-      _storesFuture = context.read<GroceryApi>().fetchStores(text);
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      setState(() {
+        _storesFuture = context.read<GroceryApi>().fetchStores(text);
+      });
     });
   }
 
@@ -80,7 +87,7 @@ class _StoreSearchState extends State<StoreSearch> {
         return;
       }
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not save stores: $error')),
+        const SnackBar(content: Text('Could not save stores. Please try again.')),
       );
     } finally {
       if (mounted) {
@@ -117,21 +124,25 @@ class _StoreSearchState extends State<StoreSearch> {
           width: double.infinity,
           height: 40,
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(5),
-          ),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
           child: TextFormField(
             keyboardType: TextInputType.text,
             onChanged: _searchStores,
             controller: storeSearchController,
             decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF71717A)),
               suffixIcon: IconButton(
-                icon: const Icon(Icons.clear),
+                icon: const Icon(Icons.clear, color: Color(0xFF71717A)),
                 onPressed: _clearSearch,
               ),
-              hintText: 'Search For Stores By Zipcode or Address!',
+              hintText: 'Search stores by zipcode or address',
+              filled: true,
+              fillColor: Colors.white,
               border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
             ),
           ),
         ),
@@ -217,11 +228,11 @@ class _StoreSearchState extends State<StoreSearch> {
           Container(
             width: double.infinity,
             margin: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE4E4E7)),
             ),
             child: Row(
               children: [
@@ -296,10 +307,18 @@ class _StoreSearchState extends State<StoreSearch> {
                       final company = _companyForStore(companies, store);
                       return Card(
                         color: isSaved
-                            ? Colors.lightBlue
-                            : const Color.fromARGB(255, 144, 220, 255),
+                            ? const Color(0xFFEEF2FF)
+                            : Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(
+                            color: isSaved
+                                ? const Color(0xFFC7D2FE)
+                                : const Color(0xFFE4E4E7),
+                          ),
+                        ),
                         child: InkWell(
-                          splashColor: Colors.blue.withAlpha(30),
+                          splashColor: const Color(0xFF6366F1).withAlpha(20),
                           onTap: () {
                             context.read<AppState>().toggleStore(store);
                           },
@@ -314,9 +333,9 @@ class _StoreSearchState extends State<StoreSearch> {
                                   const Align(
                                     alignment: Alignment.topRight,
                                     child: Icon(
-                                      Icons.bookmark,
+                                      Icons.check_circle,
                                       size: 18,
-                                      color: Colors.indigo,
+                                      color: Color(0xFF4F46E5),
                                     ),
                                   ),
                                 Column(

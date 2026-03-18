@@ -64,9 +64,7 @@ def _staple_heuristic_score(
         total = 0.0
         for nw, bw in profiles:
             name_sim = _jaccard(cand_name_words, nw)
-            brand_sim = (
-                1.0 if cand_brand_words and cand_brand_words == bw else 0.0
-            )
+            brand_sim = _jaccard(cand_brand_words, bw)
             total += 0.7 * name_sim + 0.3 * brand_sim
         return total / len(profiles)
 
@@ -218,8 +216,7 @@ async def get_judgement_candidates(
             products = (
                 sess.query(models.Product)
                 .filter(models.Product.name.ilike(f"%{staple_name}%"))
-                .order_by(func.random())
-                .limit(count * 10)
+                .limit(400)
                 .all()
             )
 
@@ -427,7 +424,7 @@ async def get_staple_heuristics(
         products = (
             sess.query(models.Product)
             .filter(models.Product.name.ilike(f"%{staple_name}%"))
-            .limit(200)
+            .limit(400)
             .all()
         )
 

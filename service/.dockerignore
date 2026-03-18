@@ -1,0 +1,12 @@
+# Exclude files that shouldn't be in the Docker image
+__pycache__/
+*.py[cod]
+.env
+.venv/
+app.db
+app.db-journal
+app.db-shm
+app.db-wal
+static/products/
+*.csv
+.git/
