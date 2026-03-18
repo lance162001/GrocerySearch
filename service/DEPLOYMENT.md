@@ -1,9 +1,10 @@
-# GrocerySearch Backend Deployment (API + Scraper)
+# GrocerySearch Full-Stack Deployment (Frontend + API + Scraper)
 
-This runbook deploys the backend on a single Linux VM using Docker Compose.
+This runbook deploys the Flutter web frontend and Python backend on a single Linux VM using Docker Compose.
 
 ## What This Deployment Includes
 
+- Flutter web frontend service (`frontend`) on port `3000`
 - FastAPI API service (`api`) on port `8000`
 - PostgreSQL service (`db`) with persistent storage
 - Shared static volume for scraped assets (`/app/static`)
@@ -43,21 +44,38 @@ Minimum required values:
 
 - `POSTGRES_PASSWORD`
 - `ALLOWED_ORIGINS`
+- `FRONTEND_USE_LOCAL_BACKEND=true`
 - `ALGOLIA_API_KEY`
 - `SMTP_USERNAME`, `SMTP_PASSWORD`, `EMAIL_RECEIVER` (if you want summary emails)
 
-## 3) Build and Start API + Database
+Set `ALLOWED_ORIGINS` to include the frontend origin, for example:
+
+```env
+ALLOWED_ORIGINS=http://your-server-ip:3000,https://yourdomain.com
+```
+
+## 3) Build and Start Frontend + API + Database
 
 ```bash
 cd /opt/grocerysearch/service
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build db api
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build db api frontend
 ```
+
+The first frontend build can take several minutes because Flutter dependencies
+and web artifacts are compiled inside the image.
 
 Check health:
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.prod ps
 curl -fsS http://127.0.0.1:${API_PORT:-8000}/
+curl -I http://127.0.0.1:${FRONTEND_PORT:-3000}/
+```
+
+Open the app:
+
+```text
+http://<server-ip>:${FRONTEND_PORT}
 ```
 
 ## 4) Run Jobs Manually (Smoke Test)
@@ -129,8 +147,8 @@ cd /opt/grocerysearch
 # pull latest code
 git pull
 cd service
-# rebuild and restart api/db
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build db api
+# rebuild and restart frontend/api/db
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build db api frontend
 ```
 
 ## 8) Rollback (Quick)
@@ -141,11 +159,13 @@ If a new image fails, check logs and redeploy previous git commit:
 cd /opt/grocerysearch
 git checkout <known-good-commit>
 cd service
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build db api
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build db api frontend
 ```
 
 ## Notes
 
 - The API container command is now configurable with `UVICORN_WORKERS`.
+- Frontend is built with Flutter `--dart-define` values from `.env.prod`.
+- `FRONTEND_USE_LOCAL_BACKEND=true` keeps frontend API calls pointed at this deployment.
 - Scraper scheduling is intentionally externalized (systemd timer) to avoid duplicate in-process schedulers.
 - If you later scale beyond one VM, migrate static assets to object storage and move to managed database/services.

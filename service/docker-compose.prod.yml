@@ -38,6 +38,20 @@ services:
     volumes:
       - static_data:/app/static
 
+  frontend:
+    build:
+      context: ../app
+      dockerfile: Dockerfile.web
+      args:
+        USE_LOCAL_BACKEND: ${FRONTEND_USE_LOCAL_BACKEND:-true}
+        LOCAL_BACKEND_HOST: ${LOCAL_BACKEND_HOST:-}
+        LOCAL_BACKEND_PORT: ${LOCAL_BACKEND_PORT:-8000}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+
   scraper:
     build:
       context: .

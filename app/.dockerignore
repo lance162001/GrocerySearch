@@ -1,0 +1,22 @@
+# Flutter build outputs
+build/
+.dart_tool/
+
+# VCS and editor
+.git/
+.idea/
+.vscode/
+
+# Local env and caches
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+
+# Platform build artifacts
+android/.gradle/
+android/app/build/
+ios/Pods/
+ios/.symlinks/
+linux/build/
+macos/Pods/
+windows/build/

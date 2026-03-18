@@ -3,7 +3,7 @@ Data is served over [FastAPI](https://fastapi.tiangolo.com/), an ASGI framework 
 
 ## Deployment
 
-Production deployment (API + scraper + scheduled jobs) is documented in
+Production deployment (frontend + API + scraper + scheduled jobs) is documented in
 `service/DEPLOYMENT.md`.
 
 ## Installation
