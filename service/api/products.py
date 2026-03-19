@@ -1,12 +1,13 @@
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 import random
 import re
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from fastapi_pagination import Page, add_pagination
 from fastapi_pagination.ext.sqlalchemy import paginate
-from sqlalchemy import select, func, and_, case
+from sqlalchemy import or_, select, func, and_, case
 
 from . import get_db
 import models
@@ -115,6 +116,12 @@ def _load_staple_labels(sess: Session, staple_name: str):
             negatives.append(profile)
     return positives, negatives
 
+
+# ---------------------------------------------------------------------------
+# In-process TTL cache for staple heuristics (expensive to recompute)
+# ---------------------------------------------------------------------------
+_heuristics_cache: Optional[Tuple[float, List[schemas.StapleHeuristic]]] = None
+_HEURISTICS_TTL = 3600.0  # recompute at most once per hour
 
 product_router = APIRouter()
 
@@ -403,6 +410,68 @@ async def get_staple_judgements(
 
 
 @product_router.get(
+    "/products/staples",
+    response_model=Dict[str, List[schemas.Product_Details]],
+)
+async def get_staple_products_bulk(
+    store_ids: List[int] = Query(default=[]),
+    sess: Session = Depends(get_db),
+):
+    """Return all staple products in a single DB query, grouped by staple name.
+
+    Replaces 20 individual /stores/product_search round-trips from the Flutter
+    staples screen with one query, cutting load on the prod VM significantly.
+    """
+    result: Dict[str, List[schemas.Product_Details]] = {name: [] for name in _STAPLE_NAMES}
+    if not store_ids:
+        return result
+
+    s = (
+        select(models.Product, models.Product_Instance)
+        .where(models.Product.id == models.Product_Instance.product_id)
+        .where(models.Product_Instance.store_id.in_(store_ids))
+        .where(
+            or_(*(models.Product.name.ilike(f"%{name}%") for name in _STAPLE_NAMES))
+        )
+        .order_by(func.length(models.Product.name))
+        .limit(3000)
+    )
+    rows = sess.execute(s).all()
+
+    for p, pi in rows:
+        product_detail = schemas.Product_Details(
+            Product=schemas.Product(
+                id=p.id,
+                brand=str(p.brand or ""),
+                name=str(p.name or ""),
+                company_id=int(p.company_id),
+                picture_url=str(p.picture_url or ""),
+                variation_group=p.variation_group,
+                tags=[schemas.Tag_Instance(tag_id=int(t.tag_id)) for t in (p.tags or [])],
+            ),
+            Product_Instance=schemas.Product_Instance(
+                store_id=int(pi.store_id),
+                price_points=[
+                    schemas.PricePoint(
+                        base_price=str(pp.base_price or "0"),
+                        sale_price=pp.sale_price,
+                        member_price=pp.member_price,
+                        size=pp.size,
+                        created_at=pp.created_at,
+                    )
+                    for pp in (pi.price_points or [])
+                ],
+            ),
+        )
+        p_name_lower = (p.name or "").lower()
+        for staple_name in _STAPLE_NAMES:
+            if staple_name in p_name_lower:
+                result[staple_name].append(product_detail)
+
+    return result
+
+
+@product_router.get(
     "/products/staple-heuristics",
     response_model=List[schemas.StapleHeuristic],
 )
@@ -411,10 +480,14 @@ async def get_staple_heuristics(
 ):
     """Heuristic staple scores inferred from existing user labels.
 
-    For each staple name that has labelled products, scores other matching
-    products by their similarity to confirmed positives and distance from
-    confirmed negatives.
+    Results are cached in-process for up to one hour to avoid re-running
+    the expensive per-staple DB + Python scoring on every page load.
     """
+    global _heuristics_cache
+    now = time.monotonic()
+    if _heuristics_cache is not None and now - _heuristics_cache[0] < _HEURISTICS_TTL:
+        return _heuristics_cache[1]
+
     results: List[schemas.StapleHeuristic] = []
     for staple_name in _STAPLE_NAMES:
         pos_profiles, neg_profiles = _load_staple_labels(sess, staple_name)
@@ -443,6 +516,7 @@ async def get_staple_heuristics(
                 )
             )
 
+    _heuristics_cache = (now, results)
     return results
 
 

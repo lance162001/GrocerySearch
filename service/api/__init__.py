@@ -7,44 +7,50 @@ from models.base import Base, engine
 Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(bind=engine)
 
-# Ad-hoc migration: add firebase_uid to users if it doesn't exist yet.
-with engine.connect() as _conn:
-    try:
-        _conn.execute(text("ALTER TABLE users ADD COLUMN firebase_uid VARCHAR(128)"))
-        _conn.commit()
-    except Exception:
-        pass  # column already exists
-
-# Ad-hoc migration: add staple_name to label_judgements if it doesn't exist yet.
-with engine.connect() as _conn:
-    try:
-        _conn.execute(text("ALTER TABLE label_judgements ADD COLUMN staple_name VARCHAR(50)"))
-        _conn.commit()
-    except Exception:
-        pass  # column already exists
-
-# Ad-hoc migration: add variation_group to products if it doesn't exist yet.
-with engine.connect() as _conn:
-    try:
-        _conn.execute(text("ALTER TABLE products ADD COLUMN variation_group VARCHAR(200)"))
-        _conn.commit()
-    except Exception:
-        pass  # column already exists
-
-try:
+# Ad-hoc migrations: add columns if they don't exist yet.
+# PostgreSQL 9.6+ supports ADD COLUMN IF NOT EXISTS; SQLite (< 3.37) does not,
+# so we try the IF NOT EXISTS form first and fall back to a bare ALTER TABLE
+# (whose failure when the column already exists we then swallow).
+_migrations = [
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS firebase_uid VARCHAR(128)",
+    "ALTER TABLE label_judgements ADD COLUMN IF NOT EXISTS staple_name VARCHAR(50)",
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS variation_group VARCHAR(200)",
+    "ALTER TABLE label_judgements ADD COLUMN IF NOT EXISTS flavour VARCHAR(50)",
+]
+for _stmt in _migrations:
     with engine.connect() as _conn:
-        _conn.execute(text("CREATE INDEX IF NOT EXISTS ix_products_variation_group ON products (variation_group)"))
-        _conn.commit()
-except Exception:
-    pass
+        try:
+            _conn.execute(text(_stmt))
+            _conn.commit()
+        except Exception:
+            # SQLite < 3.37 doesn't support IF NOT EXISTS; retry without it.
+            _bare = _stmt.replace(" IF NOT EXISTS", "")
+            with engine.connect() as _conn2:
+                try:
+                    _conn2.execute(text(_bare))
+                    _conn2.commit()
+                except Exception:
+                    pass  # column already exists
 
-# Ad-hoc migration: add flavour to label_judgements if it doesn't exist yet.
-with engine.connect() as _conn:
+_perf_indexes = [
+    # Needed for the variation-group lookup and staple-card deduplication.
+    "CREATE INDEX IF NOT EXISTS ix_products_variation_group ON products (variation_group)",
+    # Critical for the staples bulk query and every product name search.
+    "CREATE INDEX IF NOT EXISTS ix_products_name ON products (name)",
+    # Critical for store-scoped product lookups (staples, search, checkout).
+    "CREATE INDEX IF NOT EXISTS ix_product_instances_store_id ON product_instances (store_id)",
+    # Needed for the product → instance join in search queries.
+    "CREATE INDEX IF NOT EXISTS ix_product_instances_product_id ON product_instances (product_id)",
+    # Needed for _load_staple_labels and the heuristics endpoint.
+    "CREATE INDEX IF NOT EXISTS ix_lj_type_staple ON label_judgements (judgement_type, staple_name)",
+]
+for _idx_ddl in _perf_indexes:
     try:
-        _conn.execute(text("ALTER TABLE label_judgements ADD COLUMN flavour VARCHAR(50)"))
-        _conn.commit()
+        with engine.connect() as _conn:
+            _conn.execute(text(_idx_ddl))
+            _conn.commit()
     except Exception:
-        pass  # column already exists
+        pass
 
 # Ensure store_suggestions table exists (create_all handles it, but be safe).
 Base.metadata.create_all(engine)

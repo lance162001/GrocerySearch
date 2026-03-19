@@ -31,7 +31,7 @@ services:
       DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-20}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://yourdomain.com}
       DISABLE_DOCS: ${DISABLE_DOCS:-1}
-      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-4}
       UVICORN_PORT: 8000
     ports:
       - "${API_PORT:-8000}:8000"

@@ -276,19 +276,40 @@ class GroceryApi {
     List<int> storeIds,
     List<String> stapleNames,
   ) async {
-    final results = <String, List<Product>>{};
-    final futures = <String, Future<List<Product>>>{};
-    for (final name in stapleNames) {
-      futures[name] = fetchProducts(storeIds, search: name, size: 50);
+    if (storeIds.isEmpty) {
+      return {for (final name in stapleNames) name: []};
     }
-    for (final entry in futures.entries) {
-      try {
-        results[entry.key] = await entry.value;
-      } catch (_) {
-        results[entry.key] = [];
-      }
+
+    // One bulk request instead of 20 individual product_search calls.
+    // FastAPI parses repeated `store_ids` params as List[int].
+    final base = environment.uri('/products/staples');
+    final uri = base.replace(
+      queryParameters: {
+        'store_ids': storeIds.map((id) => '$id').toList(),
+      },
+    );
+
+    final response = await _client.get(uri, headers: jsonHeaders).timeout(
+          const Duration(seconds: 30),
+        );
+    if (response.statusCode != 200) {
+      throw Exception(
+          'Failed to load staple products: ${response.statusCode}');
     }
-    return results;
+
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final result = <String, List<Product>>{
+      for (final name in stapleNames) name: [],
+    };
+    for (final entry in decoded.entries) {
+      if (!result.containsKey(entry.key)) continue;
+      final items = entry.value as List<dynamic>;
+      result[entry.key] = items
+          .map((e) =>
+              Product.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return result;
   }
 
   List<dynamic> _extractItemsPage(dynamic json) {
