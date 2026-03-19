@@ -25,6 +25,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "autoheal=true"
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-grocerysearch}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-grocerysearch}}
       DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
@@ -38,6 +46,16 @@ services:
     volumes:
       - static_data:/app/static
 
+  autoheal:
+    image: willfarrell/autoheal:latest
+    restart: unless-stopped
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=15
+      - AUTOHEAL_START_PERIOD=30
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
   frontend:
     build:
       context: ../app
@@ -50,7 +68,8 @@ services:
         WEB_API_PATH_PREFIX: ${FRONTEND_WEB_API_PATH_PREFIX:-/api}
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
       - "${FRONTEND_PORT:-3000}:80"
 

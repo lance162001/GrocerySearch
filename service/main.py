@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 from api import router
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -24,6 +26,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/health", include_in_schema=False)
+async def health():
+    """Liveness + readiness probe: verifies the DB is reachable."""
+    from models.base import engine
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "ok"}
+    except Exception as exc:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "degraded", "detail": str(exc)},
+        )
+
 
 # Mount static files (e.g., logos saved to service/static/logos)
 static_dir = os.path.join(os.path.dirname(__file__), 'static')
