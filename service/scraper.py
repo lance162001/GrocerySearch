@@ -111,7 +111,28 @@ def ensure_schema() -> None:
     product_columns = {col["name"] for col in inspector.get_columns("products")}
     if "raw_name" not in product_columns:
         with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE products ADD COLUMN raw_name VARCHAR(150)"))
+            conn.execute(text("ALTER TABLE products ADD COLUMN raw_name VARCHAR(300)"))
+
+    # Widen varchar columns that were previously too narrow for real product data.
+    # PostgreSQL enforces column widths; SQLite does not, so this only matters in prod.
+    db_url = str(engine.url)
+    if "postgresql" in db_url:
+        col_type_map = {
+            col["name"]: str(col["type"]) for col in inspector.get_columns("products")
+        }
+        with engine.begin() as conn:
+            if "VARCHAR(100)" in col_type_map.get("name", "").upper() or \
+               "character varying(100)" in col_type_map.get("name", "").lower():
+                conn.execute(text("ALTER TABLE products ALTER COLUMN name TYPE VARCHAR(200)"))
+                logger.info("Migrated products.name to VARCHAR(200)")
+            if "VARCHAR(150)" in col_type_map.get("raw_name", "").upper() or \
+               "character varying(150)" in col_type_map.get("raw_name", "").lower():
+                conn.execute(text("ALTER TABLE products ALTER COLUMN raw_name TYPE VARCHAR(300)"))
+                logger.info("Migrated products.raw_name to VARCHAR(300)")
+            if "VARCHAR(255)" in col_type_map.get("picture_url", "").upper() or \
+               "character varying(255)" in col_type_map.get("picture_url", "").lower():
+                conn.execute(text("ALTER TABLE products ALTER COLUMN picture_url TYPE VARCHAR(500)"))
+                logger.info("Migrated products.picture_url to VARCHAR(500)")
 
 
 @schedule.repeat(schedule.every().day.at("10:30"))

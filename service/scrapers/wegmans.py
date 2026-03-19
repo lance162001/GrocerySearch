@@ -116,9 +116,21 @@ def scrape_wegmans(
 
     raw_products = _fetch_all_products(store_code)
 
+    skipped = 0
     for raw in raw_products:
-        _persist_product(raw, store_id, sess, tags, collector)
+        try:
+            _persist_product(raw, store_id, sess, tags, collector)
+        except Exception as exc:
+            sess.rollback()
+            skipped += 1
+            logger.warning(
+                "Wegmans: skipped product %r due to error: %s",
+                raw.get("name", "?")[:80],
+                exc,
+            )
 
+    if skipped:
+        logger.warning("Wegmans store %s: skipped %d products due to errors", store_code, skipped)
     sess.commit()
 
 

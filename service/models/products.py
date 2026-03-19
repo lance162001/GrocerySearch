@@ -15,11 +15,11 @@ class PricePoint(Base, BaseModel):
 
 class Product(Base,BaseModel):
     __tablename__ = 'products'
-    raw_name = Column(String(150))
-    name = Column(String(100))
+    raw_name = Column(String(300))
+    name = Column(String(200))
     brand = Column(String(100))
     company_id = Column(Integer, ForeignKey("companies.id"))
-    picture_url = Column(String(255))
+    picture_url = Column(String(500))
     variation_group = Column(String(200), nullable=True, index=True)
     tags = relationship('Tag_Instance', back_populates='product')
     

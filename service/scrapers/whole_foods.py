@@ -44,11 +44,24 @@ def scrape_whole_foods(
 
     slugs: set[str] = set()
 
+    skipped = 0
     for category in WF_CATEGORIES:
         raw_products = _fetch_category(store_code, category, slugs)
         for raw in raw_products:
-            _persist_product(raw, category, store_id, sess, tags, collector)
+            try:
+                _persist_product(raw, category, store_id, sess, tags, collector)
+            except Exception as exc:
+                sess.rollback()
+                skipped += 1
+                logger.warning(
+                    "WF: skipped product %r (category=%s) due to error: %s",
+                    raw.get("name", "?")[:80],
+                    category,
+                    exc,
+                )
 
+    if skipped:
+        logger.warning("WF store %s: skipped %d products due to errors", store_code, skipped)
     sess.commit()
 
 
