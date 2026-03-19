@@ -93,8 +93,8 @@ async def full_product_search(
     if search:
         s = s.where(
             or_(
-                models.Product.name.like(f"%{search}%"),
-                models.Product.brand.like(f"%{search}%"),
+                models.Product.name.ilike(f"%{search}%"),
+                models.Product.brand.ilike(f"%{search}%"),
                 models.Product.tags.any(
                     models.Tag_Instance.tag_id.in_(
                         select(models.Tag.id).where(
