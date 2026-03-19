@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrocerySearch Admin</title>
+<style>
+  :root { --bg: #0d1117; --card: #161b22; --border: #30363d; --text: #c9d1d9; --muted: #8b949e; --accent: #58a6ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); padding: 1rem; }
+  h1 { font-size: 1.5rem; margin-bottom: 1rem; color: var(--accent); }
+  h2 { font-size: 1.1rem; margin-bottom: .5rem; color: var(--accent); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
+  .card .label { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .card .value { font-size: 1.8rem; font-weight: 600; margin-top: .25rem; }
+  .status-ok { color: var(--green); }
+  .status-warn { color: var(--yellow); }
+  .status-err { color: var(--red); }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  th, td { text-align: left; padding: .5rem .75rem; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--card); }
+  tr:hover td { background: rgba(88,166,255,.05); }
+  .section { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; overflow-x: auto; }
+  .tabs { display: flex; gap: .5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .tab { padding: .4rem .8rem; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-size: .85rem; }
+  .tab.active { background: var(--accent); color: #000; border-color: var(--accent); }
+  .search-box { width: 100%; padding: .5rem .75rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); margin-bottom: .75rem; font-size: .85rem; }
+  .search-box:focus { outline: none; border-color: var(--accent); }
+  .pager { display: flex; gap: .5rem; align-items: center; margin-top: .75rem; justify-content: center; }
+  .pager button { padding: .3rem .7rem; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; }
+  .pager button:disabled { opacity: .4; cursor: default; }
+  .pager span { font-size: .85rem; color: var(--muted); }
+  .badge { display: inline-block; padding: .15rem .5rem; border-radius: 10px; font-size: .75rem; font-weight: 600; }
+  .badge-green { background: rgba(63,185,80,.15); color: var(--green); }
+  .badge-red { background: rgba(248,81,73,.15); color: var(--red); }
+  .badge-yellow { background: rgba(210,153,34,.15); color: var(--yellow); }
+  .mono { font-family: "SF Mono", "Fira Code", monospace; font-size: .8rem; }
+  #sql-input { width: 100%; min-height: 60px; padding: .5rem .75rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-family: "SF Mono", "Fira Code", monospace; font-size: .85rem; resize: vertical; }
+  #sql-input:focus { outline: none; border-color: var(--accent); }
+  .run-btn { padding: .4rem 1rem; border-radius: 6px; border: none; background: var(--accent); color: #000; font-weight: 600; cursor: pointer; margin-top: .5rem; }
+  .run-btn:hover { opacity: .9; }
+  .hint { font-size: .75rem; color: var(--muted); margin-top: .25rem; }
+  .err-msg { color: var(--red); font-size: .85rem; margin-top: .5rem; }
+  .updated { font-size: .75rem; color: var(--muted); text-align: right; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<h1>GrocerySearch Admin Dashboard</h1>
+
+<!-- Status cards -->
+<div class="grid" id="status-cards">
+  <div class="card"><div class="label">Loading…</div><div class="value">—</div></div>
+</div>
+
+<!-- Scraper status -->
+<div class="section" id="scraper-section">
+  <h2>Scraper Status</h2>
+  <div id="scraper-info">Loading…</div>
+</div>
+
+<!-- DB explorer tabs -->
+<div class="section">
+  <h2>Database Explorer</h2>
+  <div class="tabs" id="table-tabs"></div>
+  <input class="search-box" id="table-search" placeholder="Filter rows…" oninput="filterRows()">
+  <div id="table-view">Select a table above.</div>
+  <div class="pager" id="pager" style="display:none">
+    <button id="prev-btn" onclick="changePage(-1)">← Prev</button>
+    <span id="page-info"></span>
+    <button id="next-btn" onclick="changePage(1)">Next →</button>
+  </div>
+</div>
+
+<!-- SQL console -->
+<div class="section">
+  <h2>SQL Console <span class="badge badge-yellow">read-only</span></h2>
+  <textarea id="sql-input" placeholder="SELECT * FROM products LIMIT 10"></textarea>
+  <button class="run-btn" onclick="runSQL()">Run Query</button>
+  <p class="hint">Only SELECT statements are allowed. Press Ctrl+Enter to run.</p>
+  <div id="sql-error" class="err-msg"></div>
+  <div id="sql-result" style="margin-top:.75rem; overflow-x:auto;"></div>
+</div>
+
+<p class="updated" id="last-updated"></p>
+
+<script>
+const API = location.origin;
+let currentTable = null;
+let currentPage = 1;
+const PAGE_SIZE = 50;
+let allRows = [];
+let filteredRows = [];
+
+async function fetchJSON(path) {
+  const r = await fetch(API + path);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+async function loadDashboard() {
+  try {
+    const data = await fetchJSON('/admin/status');
+    renderStatus(data);
+    renderScraper(data.scraper);
+    renderTabs(data.tables);
+    document.getElementById('last-updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    document.getElementById('status-cards').innerHTML = '<div class="card"><div class="label">Error</div><div class="value status-err">' + e.message + '</div></div>';
+  }
+}
+
+function renderStatus(data) {
+  const db = data.db;
+  let html = '';
+  html += card('Database', db.type, 'status-ok');
+  html += card('DB Size', db.size_display, '');
+  for (const [name, count] of Object.entries(db.table_counts)) {
+    html += card(name, count.toLocaleString(), '');
+  }
+  document.getElementById('status-cards').innerHTML = html;
+}
+
+function card(label, value, cls) {
+  return '<div class="card"><div class="label">' + esc(label) + '</div><div class="value ' + cls + '">' + esc(String(value)) + '</div></div>';
+}
+
+function renderScraper(sc) {
+  if (!sc) { document.getElementById('scraper-info').textContent = 'No scraper info.'; return; }
+  let html = '<table><tr><th>Property</th><th>Value</th></tr>';
+  for (const [k, v] of Object.entries(sc)) {
+    html += '<tr><td>' + esc(k) + '</td><td class="mono">' + esc(String(v)) + '</td></tr>';
+  }
+  html += '</table>';
+  document.getElementById('scraper-info').innerHTML = html;
+}
+
+function renderTabs(tables) {
+  const container = document.getElementById('table-tabs');
+  container.innerHTML = tables.map(t =>
+    '<button class="tab" data-t="' + esc(t) + '" onclick="loadTable(\'' + esc(t) + '\')">' + esc(t) + '</button>'
+  ).join('');
+}
+
+async function loadTable(name) {
+  currentTable = name;
+  currentPage = 1;
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.t === name));
+  document.getElementById('table-view').innerHTML = 'Loading…';
+  document.getElementById('table-search').value = '';
+  try {
+    const data = await fetchJSON('/admin/table/' + encodeURIComponent(name) + '?limit=2000');
+    allRows = data.rows;
+    filteredRows = allRows;
+    renderTable(data.columns);
+  } catch (e) {
+    document.getElementById('table-view').innerHTML = '<span class="status-err">' + esc(e.message) + '</span>';
+  }
+}
+
+function renderTable(columns) {
+  if (!columns || columns.length === 0) { document.getElementById('table-view').innerHTML = 'Empty table.'; document.getElementById('pager').style.display='none'; return; }
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageRows = filteredRows.slice(start, start + PAGE_SIZE);
+  const totalPages = Math.ceil(filteredRows.length / PAGE_SIZE) || 1;
+
+  let html = '<table><tr>' + columns.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr>';
+  for (const row of pageRows) {
+    html += '<tr>' + columns.map(c => '<td class="mono">' + esc(String(row[c] ?? '')) + '</td>').join('') + '</tr>';
+  }
+  html += '</table>';
+  document.getElementById('table-view').innerHTML = html;
+
+  const pager = document.getElementById('pager');
+  pager.style.display = totalPages > 1 ? 'flex' : 'none';
+  document.getElementById('page-info').textContent = 'Page ' + currentPage + ' / ' + totalPages + ' (' + filteredRows.length + ' rows)';
+  document.getElementById('prev-btn').disabled = currentPage <= 1;
+  document.getElementById('next-btn').disabled = currentPage >= totalPages;
+  // remember columns for re-render
+  pager.dataset.cols = JSON.stringify(columns);
+}
+
+function changePage(delta) {
+  currentPage += delta;
+  renderTable(JSON.parse(document.getElementById('pager').dataset.cols));
+}
+
+function filterRows() {
+  const q = document.getElementById('table-search').value.toLowerCase();
+  if (!q) { filteredRows = allRows; } else {
+    filteredRows = allRows.filter(row => Object.values(row).some(v => String(v).toLowerCase().includes(q)));
+  }
+  currentPage = 1;
+  if (allRows.length > 0) renderTable(Object.keys(allRows[0]));
+}
+
+async function runSQL() {
+  const sql = document.getElementById('sql-input').value.trim();
+  if (!sql) return;
+  document.getElementById('sql-error').textContent = '';
+  document.getElementById('sql-result').innerHTML = 'Running…';
+  try {
+    const r = await fetch(API + '/admin/sql', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sql})
+    });
+    const data = await r.json();
+    if (!r.ok) { document.getElementById('sql-error').textContent = data.detail || 'Error'; document.getElementById('sql-result').innerHTML = ''; return; }
+    if (!data.columns.length) { document.getElementById('sql-result').innerHTML = '<span class="mono">Query returned no columns.</span>'; return; }
+    let html = '<table><tr>' + data.columns.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr>';
+    for (const row of data.rows) {
+      html += '<tr>' + data.columns.map(c => '<td class="mono">' + esc(String(row[c] ?? '')) + '</td>').join('') + '</tr>';
+    }
+    html += '</table><p class="hint">' + data.rows.length + ' rows returned</p>';
+    document.getElementById('sql-result').innerHTML = html;
+  } catch (e) {
+    document.getElementById('sql-error').textContent = e.message;
+    document.getElementById('sql-result').innerHTML = '';
+  }
+}
+
+document.getElementById('sql-input').addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); runSQL(); }
+});
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+loadDashboard();
+</script>
+</body>
+</html>

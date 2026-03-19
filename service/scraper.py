@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 
 import schedule
 from sqlalchemy import inspect, text
@@ -20,6 +22,14 @@ from scrapers.utils import setup_seed_data, load_existing_tags, compute_variatio
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
+
+_STATUS_FILE = Path(__file__).resolve().parent / ".scraper_status.json"
+
+
+def _write_status(status: str, **extra: object) -> None:
+    """Persist scraper status to a JSON file so the admin dashboard can read it."""
+    data = {"status": status, "updated_at": datetime.now().isoformat(), **extra}
+    _STATUS_FILE.write_text(json.dumps(data, default=str))
 
 
 def _new_session() -> Session:
@@ -98,6 +108,7 @@ def scheduled_job() -> None:
     collector = _new_collector()
     logger.info("Scraping started")
     start = datetime.now()
+    _write_status("running", started_at=start.isoformat())
 
     sess = _new_session()
     try:
@@ -139,9 +150,21 @@ def scheduled_job() -> None:
                 logger.warning("Email skipped in debug mode: %s", exc)
             else:
                 raise
+    except Exception as exc:
+        _write_status("error", started_at=start.isoformat(), error=str(exc))
+        raise
     finally:
         sess.close()
 
+    _write_status(
+        "idle",
+        last_run=start.isoformat(),
+        last_finished=datetime.now().isoformat(),
+        stores_scraped=len(stores),
+        new_products=len(collector["products"]),
+        new_instances=len(collector["product_instances"]),
+        new_price_points=len(collector["price_points"]),
+    )
     logger.info("Scraping finished")
 
 
