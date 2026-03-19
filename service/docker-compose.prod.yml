@@ -46,6 +46,8 @@ services:
         USE_LOCAL_BACKEND: ${FRONTEND_USE_LOCAL_BACKEND:-true}
         LOCAL_BACKEND_HOST: ${LOCAL_BACKEND_HOST:-}
         LOCAL_BACKEND_PORT: ${LOCAL_BACKEND_PORT:-8000}
+        WEB_USE_SAME_ORIGIN_API: ${FRONTEND_WEB_USE_SAME_ORIGIN_API:-true}
+        WEB_API_PATH_PREFIX: ${FRONTEND_WEB_API_PATH_PREFIX:-/api}
     restart: unless-stopped
     depends_on:
       - api
@@ -53,6 +55,27 @@ services:
       - "${FRONTEND_PORT:-3000}:80"
 
   scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-grocerysearch}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-grocerysearch}}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-20}
+      ALGOLIA_APP_ID: ${ALGOLIA_APP_ID:-QGPPR19V8V}
+      ALGOLIA_API_KEY: ${ALGOLIA_API_KEY:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAIL_RECEIVER: ${EMAIL_RECEIVER:-}
+    command: ["python", "scraper.py", "--run-on-start"]
+    volumes:
+      - static_data:/app/static
+
+  scraper_once:
     build:
       context: .
       dockerfile: Dockerfile
@@ -70,7 +93,7 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_RECEIVER: ${EMAIL_RECEIVER:-}
-    command: ["python", "scraper.py", "--debug"]
+    command: ["python", "scraper.py", "--run-once"]
     volumes:
       - static_data:/app/static
 

@@ -7,8 +7,9 @@ This runbook deploys the Flutter web frontend and Python backend on a single Lin
 - Flutter web frontend service (`frontend`) on port `3000`
 - FastAPI API service (`api`) on port `8000`
 - PostgreSQL service (`db`) with persistent storage
+- Continuous scraper service (`scraper`) in non-debug mode
 - Shared static volume for scraped assets (`/app/static`)
-- One-shot scraper job (`scraper`) for scheduled data refreshes
+- One-shot scraper job (`scraper_once`) for manual backfills
 - One-shot logo refresh job (`logo_refresh`) for `/static/logos/*`
 
 ## 1) Prepare Host
@@ -45,6 +46,7 @@ Minimum required values:
 - `POSTGRES_PASSWORD`
 - `ALLOWED_ORIGINS`
 - `FRONTEND_USE_LOCAL_BACKEND=true`
+- `FRONTEND_WEB_USE_SAME_ORIGIN_API=true`
 - `ALGOLIA_API_KEY`
 - `SMTP_USERNAME`, `SMTP_PASSWORD`, `EMAIL_RECEIVER` (if you want summary emails)
 
@@ -59,6 +61,15 @@ ALLOWED_ORIGINS=http://your-server-ip:3000,https://yourdomain.com
 ```bash
 cd /opt/grocerysearch/service
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build db api frontend
+
+# include scraper so the first scrape runs immediately and schedule loop stays active
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build scraper
+```
+
+Or as one command:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build db api frontend scraper
 ```
 
 The first frontend build can take several minutes because Flutter dependencies
@@ -76,6 +87,12 @@ Open the app:
 
 ```text
 http://<server-ip>:${FRONTEND_PORT}
+```
+
+Check scraper logs (first run can take a while):
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod logs -f scraper
 ```
 
 ## 4) Run Jobs Manually (Smoke Test)
@@ -96,16 +113,26 @@ cd /opt/grocerysearch/service
 
 The job runner uses `flock` locks to prevent overlapping runs.
 
+This manual scrape path uses `scraper_once` with `--run-once` (non-debug).
+
 ## 5) Enable systemd Timers
 
 The provided unit files assume the repo is at `/opt/grocerysearch/service`.
 If your path is different, edit `ExecStart` and `WorkingDirectory` first.
 
+The continuous `scraper` service already handles daily scheduling, so do not
+enable the scraper timer in this mode (it would duplicate runs). Use only the
+logo timer unless you intentionally switch off the continuous scraper service.
+
+If you enabled the scraper timer in an earlier setup, disable it:
+
+```bash
+sudo systemctl disable --now grocerysearch-scraper.timer || true
+```
+
 Install units:
 
 ```bash
-sudo cp deploy/systemd/grocerysearch-scraper.service /etc/systemd/system/
-sudo cp deploy/systemd/grocerysearch-scraper.timer /etc/systemd/system/
 sudo cp deploy/systemd/grocerysearch-logos.service /etc/systemd/system/
 sudo cp deploy/systemd/grocerysearch-logos.timer /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -114,20 +141,18 @@ sudo systemctl daemon-reload
 Enable and start timers:
 
 ```bash
-sudo systemctl enable --now grocerysearch-scraper.timer
 sudo systemctl enable --now grocerysearch-logos.timer
 ```
 
 Inspect next run times:
 
 ```bash
-systemctl list-timers | grep grocerysearch
+systemctl list-timers | grep logos
 ```
 
 View job logs:
 
 ```bash
-journalctl -u grocerysearch-scraper.service -n 200 --no-pager
 journalctl -u grocerysearch-logos.service -n 200 --no-pager
 ```
 
@@ -147,8 +172,8 @@ cd /opt/grocerysearch
 # pull latest code
 git pull
 cd service
-# rebuild and restart frontend/api/db
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build db api frontend
+# rebuild and restart frontend/api/scraper/db
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build db api frontend scraper
 ```
 
 ## 8) Rollback (Quick)
@@ -159,7 +184,7 @@ If a new image fails, check logs and redeploy previous git commit:
 cd /opt/grocerysearch
 git checkout <known-good-commit>
 cd service
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build db api frontend
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build db api frontend scraper
 ```
 
 ## Notes
@@ -167,5 +192,6 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build db 
 - The API container command is now configurable with `UVICORN_WORKERS`.
 - Frontend is built with Flutter `--dart-define` values from `.env.prod`.
 - `FRONTEND_USE_LOCAL_BACKEND=true` keeps frontend API calls pointed at this deployment.
-- Scraper scheduling is intentionally externalized (systemd timer) to avoid duplicate in-process schedulers.
+- `FRONTEND_WEB_USE_SAME_ORIGIN_API=true` (default) makes web clients call `/api/*` on the frontend origin, and nginx proxies those requests to the internal `api` container.
+- Production scraper runs as a service in non-debug mode (`--run-on-start`), then continues normal schedule loop.
 - If you later scale beyond one VM, migrate static assets to object storage and move to managed database/services.

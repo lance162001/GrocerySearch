@@ -6,6 +6,13 @@ class AppEnvironment {
   static const String _remoteHostname = 'asktheinter.net';
   static const String _remotePort = '23451';
   static const String _defaultLocalPort = '8000';
+  static const bool _webUseSameOriginApi = bool.fromEnvironment(
+    'WEB_USE_SAME_ORIGIN_API',
+  );
+  static const String _webApiPathPrefix = String.fromEnvironment(
+    'WEB_API_PATH_PREFIX',
+    defaultValue: '',
+  );
   static const String _localHostnameOverride =
       String.fromEnvironment('LOCAL_BACKEND_HOST', defaultValue: '');
   static const String _localPortOverride =
@@ -17,6 +24,31 @@ class AppEnvironment {
   static const AppEnvironment remote = AppEnvironment._(useLocalBackend: false);
 
   final bool useLocalBackend;
+
+  bool get _useSameOriginWebApi => useLocalBackend && kIsWeb && _webUseSameOriginApi;
+
+  String get _normalizedWebApiPrefix {
+    final trimmed = _webApiPathPrefix.trim();
+    if (trimmed.isEmpty || trimmed == '/') {
+      return '';
+    }
+    var prefix = trimmed;
+    if (!prefix.startsWith('/')) {
+      prefix = '/$prefix';
+    }
+    while (prefix.endsWith('/')) {
+      prefix = prefix.substring(0, prefix.length - 1);
+    }
+    return prefix;
+  }
+
+  String _joinPath(String basePrefix, String path) {
+    final normalizedPath = path.startsWith('/') ? path : '/$path';
+    if (basePrefix.isEmpty) {
+      return normalizedPath;
+    }
+    return '$basePrefix$normalizedPath';
+  }
 
   String get hostname {
     if (!useLocalBackend) {
@@ -41,12 +73,21 @@ class AppEnvironment {
     if (!useLocalBackend) {
       return Uri.https('$hostname:$port', path, queryParameters);
     }
+    if (_useSameOriginWebApi) {
+      return Uri(
+        path: _joinPath(_normalizedWebApiPrefix, path),
+        queryParameters: queryParameters,
+      );
+    }
     return Uri.http('$hostname:$port', path, queryParameters);
   }
 
   String resolveAssetUrl(String rawUrl) {
     if (rawUrl.startsWith('http')) {
       return rawUrl;
+    }
+    if (_useSameOriginWebApi) {
+      return _joinPath(_normalizedWebApiPrefix, rawUrl);
     }
     final scheme = useLocalBackend ? 'http' : 'https';
     if (rawUrl.startsWith('/')) {

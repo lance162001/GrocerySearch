@@ -10,12 +10,16 @@ COPY . .
 ARG USE_LOCAL_BACKEND=true
 ARG LOCAL_BACKEND_HOST=
 ARG LOCAL_BACKEND_PORT=8000
+ARG WEB_USE_SAME_ORIGIN_API=true
+ARG WEB_API_PATH_PREFIX=/api
 
 RUN flutter config --enable-web && \
     flutter build web --release \
       --dart-define=USE_LOCAL_BACKEND=${USE_LOCAL_BACKEND} \
       --dart-define=LOCAL_BACKEND_HOST=${LOCAL_BACKEND_HOST} \
-      --dart-define=LOCAL_BACKEND_PORT=${LOCAL_BACKEND_PORT}
+      --dart-define=LOCAL_BACKEND_PORT=${LOCAL_BACKEND_PORT} \
+      --dart-define=WEB_USE_SAME_ORIGIN_API=${WEB_USE_SAME_ORIGIN_API} \
+      --dart-define=WEB_API_PATH_PREFIX=${WEB_API_PATH_PREFIX}
 
 FROM nginx:1.27-alpine
 

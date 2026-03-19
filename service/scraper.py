@@ -163,6 +163,14 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--run-once", action="store_true",
+        help="Run one scrape pass and exit (no scheduler loop).",
+    )
+    parser.add_argument(
+        "--run-on-start", action="store_true",
+        help="Run one scrape pass immediately, then continue with the scheduler loop.",
+    )
+    parser.add_argument(
         "--verbose", "-v", action="store_true",
         help="Enable verbose output, including SQLAlchemy SQL logs.",
     )
@@ -171,6 +179,8 @@ def _parse_args() -> argparse.Namespace:
 
 args = _parse_args()
 debug = args.debug
+run_once = args.run_once
+run_on_start = args.run_on_start
 
 if args.verbose:
     engine.echo = True
@@ -188,12 +198,20 @@ if args.only:
     logger.info("Filtering to company ids: %s", only_ids)
 
 if __name__ == "__main__":
-    logger.info("Starting scraper (debug=%s, only=%s)", debug, only_ids)
+    logger.info(
+        "Starting scraper (debug=%s, run_once=%s, run_on_start=%s, only=%s)",
+        debug,
+        run_once,
+        run_on_start,
+        only_ids,
+    )
     ensure_schema()
 
-    if debug:
+    if debug or run_once:
         scheduled_job()
     else:
+        if run_on_start:
+            scheduled_job()
         while True:
             schedule.run_pending()
             time.sleep(1)

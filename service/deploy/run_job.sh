@@ -9,7 +9,7 @@ ENV_FILE="${ENV_FILE:-$SERVICE_DIR/.env.prod}"
 job="${1:-}"
 case "$job" in
   scrape)
-    compose_service="scraper"
+    compose_service="scraper_once"
     lock_file="/tmp/grocerysearch-scrape.lock"
     ;;
   logos)
