@@ -70,28 +70,76 @@ def _scrape_stores(stores: list, tags: dict[str, int], collector: dict,
     wg_stores = [s for s in stores if s.company_id == 3] if (only is None or 3 in only) else []
 
     def _run_wf():
+        logger.info("WF thread starting: %d store(s) to scrape", len(wf_stores))
         sess = _new_session()
         try:
             for store in wf_stores:
-                scrape_whole_foods(store.id, store.scraper_id, sess, tags, collector)
+                logger.info("WF: scraping store id=%s scraper_id=%s", store.id, store.scraper_id)
+                t0 = datetime.now()
+                try:
+                    scrape_whole_foods(store.id, store.scraper_id, sess, tags, collector)
+                    logger.info(
+                        "WF: finished store id=%s in %.1fs",
+                        store.id, (datetime.now() - t0).total_seconds(),
+                    )
+                except Exception:
+                    logger.error(
+                        "WF: store id=%s failed after %.1fs",
+                        store.id, (datetime.now() - t0).total_seconds(),
+                        exc_info=True,
+                    )
+                    raise
         finally:
             sess.close()
+        logger.info("WF thread done")
 
     def _run_tj():
+        logger.info("TJ thread starting: %d store(s) to scrape", len(tj_stores))
         sess = _new_session()
         try:
             for store in tj_stores:
-                scrape_trader_joes(store.id, store.scraper_id, sess, tags, collector)
+                logger.info("TJ: scraping store id=%s scraper_id=%s", store.id, store.scraper_id)
+                t0 = datetime.now()
+                try:
+                    scrape_trader_joes(store.id, store.scraper_id, sess, tags, collector)
+                    logger.info(
+                        "TJ: finished store id=%s in %.1fs",
+                        store.id, (datetime.now() - t0).total_seconds(),
+                    )
+                except Exception:
+                    logger.error(
+                        "TJ: store id=%s failed after %.1fs",
+                        store.id, (datetime.now() - t0).total_seconds(),
+                        exc_info=True,
+                    )
+                    raise
         finally:
             sess.close()
+        logger.info("TJ thread done")
 
     def _run_wg():
+        logger.info("WG thread starting: %d store(s) to scrape", len(wg_stores))
         sess = _new_session()
         try:
             for store in wg_stores:
-                scrape_wegmans(store.id, store.scraper_id, sess, tags, collector)
+                logger.info("WG: scraping store id=%s scraper_id=%s", store.id, store.scraper_id)
+                t0 = datetime.now()
+                try:
+                    scrape_wegmans(store.id, store.scraper_id, sess, tags, collector)
+                    logger.info(
+                        "WG: finished store id=%s in %.1fs",
+                        store.id, (datetime.now() - t0).total_seconds(),
+                    )
+                except Exception:
+                    logger.error(
+                        "WG: store id=%s failed after %.1fs",
+                        store.id, (datetime.now() - t0).total_seconds(),
+                        exc_info=True,
+                    )
+                    raise
         finally:
             sess.close()
+        logger.info("WG thread done")
 
     wf_thread = threading.Thread(target=_run_wf, name="wf-scraper")
     tj_thread = threading.Thread(target=_run_tj, name="tj-scraper")
@@ -150,12 +198,21 @@ def scheduled_job() -> None:
         else:
             tags = load_existing_tags(sess)
 
+        logger.info(
+            "Scraping %d store(s): %s",
+            len(stores),
+            ", ".join(f"id={s.id} company={s.company_id}" for s in stores),
+        )
         collector["stores"] = stores
         collector["companies"] = sess.query(Company).all()
 
         _scrape_stores(stores, tags, collector, only=only_ids)
-
-        # Assign variation groups based on brand + product-type suffix.
+        logger.info(
+            "All stores done — products=%d instances=%d price_points=%d",
+            len(collector["products"]),
+            len(collector["product_instances"]),
+            len(collector["price_points"]),
+        )
         variation_sess = _new_session()
         try:
             compute_variation_groups(variation_sess)
@@ -183,6 +240,7 @@ def scheduled_job() -> None:
             else:
                 raise
     except Exception as exc:
+        logger.error("Scraping run failed: %s", exc, exc_info=True)
         _write_status("error", started_at=start, error=str(exc)[:500])
         raise
     finally:

@@ -6,6 +6,8 @@ import os
 import re
 from pathlib import Path
 
+import psutil
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel as PydanticBase
@@ -40,7 +42,7 @@ def _read_scraper_status() -> dict | None:
 
 
 def _db_size_display() -> str:
-    """Human-readable DB file size (SQLite) or 'PostgreSQL'."""
+    """Human-readable DB file size (SQLite) or actual PostgreSQL size."""
     db_url = str(engine.url)
     if "sqlite" in db_url:
         if _DB_PATH.exists():
@@ -51,7 +53,15 @@ def _db_size_display() -> str:
                 size /= 1024
             return f"{size:.1f} TB"
         return "unknown"
-    return "PostgreSQL (remote)"
+    # PostgreSQL: query actual database size
+    try:
+        with engine.connect() as conn:
+            size = conn.execute(
+                text("SELECT pg_size_pretty(pg_database_size(current_database()))")
+            ).scalar()
+            return size or "unknown"
+    except Exception:
+        return "PostgreSQL (remote)"
 
 
 # ── Dashboard HTML ──────────────────────────────────────────────────
@@ -59,6 +69,56 @@ def _db_size_display() -> str:
 async def dashboard_page():
     html = (_TEMPLATE_DIR / "admin.html").read_text()
     return HTMLResponse(html)
+
+
+# ── Live system resource stats ──────────────────────────────────────
+_proc = psutil.Process(os.getpid())
+
+
+@admin_router.get("/system")
+async def system_stats():
+    """Live system resource stats for the API process — CPU, memory, disk."""
+    cpu = psutil.cpu_percent(interval=None)
+    mem = psutil.virtual_memory()
+    disk = psutil.disk_usage("/")
+    net = psutil.net_io_counters()
+
+    with _proc.oneshot():
+        proc_mem = _proc.memory_info()
+        proc_cpu = _proc.cpu_percent(interval=None)
+        proc_threads = _proc.num_threads()
+        proc_conns = len(_proc.net_connections(kind="inet"))
+
+    return {
+        "cpu": {
+            "percent": cpu,
+            "cores": psutil.cpu_count(logical=False),
+            "logical_cores": psutil.cpu_count(logical=True),
+        },
+        "memory": {
+            "total_mb": round(mem.total / 1024 ** 2),
+            "used_mb": round(mem.used / 1024 ** 2),
+            "available_mb": round(mem.available / 1024 ** 2),
+            "percent": mem.percent,
+        },
+        "disk": {
+            "total_gb": round(disk.total / 1024 ** 3, 1),
+            "used_gb": round(disk.used / 1024 ** 3, 1),
+            "free_gb": round(disk.free / 1024 ** 3, 1),
+            "percent": disk.percent,
+        },
+        "network": {
+            "bytes_sent_mb": round(net.bytes_sent / 1024 ** 2, 1),
+            "bytes_recv_mb": round(net.bytes_recv / 1024 ** 2, 1),
+        },
+        "process": {
+            "pid": _proc.pid,
+            "rss_mb": round(proc_mem.rss / 1024 ** 2, 1),
+            "cpu_percent": proc_cpu,
+            "threads": proc_threads,
+            "open_connections": proc_conns,
+        },
+    }
 
 
 # ── Status JSON ─────────────────────────────────────────────────────

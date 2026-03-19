@@ -45,6 +45,18 @@
   .updated { font-size: .75rem; color: var(--muted); text-align: right; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
+  .res-bar-wrap { background: var(--border); border-radius: 4px; height: 8px; overflow: hidden; margin-top: .35rem; }
+  .res-bar { height: 100%; border-radius: 4px; transition: width .4s ease; }
+  .res-bar-ok { background: var(--green); }
+  .res-bar-warn { background: var(--yellow); }
+  .res-bar-err { background: var(--red); }
+  .sys-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .75rem; }
+  .sys-card { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: .6rem .85rem; }
+  .sys-card .sc-label { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .sys-card .sc-value { font-size: 1.15rem; font-weight: 600; margin-top: .1rem; }
+  .sys-card .sc-sub { font-size: .75rem; color: var(--muted); margin-top: .1rem; }
+  .pulse { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: .4rem; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 </style>
 </head>
 <body>
@@ -60,6 +72,12 @@
 <div class="section" id="scraper-section">
   <h2>Scraper Status</h2>
   <div id="scraper-info">Loading…</div>
+</div>
+
+<!-- System resources -->
+<div class="section">
+  <h2><span class="pulse"></span>System Resources <span style="font-size:.75rem;font-weight:400;color:var(--muted);">live · updates every 5s</span></h2>
+  <div class="sys-grid" id="sys-resources">Loading…</div>
 </div>
 
 <!-- DB explorer tabs -->
@@ -130,12 +148,52 @@ function card(label, value, cls) {
 
 function renderScraper(sc) {
   if (!sc) { document.getElementById('scraper-info').textContent = 'No scraper info.'; return; }
-  let html = '<table><tr><th>Property</th><th>Value</th></tr>';
-  for (const [k, v] of Object.entries(sc)) {
-    html += '<tr><td>' + esc(k) + '</td><td class="mono">' + esc(String(v)) + '</td></tr>';
+
+  const status = sc.status || 'unknown';
+  const statusClass = status === 'idle' ? 'badge-green' : status === 'running' ? 'badge-yellow' : status === 'error' ? 'badge-red' : '';
+
+  let html = '<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;">';
+  html += '<span class="badge ' + statusClass + '" style="font-size:.95rem;padding:.3rem .9rem;">' + esc(status.toUpperCase()) + '</span>';
+  if (sc.updated_at) html += '<span style="color:var(--muted);font-size:.85rem">Last updated: ' + fmtDate(sc.updated_at) + '</span>';
+  html += '</div>';
+
+  if (sc.error) {
+    html += '<div style="background:rgba(248,81,73,.1);border:1px solid var(--red);border-radius:6px;padding:.75rem;margin-bottom:1rem;color:var(--red);word-break:break-word;">';
+    html += '<strong style="display:block;margin-bottom:.25rem;">Error</strong><span class="mono">' + esc(sc.error) + '</span>';
+    html += '</div>';
   }
-  html += '</table>';
+
+  const timingFields = ['started_at', 'last_finished'];
+  const timingLabels = { started_at: 'Started', last_finished: 'Last Finished' };
+  const timingItems = timingFields.filter(f => sc[f]);
+  if (timingItems.length) {
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.75rem;margin-bottom:1rem;">';
+    for (const f of timingItems) html += scraperCard(timingLabels[f], fmtDate(sc[f]));
+    html += '</div>';
+  }
+
+  const countFields = ['stores_scraped', 'new_products', 'new_instances', 'new_price_points'];
+  const countLabels = { stores_scraped: 'Stores Scraped', new_products: 'New Products', new_instances: 'New Instances', new_price_points: 'New Price Points' };
+  const countItems = countFields.filter(f => sc[f] != null);
+  if (countItems.length) {
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;">';
+    for (const f of countItems) html += scraperCard(countLabels[f], sc[f].toLocaleString());
+    html += '</div>';
+  }
+
   document.getElementById('scraper-info').innerHTML = html;
+}
+
+function scraperCard(label, value) {
+  return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;">'
+    + '<div style="font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">' + esc(label) + '</div>'
+    + '<div style="font-size:1.2rem;font-weight:600;margin-top:.15rem;">' + esc(String(value)) + '</div>'
+    + '</div>';
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleString(); } catch { return iso; }
 }
 
 function renderTabs(tables) {
@@ -227,7 +285,40 @@ document.getElementById('sql-input').addEventListener('keydown', e => {
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
+function barColor(pct) {
+  return pct >= 90 ? 'res-bar-err' : pct >= 70 ? 'res-bar-warn' : 'res-bar-ok';
+}
+function resBar(pct) {
+  const cls = barColor(pct);
+  return `<div class="res-bar-wrap"><div class="res-bar ${cls}" style="width:${pct}%"></div></div>`;
+}
+function sysCard(label, value, sub, barPct) {
+  const bar = barPct != null ? resBar(barPct) : '';
+  return `<div class="sys-card"><div class="sc-label">${esc(label)}</div>`
+    + `<div class="sc-value">${esc(String(value))}</div>`
+    + (sub ? `<div class="sc-sub">${esc(sub)}</div>` : '')
+    + bar + '</div>';
+}
+
+async function loadSystemStats() {
+  try {
+    const s = await fetchJSON('/admin/system');
+    let html = '';
+    html += sysCard('CPU', s.cpu.percent.toFixed(1) + '%', `${s.cpu.cores} cores / ${s.cpu.logical_cores} logical`, s.cpu.percent);
+    html += sysCard('Memory', s.memory.percent.toFixed(1) + '%', `${s.memory.used_mb.toLocaleString()} / ${s.memory.total_mb.toLocaleString()} MB used`, s.memory.percent);
+    html += sysCard('Disk', s.disk.percent.toFixed(1) + '%', `${s.disk.used_gb} / ${s.disk.total_gb} GB used`, s.disk.percent);
+    html += sysCard('API Process RSS', s.process.rss_mb.toFixed(1) + ' MB', `PID ${s.process.pid} · ${s.process.threads} threads`, null);
+    html += sysCard('API Process CPU', s.process.cpu_percent.toFixed(1) + '%', `${s.process.open_connections} open connections`, s.process.cpu_percent);
+    html += sysCard('Network (cumulative)', `↑ ${s.network.bytes_sent_mb} MB`, `↓ ${s.network.bytes_recv_mb} MB recv`, null);
+    document.getElementById('sys-resources').innerHTML = html;
+  } catch (e) {
+    document.getElementById('sys-resources').innerHTML = '<span class="status-err">Failed to load system stats: ' + esc(e.message) + '</span>';
+  }
+}
+
 loadDashboard();
+loadSystemStats();
+setInterval(loadSystemStats, 5000);
 </script>
 </body>
 </html>
