@@ -32,144 +32,7 @@ const List<String> _stapleNames = [
   'pepper',
 ];
 
-const int _minStapleItems = 8;
-
 String _formatPrice(double price) => '\$${price.toStringAsFixed(2)}';
-
-/// Confidence score for how well a product name matches a staple keyword.
-/// Lower is better (0 = exact match).
-double _stapleConfidence(Product product, String staple) {
-  final name = product.name.toLowerCase().trim();
-  final query = staple.toLowerCase().trim();
-
-  // Exact match.
-  if (name == query) return 0.0;
-
-  // Name is the staple with simple qualifiers (e.g. "whole milk").
-  final words = name.split(RegExp(r'\s+'));
-  final queryWords = query.split(RegExp(r'\s+'));
-  if (words.length <= queryWords.length + 1 && name.contains(query)) return 0.1;
-
-  // Name starts with the staple term.
-  if (name.startsWith(query)) return 0.2;
-
-  // Staple term starts a word boundary in the name.
-  final wordBoundary = RegExp(r'\b' + RegExp.escape(query) + r'\b');
-  if (wordBoundary.hasMatch(name)) {
-    // Penalize by extra word count — more words = less confident.
-    final extraWords = words.length - queryWords.length;
-    return 0.3 + extraWords * 0.05;
-  }
-
-  // Partial substring match.
-  if (name.contains(query)) return 0.7 + words.length * 0.02;
-
-  // No match at all (shouldn't happen since the API searched for it).
-  return 1.0;
-}
-
-/// Select products for a staple card.
-/// Selects up to [_minStapleItems] **distinct products** (by product ID),
-/// guaranteeing at least one per store, then returns all store instances for
-/// those selected products so prices across stores can be displayed.
-/// [stapleJudgements] maps product IDs to their net judgement score
-/// (positive = confirmed staple, negative = denied).
-List<Product> _selectStapleProducts(
-  List<Product> products,
-  String stapleName,
-  Set<int> storeIds, {
-  Map<int, int> stapleJudgements = const {},
-  Map<int, double> stapleHeuristics = const {},
-}) {
-  // Filter to selected stores and deduplicate by instanceId.
-  final seen = <int>{};
-  final eligible = <Product>[];
-  for (final product in products) {
-    if (!storeIds.contains(product.storeId)) continue;
-    if (seen.add(product.instanceId)) {
-      eligible.add(product);
-    }
-  }
-
-  // Filter out products denied by judgements (net score < 0).
-  final candidates = <Product>[];
-  for (final product in eligible) {
-    final score = stapleJudgements[product.id];
-    if (score != null && score < 0) continue; // denied by users
-    candidates.add(product);
-  }
-
-  // Score and sort by confidence, boosted by judgements.
-  candidates.sort((a, b) {
-    var ca = _stapleConfidence(a, stapleName);
-    var cb = _stapleConfidence(b, stapleName);
-    // Boost confirmed products (lower confidence = better).
-    final sa = stapleJudgements[a.id];
-    final sb = stapleJudgements[b.id];
-    if (sa != null && sa > 0) ca -= 0.5;
-    if (sb != null && sb > 0) cb -= 0.5;
-    // Heuristic boost/demote when no explicit judgement exists.
-    if (sa == null) {
-      final ha = stapleHeuristics[a.id];
-      if (ha != null) ca -= (ha - 0.5) * 0.6;
-    }
-    if (sb == null) {
-      final hb = stapleHeuristics[b.id];
-      if (hb != null) cb -= (hb - 0.5) * 0.6;
-    }
-    final cmp = ca.compareTo(cb);
-    if (cmp != 0) return cmp;
-    // Tie-break: prefer cheaper.
-    final pa = productEffectivePrice(a) ?? double.infinity;
-    final pb = productEffectivePrice(b) ?? double.infinity;
-    return pa.compareTo(pb);
-  });
-
-  // Select up to _minStapleItems DISTINCT product IDs.
-  // Skip products that share a variation group with an already-selected one
-  // so that the staples view doesn't show redundant flavors/styles.
-  final selectedProductIds = <int>{};
-  final claimedVariationGroups = <String>{};
-
-  // Helper: returns true if a product can be selected (not a duplicate
-  // variation of something already chosen).
-  bool canSelect(Product p) {
-    if (selectedProductIds.contains(p.id)) return true; // already in
-    final vg = p.variationGroup;
-    if (vg != null && vg.isNotEmpty && claimedVariationGroups.contains(vg)) {
-      return false;
-    }
-    return true;
-  }
-
-  void markSelected(Product p) {
-    selectedProductIds.add(p.id);
-    final vg = p.variationGroup;
-    if (vg != null && vg.isNotEmpty) {
-      claimedVariationGroups.add(vg);
-    }
-  }
-
-  // Phase 1: guarantee at least one distinct product per store.
-  for (final storeId in storeIds) {
-    if (selectedProductIds.length >= _minStapleItems) break;
-    final best = candidates.cast<Product?>().firstWhere(
-          (p) => p!.storeId == storeId && canSelect(p),
-          orElse: () => null,
-        );
-    if (best != null) markSelected(best);
-  }
-
-  // Phase 2: fill remaining slots with best-confidence distinct products.
-  for (final product in candidates) {
-    if (selectedProductIds.length >= _minStapleItems) break;
-    if (canSelect(product)) markSelected(product);
-  }
-
-  // Return ALL instances for the selected product IDs so that per-store
-  // prices can be shown by groupProductsById downstream.
-  return candidates.where((p) => selectedProductIds.contains(p.id)).toList();
-}
 
 class StaplesOverview extends StatefulWidget {
   const StaplesOverview({super.key});
@@ -180,15 +43,16 @@ class StaplesOverview extends StatefulWidget {
 
 class _StaplesOverviewState extends State<StaplesOverview> {
   Future<Map<String, List<Product>>>? _staplesFuture;
-  /// Maps (staple_name, product_id) → net score from judgements.
-  Map<String, Map<int, int>> _stapleJudgements = {};
-  /// Heuristic staple scores inferred from existing labels.
-  Map<String, Map<int, double>> _stapleHeuristics = {};
   Set<(int, int)> _confirmedGroupPairs = {};
   Set<(int, int)> _deniedGroupPairs = {};
   /// Product IDs denied as a staple during this session, keyed by staple name.
   final Map<String, Set<int>> _sessionDenied = {};
   bool _initialized = false;
+
+  // Cached selections: recomputed when raw data or session denials change.
+  Map<String, List<Product>>? _cachedRawStaples;
+  Map<String, List<Product>> _stapleSelections = {};
+  List<String> _visibleStaples = [];
 
   @override
   void didChangeDependencies() {
@@ -198,42 +62,16 @@ class _StaplesOverviewState extends State<StaplesOverview> {
     final api = context.read<GroceryApi>();
     final appState = context.read<AppState>();
     final storeIds = appState.userStores.map((s) => s.id).toList();
-    _staplesFuture = api.fetchStapleProducts(storeIds, _stapleNames);
-    _loadStapleJudgements(api);
-    _loadStapleHeuristics(api);
+    final rawFuture = api.fetchStapleProducts(storeIds, _stapleNames);
+    _staplesFuture = rawFuture;
+    rawFuture.then((data) {
+      if (!mounted) return;
+      setState(() {
+        _cachedRawStaples = data;
+        _rebuildSelections();
+      });
+    }).catchError((_) {});
     _loadGroupingJudgements(api);
-  }
-
-  Future<void> _loadStapleJudgements(GroceryApi api) async {
-    try {
-      final summaries = await api.fetchStapleJudgements();
-      if (!mounted) return;
-      final map = <String, Map<int, int>>{};
-      for (final s in summaries) {
-        map.putIfAbsent(s.stapleName, () => {})[s.productId] = s.netScore;
-      }
-      setState(() {
-        _stapleJudgements = map;
-      });
-    } catch (_) {
-      // Best-effort; screen works without judgements.
-    }
-  }
-
-  Future<void> _loadStapleHeuristics(GroceryApi api) async {
-    try {
-      final heuristics = await api.fetchStapleHeuristics();
-      if (!mounted) return;
-      final map = <String, Map<int, double>>{};
-      for (final h in heuristics) {
-        map.putIfAbsent(h.stapleName, () => {})[h.productId] = h.score;
-      }
-      setState(() {
-        _stapleHeuristics = map;
-      });
-    } catch (_) {
-      // Best-effort.
-    }
   }
 
   Future<void> _loadGroupingJudgements(GroceryApi api) async {
@@ -257,6 +95,30 @@ class _StaplesOverviewState extends State<StaplesOverview> {
     } catch (_) {
       // Best-effort.
     }
+  }
+
+  /// Recomputes [_stapleSelections] from the current raw staple data,
+  /// judgements, heuristics, and session denials.  Call this inside a
+  /// [setState] whenever any of those inputs change.
+  /// Recomputes [_stapleSelections] from the current raw data and session denials.
+  /// Scoring and ranking are handled server-side; the client only filters
+  /// products the user denied during the current session.
+  void _rebuildSelections() {
+    final staples = _cachedRawStaples;
+    if (staples == null) return;
+
+    final selections = <String, List<Product>>{};
+    for (final name in _stapleNames) {
+      final raw = staples[name];
+      if (raw == null || raw.isEmpty) continue;
+      final denied = _sessionDenied[name] ?? const {};
+      selections[name] = raw.where((p) => !denied.contains(p.id)).toList();
+    }
+    _visibleStaples = selections.entries
+        .where((e) => e.value.isNotEmpty)
+        .map((e) => e.key)
+        .toList();
+    _stapleSelections = selections;
   }
 
   Company? _companyForStore(List<Company> companies, int companyId) {
@@ -343,51 +205,27 @@ class _StaplesOverviewState extends State<StaplesOverview> {
       body: FutureBuilder<Map<String, List<Product>>>(
         future: _staplesFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          // Show loading state until the cache is populated by the .then() callback.
+          if (_cachedRawStaples == null) {
+            if (snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}'));
+            }
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-          final staples = snapshot.data ?? {};
 
-          final visibleStaples = _stapleNames
-              .where((name) =>
-                  staples.containsKey(name) && staples[name]!.isNotEmpty)
-              .toList();
-
-          if (visibleStaples.isEmpty) {
+          if (_visibleStaples.isEmpty) {
             return const Center(
               child: Text('No staple products found for your stores.'),
             );
           }
 
-          // Pre-compute staple selections with exclusivity:
-          // a product claimed by an earlier staple is excluded from later ones.
-          final storeIds = selectedStores.map((s) => s.id).toSet();
-          final claimedProductIds = <int>{};
-          final stapleSelections = <String, List<Product>>{};
-          for (final stapleName in visibleStaples) {
-            final products = staples[stapleName]!;
-            final denied = _sessionDenied[stapleName] ?? const {};
-            final filtered = products.where((p) {
-              if (denied.contains(p.id)) return false;
-              if (claimedProductIds.contains(p.id)) return false;
-              return true;
-            }).toList();
-            final selected = _selectStapleProducts(
-              filtered,
-              stapleName,
-              storeIds,
-              stapleJudgements: _stapleJudgements[stapleName] ?? {},
-              stapleHeuristics: _stapleHeuristics[stapleName] ?? {},
-            );
-            stapleSelections[stapleName] = selected;
-            claimedProductIds.addAll(selected.map((p) => p.id));
-          }
-
+          // Selections are pre-computed in state and updated only when inputs
+          // change (data, judgements, heuristics, denials) — not on cart updates.
           return GridView.builder(
             padding: const EdgeInsets.all(8),
+            // Keep ~600 px beyond the viewport pre-built so scrolling into the
+            // next row of cards feels instant.
+            cacheExtent: 600,
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: crossAxisCount,
               childAspectRatio: crossAxisCount == 1
@@ -398,28 +236,33 @@ class _StaplesOverviewState extends State<StaplesOverview> {
               crossAxisSpacing: 8,
               mainAxisSpacing: 8,
             ),
-            itemCount: visibleStaples.length,
+            itemCount: _visibleStaples.length,
             itemBuilder: (context, index) {
-              final stapleName = visibleStaples[index];
-              final stapleProducts = stapleSelections[stapleName]!;
+              final stapleName = _visibleStaples[index];
+              final stapleProducts = _stapleSelections[stapleName] ?? [];
 
-              return _StapleCard(
-                key: ValueKey('$stapleName-${_sessionDenied[stapleName]?.length ?? 0}'),
-                stapleName: stapleName,
-                products: stapleProducts,
-                selectedStores: selectedStores,
-                companies: companies,
-                storeById: _storeById,
-                companyForStore: _companyForStore,
-                confirmedGroupPairs: _confirmedGroupPairs,
-                deniedGroupPairs: _deniedGroupPairs,
-                onDenyProduct: (productId) {
-                  setState(() {
-                    _sessionDenied
-                        .putIfAbsent(stapleName, () => {})
-                        .add(productId);
-                  });
-                },
+              // RepaintBoundary isolates each card so that a cart change
+              // in one card doesn't repaint its neighbours.
+              return RepaintBoundary(
+                child: _StapleCard(
+                  key: ValueKey('$stapleName-${_sessionDenied[stapleName]?.length ?? 0}'),
+                  stapleName: stapleName,
+                  products: stapleProducts,
+                  selectedStores: selectedStores,
+                  companies: companies,
+                  storeById: _storeById,
+                  companyForStore: _companyForStore,
+                  confirmedGroupPairs: _confirmedGroupPairs,
+                  deniedGroupPairs: _deniedGroupPairs,
+                  onDenyProduct: (productId) {
+                    setState(() {
+                      _sessionDenied
+                          .putIfAbsent(stapleName, () => {})
+                          .add(productId);
+                      _rebuildSelections();
+                    });
+                  },
+                ),
               );
             },
           );

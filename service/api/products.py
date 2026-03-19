@@ -77,6 +77,27 @@ def _staple_heuristic_score(
     return avg_pos / denom
 
 
+def _staple_confidence_py(product_name: str, staple: str) -> float:
+    """Server-side port of Flutter's _stapleConfidence(). Lower score = better match."""
+    name = (product_name or "").lower().strip()
+    query = staple.lower().strip()
+    if name == query:
+        return 0.0
+    words = name.split()
+    query_words = query.split()
+    if len(words) <= len(query_words) + 1 and query in name:
+        return 0.1
+    if name.startswith(query):
+        return 0.2
+    pattern = r'\b' + re.escape(query) + r'\b'
+    if re.search(pattern, name):
+        extra_words = len(words) - len(query_words)
+        return 0.3 + extra_words * 0.05
+    if query in name:
+        return 0.7 + len(words) * 0.02
+    return 1.0
+
+
 def _load_staple_labels(sess: Session, staple_name: str):
     """Return *(pos_profiles, neg_profiles)* for a staple name.
 
@@ -415,25 +436,62 @@ async def get_staple_judgements(
 )
 async def get_staple_products_bulk(
     store_ids: List[int] = Query(default=[]),
+    top_n: int = Query(default=12, ge=1, le=30),
     sess: Session = Depends(get_db),
 ):
-    """Return all staple products in a single DB query, grouped by staple name.
+    """Return top-ranked staple products per category, scored entirely server-side.
 
-    Replaces 20 individual /stores/product_search round-trips from the Flutter
-    staples screen with one query, cutting load on the prod VM significantly.
-    Each staple category is independently capped at _STAPLE_PER_CAT rows so
-    that common staples (milk, bread …) cannot crowd out later ones (tomatoes,
-    garlic …) the way a global LIMIT would.
+    Scoring mirrors the Flutter client's former _selectStapleProducts():
+    - confidence based on product name vs staple keyword (ported from Dart)
+    - boosted/penalised by crowdsourced judgements and cached heuristic scores
+    - guaranteed at least one product per selected store (phase 1)
+    - filled to top_n distinct products by score (phase 2)
+    - variation-group deduplication to avoid redundant flavours
+    - cross-staple claimed set so the same product doesn't appear in two cards
+
+    Returns all store instances for each selected product so the Flutter client
+    can show per-store price comparisons.  The client only needs trivial
+    session-denial filtering after receiving this response.
     """
-    _STAPLE_PER_CAT = 100  # max results kept per staple name
-
     result: Dict[str, List[schemas.Product_Details]] = {name: [] for name in _STAPLE_NAMES}
     if not store_ids:
         return result
 
-    # No global LIMIT — let the OR filter + store_id filter bound the scan.
-    # The ix_products_name and ix_product_instances_store_id indexes make this
-    # fast enough even on a 2-core VM.
+    # --- Load aggregated staple judgements (one indexed query) ---
+    judgement_rows = (
+        sess.query(
+            models.LabelJudgement.product_id,
+            models.LabelJudgement.staple_name,
+            func.sum(case((models.LabelJudgement.approved == True, 1), else_=0)).label("approvals"),
+            func.sum(case((models.LabelJudgement.approved == False, 1), else_=0)).label("denials"),
+        )
+        .filter(
+            models.LabelJudgement.judgement_type == "staple",
+            models.LabelJudgement.staple_name.isnot(None),
+        )
+        .group_by(models.LabelJudgement.product_id, models.LabelJudgement.staple_name)
+        .all()
+    )
+    # {staple_name: {product_id: net_score}}
+    judgements: Dict[str, Dict[int, int]] = {}
+    for product_id, staple_name, approvals, denials in judgement_rows:
+        net = (approvals or 0) - (denials or 0)
+        judgements.setdefault(staple_name, {})[int(product_id)] = net
+
+    # --- Heuristics from in-process TTL cache (reuses get_staple_heuristics logic) ---
+    global _heuristics_cache
+    now = time.monotonic()
+    heuristic_list: List[schemas.StapleHeuristic] = (
+        _heuristics_cache[1]
+        if _heuristics_cache is not None and now - _heuristics_cache[0] < _HEURISTICS_TTL
+        else []
+    )
+    # {(staple_name, product_id) -> score}
+    heuristics: Dict[Tuple[str, int], float] = {
+        (h.staple_name, h.product_id): h.score for h in heuristic_list
+    }
+
+    # --- Single DB query ordered by name length (shorter = more specific) ---
     s = (
         select(models.Product, models.Product_Instance)
         .where(models.Product.id == models.Product_Instance.product_id)
@@ -445,45 +503,143 @@ async def get_staple_products_bulk(
     )
     rows = sess.execute(s).all()
 
+    # --- Group rows by staple, capping candidates at _MAX_PER_STAPLE unique products ---
+    _MAX_PER_STAPLE = 100
+    # staple_name -> {product_id: (Product model, min_effective_price)}
+    staple_products: Dict[str, Dict[int, Tuple]] = {name: {} for name in _STAPLE_NAMES}
+    # staple_name -> {product_id: set of store_ids}
+    staple_product_stores: Dict[str, Dict[int, set]] = {name: {} for name in _STAPLE_NAMES}
+    # (staple_name, product_id, store_id) -> (Product model, Product_Instance model)
+    all_rows: Dict[Tuple, Tuple] = {}
+
     for p, pi in rows:
+        pid = int(p.id)
+        sid = int(pi.store_id)
         p_name_lower = (p.name or "").lower()
-        matched_any = False
         for staple_name in _STAPLE_NAMES:
             if staple_name not in p_name_lower:
                 continue
-            if len(result[staple_name]) >= _STAPLE_PER_CAT:
+            sp = staple_products[staple_name]
+            # Admit new products up to the cap; always include all instances
+            # of products already in the candidate list.
+            if pid not in sp:
+                if len(sp) >= _MAX_PER_STAPLE:
+                    continue
+                sp[pid] = (p, float("inf"))
+            # Track cheapest effective price across stores for tie-breaking.
+            cur_p, cur_min = sp[pid]
+            for pp in pi.price_points or []:
+                try:
+                    effective = float(pp.sale_price or pp.base_price or "inf")
+                    if effective < cur_min:
+                        cur_min = effective
+                except (ValueError, TypeError):
+                    pass
+            sp[pid] = (cur_p, cur_min)
+            staple_product_stores[staple_name].setdefault(pid, set()).add(sid)
+            all_rows[(staple_name, pid, sid)] = (p, pi)
+
+    # --- Score, rank, and select per staple with cross-staple deduplication ---
+    # claimed_product_ids prevents the same product appearing in two cards
+    # (e.g. "whole wheat bread" shouldn't show in both 'bread' and 'wheat').
+    claimed_product_ids: set = set()
+
+    for staple_name in _STAPLE_NAMES:
+        sp = staple_products[staple_name]
+        if not sp:
+            continue
+
+        staple_judgements = judgements.get(staple_name, {})
+
+        def _score(pid: int, p, min_price: float) -> Tuple[float, float]:
+            conf = _staple_confidence_py(p.name or "", staple_name)
+            j = staple_judgements.get(pid)
+            h = heuristics.get((staple_name, pid))
+            if j is not None and j > 0:
+                conf -= 0.5
+            if j is None and h is not None:
+                conf -= (h - 0.5) * 0.6
+            return (conf, min_price if min_price != float("inf") else 1e9)
+
+        # Filter denied (net < 0) and already-claimed products, then rank.
+        candidates = sorted(
+            [
+                (pid, p, min_price)
+                for pid, (p, min_price) in sp.items()
+                if staple_judgements.get(pid, 0) >= 0
+                and pid not in claimed_product_ids
+            ],
+            key=lambda x: _score(x[0], x[1], x[2]),
+        )
+
+        selected_ids: set = set()
+        claimed_vg: set = set()
+
+        def can_select(pid: int, p) -> bool:
+            if pid in selected_ids:
+                return True
+            vg = p.variation_group
+            return not (vg and vg in claimed_vg)
+
+        def mark_selected(pid: int, p) -> None:
+            selected_ids.add(pid)
+            vg = p.variation_group
+            if vg:
+                claimed_vg.add(vg)
+
+        # Phase 1: guarantee at least one distinct product per selected store.
+        for sid in store_ids:
+            if len(selected_ids) >= top_n:
+                break
+            for pid, p, _ in candidates:
+                if sid in staple_product_stores[staple_name].get(pid, set()) and can_select(pid, p):
+                    mark_selected(pid, p)
+                    break
+
+        # Phase 2: fill remaining slots with the highest-scored products.
+        for pid, p, _ in candidates:
+            if len(selected_ids) >= top_n:
+                break
+            if can_select(pid, p):
+                mark_selected(pid, p)
+
+        claimed_product_ids.update(selected_ids)
+
+        # Build response: all store instances for selected products, in score order.
+        for pid, p_m, _ in candidates:
+            if pid not in selected_ids:
                 continue
-            matched_any = True
-            product_detail = schemas.Product_Details(
-                Product=schemas.Product(
-                    id=p.id,
-                    brand=str(p.brand or ""),
-                    name=str(p.name or ""),
-                    company_id=int(p.company_id),
-                    picture_url=str(p.picture_url or ""),
-                    variation_group=p.variation_group,
-                    tags=[schemas.Tag_Instance(tag_id=int(t.tag_id)) for t in (p.tags or [])],
-                ),
-                Product_Instance=schemas.Product_Instance(
-                    store_id=int(pi.store_id),
-                    price_points=[
-                        schemas.PricePoint(
-                            base_price=str(pp.base_price or "0"),
-                            sale_price=pp.sale_price,
-                            member_price=pp.member_price,
-                            size=pp.size,
-                            created_at=pp.created_at,
-                        )
-                        for pp in (pi.price_points or [])
-                    ],
-                ),
-            )
-            result[staple_name].append(product_detail)
-        # Once every category has hit its cap we can stop early.
-        if not matched_any and all(
-            len(v) >= _STAPLE_PER_CAT for v in result.values()
-        ):
-            break
+            for sid in store_ids:
+                row = all_rows.get((staple_name, pid, sid))
+                if row is None:
+                    continue
+                _, pi_m = row
+                result[staple_name].append(
+                    schemas.Product_Details(
+                        Product=schemas.Product(
+                            id=p_m.id,
+                            brand=str(p_m.brand or ""),
+                            name=str(p_m.name or ""),
+                            company_id=int(p_m.company_id),
+                            picture_url=str(p_m.picture_url or ""),
+                            variation_group=p_m.variation_group,
+                            tags=[schemas.Tag_Instance(tag_id=int(t.tag_id)) for t in (p_m.tags or [])],
+                        ),
+                        Product_Instance=schemas.Product_Instance(
+                            store_id=int(pi_m.store_id),
+                            price_points=[
+                                schemas.PricePoint(
+                                    base_price=str(pp.base_price or "0"),
+                                    sale_price=pp.sale_price,
+                                    member_price=pp.member_price,
+                                    size=pp.size,
+                                    created_at=pp.created_at,
+                                )
+                                for pp in (pi_m.price_points or [])
+                            ],
+                        ),
+                    )
+                )
 
     return result
 
