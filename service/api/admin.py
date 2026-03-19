@@ -89,9 +89,12 @@ async def table_data(table_name: str, limit: int = 200):
         raise HTTPException(404, f"Table '{table_name}' not found")
 
     columns = [c["name"] for c in insp.get_columns(table_name)]
+    # Use 'id' for ordering when available (all models have it); fall back to
+    # unordered for junction tables.  Avoids SQLite-only 'rowid'.
+    order_clause = "ORDER BY id DESC" if "id" in columns else ""
     with engine.connect() as conn:
         rows = conn.execute(
-            text(f'SELECT * FROM "{table_name}" ORDER BY rowid DESC LIMIT :lim'),
+            text(f'SELECT * FROM "{table_name}" {order_clause} LIMIT :lim'),
             {"lim": min(limit, 5000)},
         ).mappings().all()
     return {"columns": columns, "rows": [dict(r) for r in rows]}
