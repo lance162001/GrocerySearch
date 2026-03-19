@@ -421,11 +421,19 @@ async def get_staple_products_bulk(
 
     Replaces 20 individual /stores/product_search round-trips from the Flutter
     staples screen with one query, cutting load on the prod VM significantly.
+    Each staple category is independently capped at _STAPLE_PER_CAT rows so
+    that common staples (milk, bread …) cannot crowd out later ones (tomatoes,
+    garlic …) the way a global LIMIT would.
     """
+    _STAPLE_PER_CAT = 100  # max results kept per staple name
+
     result: Dict[str, List[schemas.Product_Details]] = {name: [] for name in _STAPLE_NAMES}
     if not store_ids:
         return result
 
+    # No global LIMIT — let the OR filter + store_id filter bound the scan.
+    # The ix_products_name and ix_product_instances_store_id indexes make this
+    # fast enough even on a 2-core VM.
     s = (
         select(models.Product, models.Product_Instance)
         .where(models.Product.id == models.Product_Instance.product_id)
@@ -434,39 +442,48 @@ async def get_staple_products_bulk(
             or_(*(models.Product.name.ilike(f"%{name}%") for name in _STAPLE_NAMES))
         )
         .order_by(func.length(models.Product.name))
-        .limit(3000)
     )
     rows = sess.execute(s).all()
 
     for p, pi in rows:
-        product_detail = schemas.Product_Details(
-            Product=schemas.Product(
-                id=p.id,
-                brand=str(p.brand or ""),
-                name=str(p.name or ""),
-                company_id=int(p.company_id),
-                picture_url=str(p.picture_url or ""),
-                variation_group=p.variation_group,
-                tags=[schemas.Tag_Instance(tag_id=int(t.tag_id)) for t in (p.tags or [])],
-            ),
-            Product_Instance=schemas.Product_Instance(
-                store_id=int(pi.store_id),
-                price_points=[
-                    schemas.PricePoint(
-                        base_price=str(pp.base_price or "0"),
-                        sale_price=pp.sale_price,
-                        member_price=pp.member_price,
-                        size=pp.size,
-                        created_at=pp.created_at,
-                    )
-                    for pp in (pi.price_points or [])
-                ],
-            ),
-        )
         p_name_lower = (p.name or "").lower()
+        matched_any = False
         for staple_name in _STAPLE_NAMES:
-            if staple_name in p_name_lower:
-                result[staple_name].append(product_detail)
+            if staple_name not in p_name_lower:
+                continue
+            if len(result[staple_name]) >= _STAPLE_PER_CAT:
+                continue
+            matched_any = True
+            product_detail = schemas.Product_Details(
+                Product=schemas.Product(
+                    id=p.id,
+                    brand=str(p.brand or ""),
+                    name=str(p.name or ""),
+                    company_id=int(p.company_id),
+                    picture_url=str(p.picture_url or ""),
+                    variation_group=p.variation_group,
+                    tags=[schemas.Tag_Instance(tag_id=int(t.tag_id)) for t in (p.tags or [])],
+                ),
+                Product_Instance=schemas.Product_Instance(
+                    store_id=int(pi.store_id),
+                    price_points=[
+                        schemas.PricePoint(
+                            base_price=str(pp.base_price or "0"),
+                            sale_price=pp.sale_price,
+                            member_price=pp.member_price,
+                            size=pp.size,
+                            created_at=pp.created_at,
+                        )
+                        for pp in (pi.price_points or [])
+                    ],
+                ),
+            )
+            result[staple_name].append(product_detail)
+        # Once every category has hit its cap we can stop early.
+        if not matched_any and all(
+            len(v) >= _STAPLE_PER_CAT for v in result.values()
+        ):
+            break
 
     return result
 
