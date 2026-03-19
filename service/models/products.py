@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, PrimaryKeyConstraint
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, PrimaryKeyConstraint, Text
 from sqlalchemy.orm import relationship
 from .base import Base, BaseModel
 from datetime import datetime
@@ -50,3 +50,24 @@ class LabelJudgement(Base, BaseModel):
     approved = Column(Boolean, nullable=False)
     flavour = Column(String(50), nullable=True)  # 'flavour' when grouping is a flavor/variation
     created_at = Column(DateTime, default=datetime.now)
+
+
+class StapleStoreCache(Base):
+    """Per-(store, staple) cache of ranked product candidates.
+
+    ``ranked_json`` is a JSON array of objects::
+
+        [{"product_id": 123, "score": 0.35, "variation_group": "..."}, ...]
+
+    ordered best-first (lowest score = best match).  Denied products are
+    excluded at write time so serving only needs to merge + dedup.
+    ``computed_at`` allows staleness checks at serve time.
+    """
+    __tablename__ = "staple_store_cache"
+    __table_args__ = (
+        PrimaryKeyConstraint("store_id", "staple_name"),
+    )
+    store_id = Column(Integer, ForeignKey("stores.id"), nullable=False)
+    staple_name = Column(String(64), nullable=False)
+    ranked_json = Column(Text, nullable=False, default="[]")
+    computed_at = Column(DateTime, default=datetime.utcnow)

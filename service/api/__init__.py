@@ -43,6 +43,8 @@ _perf_indexes = [
     "CREATE INDEX IF NOT EXISTS ix_product_instances_product_id ON product_instances (product_id)",
     # Needed for _load_staple_labels and the heuristics endpoint.
     "CREATE INDEX IF NOT EXISTS ix_lj_type_staple ON label_judgements (judgement_type, staple_name)",
+    # Speeds up per-store cache lookups by store_id.
+    "CREATE INDEX IF NOT EXISTS ix_staple_store_cache_store ON staple_store_cache (store_id)",
 ]
 for _idx_ddl in _perf_indexes:
     try:

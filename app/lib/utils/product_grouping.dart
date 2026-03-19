@@ -137,23 +137,22 @@ List<ProductGroup> mergeSimilarProductGroups(
     }
 
     // Check if any product pair in this merge group was denied.
-    final allProductIds = <int>[];
+    final allProductIds = <int>{};
     for (final group in entry) {
       for (final option in group.options) {
-        if (!allProductIds.contains(option.id)) {
-          allProductIds.add(option.id);
-        }
+        allProductIds.add(option.id);
       }
     }
 
     // Split denied product ids into separate groups.
+    final orderedProductIds = allProductIds.toList(growable: false);
     final deniedIds = <int>{};
-    for (var i = 0; i < allProductIds.length; i++) {
-      for (var j = i + 1; j < allProductIds.length; j++) {
-        final pair = (allProductIds[i], allProductIds[j]);
-        final reversePair = (allProductIds[j], allProductIds[i]);
+    for (var i = 0; i < orderedProductIds.length; i++) {
+      for (var j = i + 1; j < orderedProductIds.length; j++) {
+        final pair = (orderedProductIds[i], orderedProductIds[j]);
+        final reversePair = (orderedProductIds[j], orderedProductIds[i]);
         if (deniedPairs.contains(pair) || deniedPairs.contains(reversePair)) {
-          deniedIds.add(allProductIds[j]);
+          deniedIds.add(orderedProductIds[j]);
         }
       }
     }

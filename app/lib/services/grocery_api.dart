@@ -297,7 +297,13 @@ class GroceryApi {
           'Failed to load staple products: ${response.statusCode}');
     }
 
+    // Parse JSON (fast native call), then process categories one at a time,
+    // yielding to the event loop between each so Flutter can render animation
+    // frames. This keeps the CircularProgressIndicator spinning on web where
+    // compute() isolate round-trips can still block the main thread.
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    await Future.delayed(Duration.zero);
+
     final result = <String, List<Product>>{
       for (final name in stapleNames) name: [],
     };
@@ -305,9 +311,9 @@ class GroceryApi {
       if (!result.containsKey(entry.key)) continue;
       final items = entry.value as List<dynamic>;
       result[entry.key] = items
-          .map((e) =>
-              Product.fromJson(Map<String, dynamic>.from(e as Map)))
+          .map((e) => Product.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList();
+      await Future.delayed(Duration.zero);
     }
     return result;
   }

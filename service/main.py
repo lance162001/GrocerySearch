@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from api import router
+from api.products import _schedule_full_refresh
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
@@ -48,3 +49,9 @@ os.makedirs(static_dir, exist_ok=True)
 app.mount('/static', StaticFiles(directory=static_dir), name='static')
 
 app.include_router(router)
+
+
+@app.on_event("startup")
+async def _warm_staple_cache():
+    """On startup, refresh any per-store staple cache entries that are stale or missing."""
+    _schedule_full_refresh()

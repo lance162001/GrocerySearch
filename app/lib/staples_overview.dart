@@ -51,8 +51,11 @@ class _StaplesOverviewState extends State<StaplesOverview> {
 
   // Cached selections: recomputed when raw data or session denials change.
   Map<String, List<Product>>? _cachedRawStaples;
-  Map<String, List<Product>> _stapleSelections = {};
   List<String> _visibleStaples = [];
+  // Pre-computed groups — computed asynchronously so card builds are instant.
+  Map<String, List<ProductGroup>> _stapleGroups = {};
+  Set<String> _pendingStapleGroups = {};
+  int _applyGeneration = 0;
 
   @override
   void didChangeDependencies() {
@@ -66,17 +69,81 @@ class _StaplesOverviewState extends State<StaplesOverview> {
     _staplesFuture = rawFuture;
     rawFuture.then((data) {
       if (!mounted) return;
-      setState(() {
-        _cachedRawStaples = data;
-        _rebuildSelections();
-      });
+      _applyStaplesAsync(data);
     }).catchError((_) {});
     _loadGroupingJudgements(api);
+  }
+
+  /// Loads staples data, computes product groups with yield points between
+  /// each staple category, then commits everything to state in one setState.
+  /// This keeps the CircularProgressIndicator animating until cards are ready.
+  Future<void> _applyStaplesAsync(Map<String, List<Product>> raw) async {
+    final generation = ++_applyGeneration;
+
+    Future<void> yieldToUi() async {
+      await Future<void>.delayed(Duration.zero);
+      final binding = WidgetsBinding.instance;
+      if (binding.hasScheduledFrame) {
+        await binding.endOfFrame;
+      }
+    }
+
+    // Build filtered selections.
+    final selections = <String, List<Product>>{};
+    for (final name in _stapleNames) {
+      final products = raw[name];
+      if (products == null || products.isEmpty) continue;
+      final denied = _sessionDenied[name] ?? const {};
+      selections[name] = products.where((p) => !denied.contains(p.id)).toList();
+    }
+
+    final visibleStaples = selections.entries
+        .where((e) => e.value.isNotEmpty)
+        .map((e) => e.key)
+        .toList(growable: false);
+
+    if (!mounted || generation != _applyGeneration) return;
+    setState(() {
+      _cachedRawStaples = raw;
+      _stapleGroups = {};
+      _visibleStaples = visibleStaples;
+      _pendingStapleGroups = visibleStaples.toSet();
+    });
+
+    await yieldToUi();
+    if (!mounted || generation != _applyGeneration) return;
+
+    // Compute groups one category at a time, yielding between each so the
+    // animation can render frames.
+    final confirmed = _confirmedGroupPairs;
+    final denied = _deniedGroupPairs;
+    final groups = <String, List<ProductGroup>>{};
+    final pending = visibleStaples.toSet();
+    for (final name in visibleStaples) {
+      final products = selections[name];
+      if (products == null || products.isEmpty) continue;
+      await yieldToUi();
+      if (!mounted || generation != _applyGeneration) return;
+      groups[name] = groupProductsById(
+        products,
+        confirmedPairs: confirmed,
+        deniedPairs: denied,
+      );
+      pending.remove(name);
+      if (!mounted || generation != _applyGeneration) return;
+      setState(() {
+        _stapleGroups = Map<String, List<ProductGroup>>.from(groups);
+        _pendingStapleGroups = Set<String>.from(pending);
+      });
+    }
   }
 
   Future<void> _loadGroupingJudgements(GroceryApi api) async {
     try {
       final summaries = await api.fetchGroupingJudgements();
+      if (!mounted) return;
+      // Yield so the animation isn't blocked by the mapping loop.
+      await Future.delayed(Duration.zero);
       if (!mounted) return;
       final confirmed = <(int, int)>{};
       final denied = <(int, int)>{};
@@ -92,18 +159,20 @@ class _StaplesOverviewState extends State<StaplesOverview> {
         _confirmedGroupPairs = confirmed;
         _deniedGroupPairs = denied;
       });
+      // If staples are already loaded, recompute groups with the new judgement
+      // pairs (async so the UI stays responsive).
+      if (_cachedRawStaples != null) {
+        _applyStaplesAsync(_cachedRawStaples!);
+      }
     } catch (_) {
       // Best-effort.
     }
   }
 
-  /// Recomputes [_stapleSelections] from the current raw staple data,
-  /// judgements, heuristics, and session denials.  Call this inside a
-  /// [setState] whenever any of those inputs change.
-  /// Recomputes [_stapleSelections] from the current raw data and session denials.
-  /// Scoring and ranking are handled server-side; the client only filters
-  /// products the user denied during the current session.
+  /// Recomputes selections and groups synchronously. Used for user-triggered
+  /// changes (e.g. denying a product) where an immediate response is expected.
   void _rebuildSelections() {
+    _applyGeneration++;
     final staples = _cachedRawStaples;
     if (staples == null) return;
 
@@ -118,7 +187,20 @@ class _StaplesOverviewState extends State<StaplesOverview> {
         .where((e) => e.value.isNotEmpty)
         .map((e) => e.key)
         .toList();
-    _stapleSelections = selections;
+
+    // Recompute groups synchronously (fast, since data is already in memory).
+    final groups = <String, List<ProductGroup>>{};
+    for (final name in _stapleNames) {
+      final products = selections[name];
+      if (products == null || products.isEmpty) continue;
+      groups[name] = groupProductsById(
+        products,
+        confirmedPairs: _confirmedGroupPairs,
+        deniedPairs: _deniedGroupPairs,
+      );
+    }
+    _stapleGroups = groups;
+    _pendingStapleGroups = {};
   }
 
   Company? _companyForStore(List<Company> companies, int companyId) {
@@ -239,7 +321,6 @@ class _StaplesOverviewState extends State<StaplesOverview> {
             itemCount: _visibleStaples.length,
             itemBuilder: (context, index) {
               final stapleName = _visibleStaples[index];
-              final stapleProducts = _stapleSelections[stapleName] ?? [];
 
               // RepaintBoundary isolates each card so that a cart change
               // in one card doesn't repaint its neighbours.
@@ -247,13 +328,12 @@ class _StaplesOverviewState extends State<StaplesOverview> {
                 child: _StapleCard(
                   key: ValueKey('$stapleName-${_sessionDenied[stapleName]?.length ?? 0}'),
                   stapleName: stapleName,
-                  products: stapleProducts,
+                  groups: _stapleGroups[stapleName] ?? [],
+                  loading: _pendingStapleGroups.contains(stapleName),
                   selectedStores: selectedStores,
                   companies: companies,
                   storeById: _storeById,
                   companyForStore: _companyForStore,
-                  confirmedGroupPairs: _confirmedGroupPairs,
-                  deniedGroupPairs: _deniedGroupPairs,
                   onDenyProduct: (productId) {
                     setState(() {
                       _sessionDenied
@@ -309,34 +389,27 @@ class _StapleCard extends StatelessWidget {
   const _StapleCard({
     super.key,
     required this.stapleName,
-    required this.products,
+    required this.groups,
+    required this.loading,
     required this.selectedStores,
     required this.companies,
     required this.storeById,
     required this.companyForStore,
-    this.confirmedGroupPairs = const {},
-    this.deniedGroupPairs = const {},
     this.onDenyProduct,
   });
 
   final String stapleName;
-  final List<Product> products;
+  final List<ProductGroup> groups;
+  final bool loading;
   final List<Store> selectedStores;
   final List<Company> companies;
   final Store? Function(List<Store>, int) storeById;
   final Company? Function(List<Company>, int) companyForStore;
-  final Set<(int, int)> confirmedGroupPairs;
-  final Set<(int, int)> deniedGroupPairs;
   final void Function(int productId)? onDenyProduct;
 
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final groups = groupProductsById(
-      products,
-      confirmedPairs: confirmedGroupPairs,
-      deniedPairs: deniedGroupPairs,
-    );
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -357,7 +430,14 @@ class _StapleCard extends StatelessWidget {
           ),
           const Divider(height: 1),
           Expanded(
-            child: groups.isEmpty
+            child: loading
+                ? Center(
+                    child: CircularProgressIndicator(
+                      key: ValueKey('staple-card-loading-$stapleName'),
+                      strokeWidth: 2,
+                    ),
+                  )
+                : groups.isEmpty
                 ? const Center(
                     child: Text(
                       'No options',
@@ -479,7 +559,7 @@ class _StapleProductTile extends StatelessWidget {
                           ),
                         ),
                       if (store != null)
-                        Flexible(
+                        Expanded(
                           child: Text(
                             store!.town,
                             maxLines: 1,
@@ -491,12 +571,17 @@ class _StapleProductTile extends StatelessWidget {
                           ),
                         ),
                       if (group.otherStoreCount > 0) ...[
-                        const SizedBox(width: 4),
-                        Text(
-                          '+${group.otherStoreCount} more',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: const Color(0xFFA1A1AA),
+                        if (store != null) const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            '+${group.otherStoreCount} more',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: const Color(0xFFA1A1AA),
+                            ),
                           ),
                         ),
                       ],

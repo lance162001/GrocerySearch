@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -329,6 +330,63 @@ class TestGroceryApi extends GroceryApi {
         })
         .toList();
   }
+
+  @override
+  Future<Map<String, List<Product>>> fetchStapleProducts(
+    List<int> storeIds,
+    List<String> stapleNames,
+  ) async {
+    final storeIdSet = storeIds.toSet();
+    final result = <String, List<Product>>{
+      for (final name in stapleNames) name: <Product>[],
+    };
+    for (final product in allProducts) {
+      if (!storeIdSet.contains(product.storeId)) {
+        continue;
+      }
+      for (final stapleName in stapleNames) {
+        if (product.name.toLowerCase().contains(stapleName)) {
+          result[stapleName] = <Product>[
+            ...result[stapleName] ?? const <Product>[],
+            product,
+          ];
+        }
+      }
+    }
+    return result;
+  }
+
+  @override
+  Future<List<GroupingJudgementSummary>> fetchGroupingJudgements() async {
+    return const <GroupingJudgementSummary>[];
+  }
+}
+
+class DelayedStaplesApi extends TestGroceryApi {
+  DelayedStaplesApi({
+    required super.allStores,
+    required super.allProducts,
+    required this.staplesResult,
+  });
+
+  final Map<String, List<Product>> staplesResult;
+  final Completer<Map<String, List<Product>>> _staplesCompleter =
+      Completer<Map<String, List<Product>>>();
+
+  void completeStaplesLoad() {
+    if (_staplesCompleter.isCompleted) {
+      return;
+    }
+    _staplesCompleter.complete(staplesResult);
+  }
+
+  @override
+  Future<Map<String, List<Product>>> fetchStapleProducts(
+    List<int> storeIds,
+    List<String> stapleNames,
+  ) {
+    return _staplesCompleter.future;
+  }
 }
 
 AppState _seededState(
@@ -448,6 +506,90 @@ Map<String, dynamic> _bundleProductJson({
 
 void main() {
   group('frontend widget flows', () {
+    testWidgets(
+      'staples overview shows progressive card loading before grouped content renders',
+      (tester) async {
+        final wholeMilkAustin = _product(
+          id: 1,
+          instanceId: 101,
+          storeId: _austinStore.id,
+          name: 'Whole Milk',
+          basePrice: '3.19',
+        );
+        final wholeMilkDallas = _product(
+          id: 1,
+          instanceId: 102,
+          storeId: _dallasStore.id,
+          name: 'Whole Milk',
+          basePrice: '3.49',
+        );
+        final breadAustin = _product(
+          id: 2,
+          instanceId: 201,
+          storeId: _austinStore.id,
+          name: 'Bread Loaf',
+          basePrice: '2.99',
+        );
+
+        final api = DelayedStaplesApi(
+          allStores: <Store>[_austinStore, _dallasStore],
+          allProducts: <Product>[
+            wholeMilkAustin,
+            wholeMilkDallas,
+            breadAustin,
+          ],
+          staplesResult: <String, List<Product>>{
+            'milk': <Product>[wholeMilkAustin, wholeMilkDallas],
+            'bread': <Product>[breadAustin],
+          },
+        );
+        final appState = _seededState(
+          api,
+          userStores: const <Store>[_austinStore, _dallasStore],
+        );
+
+        await tester.pumpWidget(
+          _buildTestApp(
+            home: const StaplesOverview(),
+            api: api,
+            appState: appState,
+          ),
+        );
+
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+        api.completeStaplesLoad();
+        await tester.pump();
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.byType(GridView), findsOneWidget);
+        expect(find.text('Milk'), findsOneWidget);
+        expect(find.text('Bread'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey<String>('staple-card-loading-milk')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey<String>('staple-card-loading-bread')),
+          findsOneWidget,
+        );
+
+        await _pumpUi(tester, frames: 8);
+
+        expect(find.text('Whole Milk'), findsOneWidget);
+        expect(find.text('Bread Loaf'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey<String>('staple-card-loading-milk')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const ValueKey<String>('staple-card-loading-bread')),
+          findsNothing,
+        );
+      },
+    );
+
     testWidgets(
       'store selection, search, sale filter, checkout, and save bundle flow',
       (tester) async {
