@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import re
-from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -19,19 +18,25 @@ admin_router = APIRouter(prefix="/admin", tags=["admin"])
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 _DB_PATH = Path(__file__).resolve().parent.parent / "app.db"
 
-# ── simple scraper-status file (written by scraper.py) ──────────────
-_STATUS_FILE = Path(__file__).resolve().parent.parent / ".scraper_status.json"
-
 
 def _read_scraper_status() -> dict | None:
-    """Return scraper status dict, or None if unavailable."""
-    import json
-    if _STATUS_FILE.exists():
-        try:
-            return json.loads(_STATUS_FILE.read_text())
-        except Exception:
-            return None
-    return None
+    """Read scraper status from the database."""
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text('SELECT * FROM scraper_status WHERE id = 1')
+            ).mappings().first()
+            if row is None:
+                return None
+            result = dict(row)
+            # Convert datetime values to ISO strings for JSON
+            for k, v in result.items():
+                if hasattr(v, 'isoformat'):
+                    result[k] = v.isoformat()
+            result.pop('id', None)
+            return result
+    except Exception:
+        return None
 
 
 def _db_size_display() -> str:

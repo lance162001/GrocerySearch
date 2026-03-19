@@ -36,3 +36,18 @@ class StoreSuggestion(Base, BaseModel):
     status = Column(String(20), default='todo')  # 'todo', 'done', 'rejected'
     created_at = Column(DateTime, default=datetime.now)
 
+
+class ScraperStatus(Base):
+    """Single-row table holding the latest scraper run status."""
+    __tablename__ = 'scraper_status'
+    id = Column(Integer, primary_key=True, default=1)
+    status = Column(String(20))           # idle, running, error
+    updated_at = Column(DateTime)
+    started_at = Column(DateTime, nullable=True)
+    last_finished = Column(DateTime, nullable=True)
+    stores_scraped = Column(Integer, nullable=True)
+    new_products = Column(Integer, nullable=True)
+    new_instances = Column(Integer, nullable=True)
+    new_price_points = Column(Integer, nullable=True)
+    error = Column(String(500), nullable=True)
+

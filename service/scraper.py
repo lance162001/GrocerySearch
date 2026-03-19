@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import threading
 import time
 from datetime import datetime
-from pathlib import Path
 
 import schedule
 from sqlalchemy import inspect, text
@@ -17,19 +15,32 @@ from sqlalchemy.orm import Session
 import emailer
 from models import Company, Store, Tag
 from models.base import Base, engine
+from models.stores import ScraperStatus
 from scrapers import scrape_whole_foods, scrape_trader_joes, scrape_wegmans
 from scrapers.utils import setup_seed_data, load_existing_tags, compute_variation_groups
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-_STATUS_FILE = Path(__file__).resolve().parent / ".scraper_status.json"
-
-
 def _write_status(status: str, **extra: object) -> None:
-    """Persist scraper status to a JSON file so the admin dashboard can read it."""
-    data = {"status": status, "updated_at": datetime.now().isoformat(), **extra}
-    _STATUS_FILE.write_text(json.dumps(data, default=str))
+    """Persist scraper status to the database so the admin dashboard can read it."""
+    sess = Session(engine, expire_on_commit=False)
+    try:
+        row = sess.get(ScraperStatus, 1)
+        if row is None:
+            row = ScraperStatus(id=1)
+            sess.add(row)
+        row.status = status
+        row.updated_at = datetime.now()
+        for key, val in extra.items():
+            if hasattr(row, key):
+                setattr(row, key, val)
+        sess.commit()
+    except Exception:
+        sess.rollback()
+        logger.warning("Failed to write scraper status to DB", exc_info=True)
+    finally:
+        sess.close()
 
 
 def _new_session() -> Session:
@@ -108,7 +119,7 @@ def scheduled_job() -> None:
     collector = _new_collector()
     logger.info("Scraping started")
     start = datetime.now()
-    _write_status("running", started_at=start.isoformat())
+    _write_status("running", started_at=start)
 
     sess = _new_session()
     try:
@@ -151,15 +162,15 @@ def scheduled_job() -> None:
             else:
                 raise
     except Exception as exc:
-        _write_status("error", started_at=start.isoformat(), error=str(exc))
+        _write_status("error", started_at=start, error=str(exc)[:500])
         raise
     finally:
         sess.close()
 
     _write_status(
         "idle",
-        last_run=start.isoformat(),
-        last_finished=datetime.now().isoformat(),
+        started_at=start,
+        last_finished=datetime.now(),
         stores_scraped=len(stores),
         new_products=len(collector["products"]),
         new_instances=len(collector["product_instances"]),
