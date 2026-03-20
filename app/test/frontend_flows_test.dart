@@ -1036,7 +1036,7 @@ void main() {
         await tester.pageBack();
         await _pumpUi(tester, frames: 8);
 
-        expect(find.byType(StaplesOverview), findsOneWidget);
+        expect(find.byType(StoreSearch), findsOneWidget);
 
         await tester.tap(find.text('Search'));
         await _pumpUi(tester, frames: 8);

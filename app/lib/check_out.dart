@@ -149,159 +149,343 @@ class _CheckOutState extends State<CheckOut> {
     }
   }
 
+  Widget _buildCheckoutSummary(AppState appState) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE4E4E7)),
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        runAlignment: WrapAlignment.spaceBetween,
+        runSpacing: 8,
+        spacing: 12,
+        children: [
+          const Text(
+            'Cart overview',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          Text(
+            'Total Items: ${appState.cartTotalItems}',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          Text(
+            'Total: \$${_checkoutTotal(appState).toStringAsFixed(2)}',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCartProductEntry(
+    AppState appState,
+    Product product, {
+    required VoidCallback onTap,
+    required bool showQuantity,
+  }) {
+    return Card(
+      color: Colors.white,
+      clipBehavior: Clip.hardEdge,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          children: [
+            ProductBox(
+              p: product,
+              qty: appState.cartQuantities[product.instanceId] ?? 0,
+            ),
+            if (showQuantity)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Qty: ${appState.cartQuantities[product.instanceId] ?? 0}',
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWideStoreColumn(
+    AppState appState,
+    Store store,
+    List<Product> products, {
+    required bool finished,
+    required List<Product> allProducts,
+  }) {
+    final company = _companyForStore(appState, store);
+    return Column(
+      children: [
+        Row(
+          children: [
+            Text(
+              store.town,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            if (company != null)
+              ProductImage(
+                url: company.logoUrl,
+                width: 75,
+                height: 50,
+              ),
+          ],
+        ),
+        if (finished)
+          Text(
+            'Store Total: \$${_storeSectionSubtotal(appState, allProducts, store.id).toStringAsFixed(2)}',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        Expanded(
+          child: SizedBox(
+            width: 180,
+            child: ListView(
+              scrollDirection: Axis.vertical,
+              shrinkWrap: true,
+              padding: const EdgeInsets.all(1),
+              children: products
+                  .map((product) => _buildCartProductEntry(
+                        appState,
+                        product,
+                        onTap: () {
+                          if (finished) {
+                            context.read<AppState>().restoreFinishedItem(product);
+                          } else {
+                            context.read<AppState>().moveCartItemToFinished(product);
+                          }
+                        },
+                        showQuantity: !finished,
+                      ))
+                  .toList()
+                  .cast<Widget>(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactStoreSection(
+    AppState appState,
+    Store store,
+    List<Product> allProducts,
+  ) {
+    final company = _companyForStore(appState, store);
+    final todoProducts = appState.cart
+        .where((product) => product.storeId == store.id)
+        .toList(growable: false);
+    final doneProducts = appState.cartFinished
+        .where((product) => product.storeId == store.id)
+        .toList(growable: false);
+
+    return Card(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        store.town,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        'Store Total: \$${_storeSectionSubtotal(appState, allProducts, store.id).toStringAsFixed(2)}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+                if (company != null)
+                  ProductImage(
+                    url: company.logoUrl,
+                    width: 64,
+                    height: 40,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'To Do',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            if (todoProducts.isEmpty)
+              Text(
+                'No items to pick up.',
+                style: TextStyle(color: Colors.grey.shade600),
+              )
+            else
+              ...todoProducts.map(
+                (product) => _buildCartProductEntry(
+                  appState,
+                  product,
+                  onTap: () => context.read<AppState>().moveCartItemToFinished(product),
+                  showQuantity: true,
+                ),
+              ),
+            const SizedBox(height: 12),
+            const Text(
+              'Done',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            if (doneProducts.isEmpty)
+              Text(
+                'Nothing marked done yet.',
+                style: TextStyle(color: Colors.grey.shade600),
+              )
+            else
+              ...doneProducts.map(
+                (product) => _buildCartProductEntry(
+                  appState,
+                  product,
+                  onTap: () => context.read<AppState>().restoreFinishedItem(product),
+                  showQuantity: false,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final stores = appState.userStores;
     final allProducts = [...appState.cart, ...appState.cartFinished];
+    final screenWidth = MediaQuery.of(context).size.width;
+    final compactLayout = screenWidth < 720;
+    final compactAction = screenWidth < 430;
     return Scaffold(
         appBar: AppBar(
           title: const Text('Cart'),
           actions: [
-            TextButton.icon(
-              onPressed: _savingBundle ? null : _saveCartAsBundle,
-              icon: _savingBundle
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+            if (compactAction)
+              IconButton(
+                tooltip: 'Save Bundle',
+                onPressed: _savingBundle ? null : _saveCartAsBundle,
+                icon: _savingBundle
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save),
+              )
+            else
+              TextButton.icon(
+                onPressed: _savingBundle ? null : _saveCartAsBundle,
+                icon: _savingBundle
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save),
+                label: const Text('Save Bundle'),
+              ),
+          ],
+        ),
+        body: compactLayout
+            ? ListView(
+                padding: const EdgeInsets.only(bottom: 12),
+                children: [
+                  _buildCheckoutSummary(appState),
+                  if (stores.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'Pick stores and add products to start building your cart.',
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
                     )
-                  : const Icon(Icons.save),
-              label: const Text('Save Bundle'),
-            ),
-          ],
-        ),
-        body: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text("To Do:", style: TextStyle(fontWeight: FontWeight.bold)),
-                Padding(
-                  padding: const EdgeInsets.only(right: 12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        'Total Items: ${appState.cartTotalItems}',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                  else
+                    ...stores.map(
+                      (store) => _buildCompactStoreSection(
+                        appState,
+                        store,
+                        allProducts,
                       ),
-                      Text(
-                        'Total: \$${_checkoutTotal(appState).toStringAsFixed(2)}',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ],
+                    ),
+                ],
+              )
+            : Column(
+                children: [
+                  _buildCheckoutSummary(appState),
+                  const Padding(
+                    padding: EdgeInsets.only(top: 4, bottom: 4),
+                    child: Text(
+                      'To Do',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
-                )
-              ],
-            ),
-            Expanded(
-              child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.all(1),
-                  children: stores
-                      .map((s) => Column(
-                            children: [
-                              Builder(builder: (context) {
-                                final company = _companyForStore(appState, s);
-                                return Row(children: [
-                                  Text(s.town,
-                                      style:
-                                          TextStyle(fontWeight: FontWeight.bold)),
-                                  if (company != null)
-                                    ProductImage(
-                                      url: company.logoUrl,
-                                      width: 75,
-                                      height: 50,
-                                    ),
-                                ]);
-                              }),
-                              Expanded(
-                                child: SizedBox(
-                                  width: 180,
-                                  child: ListView(
-                                      scrollDirection: Axis.vertical,
-                                      shrinkWrap: true,
-                                      padding: const EdgeInsets.all(1),
-                                      children: appState.cart
-                                          .where((p) => p.storeId == s.id)
-                                          .map((p) => Card(
-                                              color: Colors.white,
-                                              clipBehavior: Clip.hardEdge,
-                                              child: InkWell(
-                                                  onTap: () {
-                                                    context.read<AppState>().moveCartItemToFinished(p);
-                                                  },
-                                                  child: Column(
-                                                    children: [
-                                                      ProductBox(p: p, qty: appState.cartQuantities[p.instanceId] ?? 0),
-                                                      Text('Qty: ${appState.cartQuantities[p.instanceId] ?? 0}'),
-                                                    ],
-                                                  ))))
-                                          .toList()
-                                          .cast<Widget>()),
-                                ),
-                              ),
-                            ],
-                          ))
-                      .toList()),
-            ),
-            SizedBox(height: 35),
-            Text("Done:", style: TextStyle(fontWeight: FontWeight.bold)),
-            Expanded(
-              child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.all(1),
-                  children: stores
-                      .map((s) => Column(
-                            children: [
-                              Builder(builder: (context) {
-                                final company = _companyForStore(appState, s);
-                                return Row(children: [
-                                  Text(s.town,
-                                      style:
-                                          TextStyle(fontWeight: FontWeight.bold)),
-                                  if (company != null)
-                                    ProductImage(
-                                      url: company.logoUrl,
-                                      width: 75,
-                                      height: 50,
-                                    ),
-                                ]);
-                              }),
-                              Text(
-                                'Store Total: \$${_storeSectionSubtotal(appState, allProducts, s.id).toStringAsFixed(2)}',
-                                style: TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                              Expanded(
-                                child: SizedBox(
-                                  width: 180,
-                                  child: ListView(
-                                      scrollDirection: Axis.vertical,
-                                      shrinkWrap: true,
-                                      padding: const EdgeInsets.all(1),
-                                        children: appState.cartFinished
-                                          .where((p) => p.storeId == s.id)
-                                          .map((p) => Card(
-                                            color: Colors.white,
-                                            clipBehavior: Clip.hardEdge,
-                                            child: InkWell(
-                                              onTap: () {
-                                              context.read<AppState>().restoreFinishedItem(p);
-                                              },
-                                              child: ProductBox(p: p, qty: appState.cartQuantities[p.instanceId] ?? 0))))
-                                          .toList()
-                                          .cast<Widget>()),
-                                ),
-                              ),
-                            ],
-                          ))
-                      .toList()),
-            ),
-          ],
-        ),
+                  Expanded(
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.all(1),
+                      children: stores
+                          .map(
+                            (store) => _buildWideStoreColumn(
+                              appState,
+                              store,
+                              appState.cart
+                                  .where((product) => product.storeId == store.id)
+                                  .toList(growable: false),
+                              finished: false,
+                              allProducts: allProducts,
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      'Done',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.all(1),
+                      children: stores
+                          .map(
+                            (store) => _buildWideStoreColumn(
+                              appState,
+                              store,
+                              appState.cartFinished
+                                  .where((product) => product.storeId == store.id)
+                                  .toList(growable: false),
+                              finished: true,
+                              allProducts: allProducts,
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                ],
+              ),
         bottomNavigationBar: const SafeArea(
           top: false,
           child: TopLevelNavigationBar(

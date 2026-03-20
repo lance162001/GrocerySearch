@@ -76,7 +76,6 @@ class _StoreSearchState extends State<StoreSearch> {
 
   Future<void> _openDestination(AppTopLevelDestination destination) async {
     final appState = context.read<AppState>();
-    final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
 
     if (destination == AppTopLevelDestination.staples &&
@@ -110,7 +109,7 @@ class _StoreSearchState extends State<StoreSearch> {
       return;
     }
 
-    navigator.pushNamed(routeForTopLevelDestination(destination));
+    navigateToTopLevelDestination(context, destination);
   }
 
   @override

@@ -871,6 +871,102 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
+  Widget _buildQuantityStepper(ProductGroup group, Product product) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F4F5),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFE4E4E7)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: InkResponse(
+              onTap: () => _changeRequestedQty(product, -1),
+              radius: 12,
+              child: const Icon(
+                Icons.remove_circle_outline,
+                size: 13,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 18,
+            child: Text(
+              '${_groupRequestedQuantity(group)}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: InkResponse(
+              onTap: () => _changeRequestedQty(product, 1),
+              radius: 12,
+              child: const Icon(
+                Icons.add_circle_outline,
+                size: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactActionBar(
+    BuildContext context,
+    ProductGroup group,
+    Product product,
+    AppState appState,
+  ) {
+    final primarySelected = appState.quantityFor(product) > 0;
+    final hasStatusPill =
+        product.salePrice.isNotEmpty || product.memberPrice.isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 2, 8, 6),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          SizedBox(
+            height: 32,
+            child: OutlinedButton.icon(
+              onPressed: () => _toggleGroupedProduct(group, appState),
+              icon: Icon(
+                primarySelected
+                    ? Icons.remove_shopping_cart
+                    : Icons.add_shopping_cart,
+                size: 16,
+              ),
+              label: Text(
+                primarySelected ? 'Remove' : 'Add',
+                style: const TextStyle(fontSize: 12),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ),
+          _buildQuantityStepper(group, product),
+          if (hasStatusPill) _buildStatusPill(context, product),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPriceSpreadBadge({
     required double amount,
     required bool isBestPrice,
@@ -1247,119 +1343,96 @@ class _SearchPageState extends State<SearchPage> {
                     onLongPress: () {
                       _showProductDetails(context, group, appState);
                     },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final compactCard = constraints.maxWidth < 430;
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Expanded(
-                                child: ProductBox(
+                              if (compactCard) ...[
+                                ProductBox(
                                   p: product,
                                   qty: groupQuantity,
                                 ),
-                              ),
-                              const SizedBox(width: 4),
-                              SizedBox(
-                                width: 72,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                _buildCompactActionBar(
+                                  context,
+                                  group,
+                                  product,
+                                  appState,
+                                ),
+                              ] else
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    IconButton(
-                                      iconSize: 22,
-                                      padding: EdgeInsets.zero,
-                                      visualDensity: VisualDensity.compact,
-                                      constraints: const BoxConstraints(
-                                        minWidth: 28,
-                                        minHeight: 28,
+                                    Expanded(
+                                      child: ProductBox(
+                                        p: product,
+                                        qty: groupQuantity,
                                       ),
-                                      icon: primarySelected
-                                          ? const Icon(
-                                              Icons.remove_shopping_cart)
-                                          : const Icon(Icons.add_shopping_cart),
-                                      onPressed: () {
-                                        _toggleGroupedProduct(group, appState);
-                                      },
-                                      tooltip: primarySelected
-                                          ? 'Remove cheapest option from cart'
-                                          : 'Add cheapest option to cart',
                                     ),
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: InkResponse(
-                                            onTap: () => _changeRequestedQty(
-                                                product, -1),
-                                            radius: 12,
-                                            child: const Icon(
-                                              Icons.remove_circle_outline,
-                                              size: 14,
+                                    const SizedBox(width: 4),
+                                    SizedBox(
+                                      width: 72,
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        children: [
+                                          IconButton(
+                                            iconSize: 22,
+                                            padding: EdgeInsets.zero,
+                                            visualDensity: VisualDensity.compact,
+                                            constraints: const BoxConstraints(
+                                              minWidth: 28,
+                                              minHeight: 28,
                                             ),
+                                            icon: primarySelected
+                                                ? const Icon(Icons.remove_shopping_cart)
+                                                : const Icon(Icons.add_shopping_cart),
+                                            onPressed: () {
+                                              _toggleGroupedProduct(group, appState);
+                                            },
+                                            tooltip: primarySelected
+                                                ? 'Remove cheapest option from cart'
+                                                : 'Add cheapest option to cart',
                                           ),
-                                        ),
-                                        SizedBox(
-                                          width: 20,
-                                          child: Text(
-                                            '${_groupRequestedQuantity(group)}',
-                                            textAlign: TextAlign.center,
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: InkResponse(
-                                            onTap: () =>
-                                                _changeRequestedQty(product, 1),
-                                            radius: 12,
-                                            child: const Icon(
-                                              Icons.add_circle_outline,
-                                              size: 14,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                                          const SizedBox(height: 4),
+                                          _buildQuantityStepper(group, product),
+                                          const SizedBox(height: 6),
+                                          _buildStatusPill(context, product),
+                                        ],
+                                      ),
                                     ),
-                                    const SizedBox(height: 6),
-                                    _buildStatusPill(context, product),
+                                  ],
+                                ),
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 8,
+                                  right: 8,
+                                  top: 2,
+                                  bottom: 4,
+                                ),
+                                child: Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    _buildBestStoreChip(group),
+                                    if (group.otherStoreCount > 0)
+                                      _buildOtherStoresChip(group),
+                                    if (group.priceSpread != null)
+                                      _buildPriceSpreadBadge(
+                                        amount: group.priceSpread!,
+                                        isBestPrice: true,
+                                        storeCount: group.storeCount,
+                                      ),
                                   ],
                                 ),
                               ),
                             ],
                           ),
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              left: 8,
-                              right: 8,
-                              top: 2,
-                              bottom: 4,
-                            ),
-                            child: Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                _buildBestStoreChip(group),
-                                if (group.otherStoreCount > 0)
-                                  _buildOtherStoresChip(group),
-                                if (group.priceSpread != null)
-                                  _buildPriceSpreadBadge(
-                                    amount: group.priceSpread!,
-                                    isBestPrice: true,
-                                    storeCount: group.storeCount,
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                   ),
                 );

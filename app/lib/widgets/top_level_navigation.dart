@@ -23,6 +23,16 @@ String routeForTopLevelDestination(AppTopLevelDestination destination) {
   }
 }
 
+void navigateToTopLevelDestination(
+  BuildContext context,
+  AppTopLevelDestination destination,
+) {
+  Navigator.of(context).pushNamedAndRemoveUntil(
+    routeForTopLevelDestination(destination),
+    (route) => route.isFirst,
+  );
+}
+
 class TopLevelNavigationBar extends StatelessWidget {
   const TopLevelNavigationBar({
     super.key,
@@ -87,9 +97,7 @@ class TopLevelNavigationBar extends StatelessWidget {
           handler(destination);
           return;
         }
-        Navigator.of(context).pushNamed(
-          routeForTopLevelDestination(destination),
-        );
+        navigateToTopLevelDestination(context, destination);
       },
       destinations: [
         const NavigationDestination(
