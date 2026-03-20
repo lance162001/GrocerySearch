@@ -194,14 +194,11 @@ class _StoreSearchState extends State<StoreSearch> {
               ),
             ),
           ),
-          IconButton(
-            tooltip: 'Bundle planner',
-            icon: const Icon(Icons.route),
-            onPressed: () => Navigator.pushNamed(context, AppRoutes.bundlePlan),
-          ),
           PopupMenuButton<String>(
             onSelected: (value) {
-              if (value == 'label') {
+              if (value == 'bundle_plan') {
+                Navigator.pushNamed(context, AppRoutes.bundlePlan);
+              } else if (value == 'label') {
                 Navigator.pushNamed(context, AppRoutes.labelJudgement);
               } else if (value == 'suggest_store') {
                 Navigator.pushNamed(context, AppRoutes.suggestStore);
@@ -209,12 +206,22 @@ class _StoreSearchState extends State<StoreSearch> {
             },
             itemBuilder: (context) => const [
               PopupMenuItem(
+                value: 'bundle_plan',
+                child: Row(
+                  children: [
+                    Icon(Icons.route, size: 20),
+                    SizedBox(width: 12),
+                    Text('Bundles'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
                 value: 'label',
                 child: Row(
                   children: [
                     Icon(Icons.rate_review_outlined, size: 20),
                     SizedBox(width: 12),
-                    Text('Help label products'),
+                    Text('Review labels'),
                   ],
                 ),
               ),
@@ -224,7 +231,7 @@ class _StoreSearchState extends State<StoreSearch> {
                   children: [
                     Icon(Icons.add_business, size: 20),
                     SizedBox(width: 12),
-                    Text('Suggest a store'),
+                    Text('Suggest store'),
                   ],
                 ),
               ),

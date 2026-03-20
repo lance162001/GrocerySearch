@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_front_end/product_search.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/utils/price_utils.dart';
+import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
 import 'package:provider/provider.dart';
 
@@ -387,6 +388,12 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
           ),
         ],
       ),
+      bottomNavigationBar: const SafeArea(
+        top: false,
+        child: TopLevelNavigationBar(
+          currentDestination: AppTopLevelDestination.cart,
+        ),
+      ),
     );
   }
 
@@ -401,24 +408,41 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
         // ---- Create bundle ----
         Padding(
           padding: const EdgeInsets.only(top: 12, bottom: 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _bundleNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'New bundle name',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 520;
+              final nameField = TextField(
+                controller: _bundleNameController,
+                decoration: const InputDecoration(
+                  labelText: 'New bundle name',
+                  border: OutlineInputBorder(),
+                  isDense: true,
                 ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.tonal(
+              );
+              final createButton = FilledButton.tonal(
                 onPressed: _loading ? null : _createBundle,
                 child: const Text('Create bundle'),
-              ),
-            ],
+              );
+
+              if (compact) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    nameField,
+                    const SizedBox(height: 8),
+                    createButton,
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: nameField),
+                  const SizedBox(width: 8),
+                  createButton,
+                ],
+              );
+            },
           ),
         ),
         const SizedBox(height: 12),
@@ -487,47 +511,83 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
             color: cs.primaryContainer.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 420;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
+                  if (compact) ...[
+                    Text(
                       bundle.name,
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: cs.onSurface),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                        color: cs.onSurface,
+                      ),
                     ),
-                  ),
-                  TextButton.icon(
-                    onPressed: () => setState(() => _selectedBundle = null),
-                    icon: const Icon(Icons.arrow_back, size: 16),
-                    label: const Text('Back'),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: () => setState(() => _selectedBundle = null),
+                      icon: const Icon(Icons.arrow_back, size: 16),
+                      label: const Text('Back to bundles'),
+                    ),
+                  ] else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            bundle.name,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 18,
+                              color: cs.onSurface,
+                            ),
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => setState(() => _selectedBundle = null),
+                          icon: const Icon(Icons.arrow_back, size: 16),
+                          label: const Text('Back'),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 4,
+                    children: [
+                      Text('${bundle.productCount} product(s)'),
+                      Text(
+                        'Best-price total: ${_money(totalBest)}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ],
                   ),
                 ],
-              ),
-              const SizedBox(height: 4),
-              Wrap(
-                spacing: 16,
-                runSpacing: 4,
-                children: [
-                  Text('${bundle.productCount} product(s)'),
-                  Text('Best\u2011price total: ${_money(totalBest)}',
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ],
+              );
+            },
           ),
         ),
         const SizedBox(height: 8),
 
         // ---- Add items ----
-        Align(
-          alignment: Alignment.centerLeft,
-          child: FilledButton.icon(
-            icon: const Icon(Icons.add_shopping_cart, size: 18),
-            label: const Text('Add items to bundle'),
-            onPressed: _loading ? null : () => _addItemsToBundle(bundle.id, bundle.name),
-          ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 420;
+            return Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: compact ? double.infinity : null,
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.add_shopping_cart, size: 18),
+                  label: const Text('Add items to bundle'),
+                  onPressed:
+                      _loading ? null : () => _addItemsToBundle(bundle.id, bundle.name),
+                ),
+              ),
+            );
+          },
         ),
         const SizedBox(height: 12),
 
@@ -556,40 +616,75 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ---- Product header ----
-            Row(
-              children: [
-                if (product.pictureUrl.isNotEmpty)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: ProductImage(
-                      url: product.pictureUrl,
-                      width: 48,
-                      height: 48,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 360;
+                final details = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.name,
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
                     ),
-                  ),
-                if (product.pictureUrl.isNotEmpty) const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
+                    if (product.brand.isNotEmpty)
+                      Text(
+                        product.brand,
+                        style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                      ),
+                  ],
+                );
+
+                final leading = Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (product.pictureUrl.isNotEmpty)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: ProductImage(
+                          url: product.pictureUrl,
+                          width: 48,
+                          height: 48,
+                        ),
+                      ),
+                    if (product.pictureUrl.isNotEmpty) const SizedBox(width: 10),
+                    Expanded(child: details),
+                  ],
+                );
+
+                final price = product.bestPrice != null
+                    ? Text(
+                        _money(product.bestPrice),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: cs.primary,
+                        ),
+                      )
+                    : null;
+
+                if (compact) {
+                  return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(product.name,
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-                      if (product.brand.isNotEmpty)
-                        Text(product.brand,
-                            style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                      leading,
+                      if (price != null) ...[
+                        const SizedBox(height: 8),
+                        price,
+                      ],
                     ],
-                  ),
-                ),
-                if (product.bestPrice != null)
-                  Text(
-                    _money(product.bestPrice),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: cs.primary,
-                    ),
-                  ),
-              ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: leading),
+                    if (price != null) ...[
+                      const SizedBox(width: 12),
+                      price,
+                    ],
+                  ],
+                );
+              },
             ),
 
             // ---- Price points by store ----
@@ -625,23 +720,27 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
                         ...inst.pricePoints.map((pp) {
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 2),
-                            child: Row(
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
-                                // Size
                                 if (pp.size != null && pp.size!.isNotEmpty)
                                   Container(
-                                    margin: const EdgeInsets.only(right: 8),
                                     padding:
                                         const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: cs.secondaryContainer,
                                       borderRadius: BorderRadius.circular(4),
                                     ),
-                                    child: Text(pp.size!,
-                                        style: TextStyle(
-                                            fontSize: 11, color: cs.onSecondaryContainer)),
+                                    child: Text(
+                                      pp.size!,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: cs.onSecondaryContainer,
+                                      ),
+                                    ),
                                   ),
-                                // Base price
                                 Text(
                                   formatPriceString(pp.basePrice),
                                   style: (pp.salePrice != null && pp.salePrice!.isNotEmpty) ||
@@ -653,8 +752,6 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
                                         )
                                       : const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                                 ),
-                                const SizedBox(width: 8),
-                                // Sale price
                                 if (pp.salePrice != null && pp.salePrice!.isNotEmpty)
                                   Text(
                                     formatPriceString(pp.salePrice!),
@@ -664,9 +761,6 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                if (pp.salePrice != null && pp.salePrice!.isNotEmpty)
-                                  const SizedBox(width: 8),
-                                // Member price
                                 if (pp.memberPrice != null && pp.memberPrice!.isNotEmpty)
                                   Container(
                                     padding:
@@ -684,8 +778,6 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
                                       ),
                                     ),
                                   ),
-                                const Spacer(),
-                                // Date
                                 if (pp.createdAt != null)
                                   Text(
                                     '${pp.createdAt!.month}/${pp.createdAt!.day}',

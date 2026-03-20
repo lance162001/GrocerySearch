@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_front_end/models/grocery_models.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
+import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
 import 'package:provider/provider.dart';
 
@@ -154,9 +155,10 @@ class _LabelJudgementPageState extends State<LabelJudgementPage>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Label Judgement'),
+        title: const Text('Review Labels'),
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
           tabs: [
             Tab(
               icon: const Icon(Icons.star_outline),
@@ -175,6 +177,12 @@ class _LabelJudgementPageState extends State<LabelJudgementPage>
           _buildJudgementView('staple'),
           _buildJudgementView('grouping'),
         ],
+      ),
+      bottomNavigationBar: const SafeArea(
+        top: false,
+        child: TopLevelNavigationBar(
+          currentDestination: AppTopLevelDestination.staples,
+        ),
       ),
     );
   }
@@ -333,33 +341,61 @@ class _StapleJudgementCard extends StatelessWidget {
                 pictureUrl: candidate.productPictureUrl,
               ),
               const SizedBox(height: 32),
-              Row(
-                children: [
-                  Expanded(
-                    child: _JudgeButton(
-                      icon: Icons.thumb_down_outlined,
-                      label: 'Not a staple',
-                      color: const Color(0xFF71717A),
-                      onPressed: () => onJudge(false),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _JudgeButton(
-                      icon: Icons.thumb_up_outlined,
-                      label: 'Staple',
-                      color: const Color(0xFF4F46E5),
-                      onPressed: () => onJudge(true),
-                    ),
-                  ),
-                ],
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 360;
+                  if (compact) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _JudgeButton(
+                          icon: Icons.thumb_down_outlined,
+                          label: 'Not a staple',
+                          color: const Color(0xFF71717A),
+                          onPressed: () => onJudge(false),
+                        ),
+                        const SizedBox(height: 8),
+                        _JudgeButton(
+                          icon: Icons.thumb_up_outlined,
+                          label: 'Staple',
+                          color: const Color(0xFF4F46E5),
+                          onPressed: () => onJudge(true),
+                        ),
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: _JudgeButton(
+                          icon: Icons.thumb_down_outlined,
+                          label: 'Not a staple',
+                          color: const Color(0xFF71717A),
+                          onPressed: () => onJudge(false),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _JudgeButton(
+                          icon: Icons.thumb_up_outlined,
+                          label: 'Staple',
+                          color: const Color(0xFF4F46E5),
+                          onPressed: () => onJudge(true),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 12),
-              _JudgeButton(
-                icon: Icons.help_outline,
-                label: 'Unsure',
-                color: const Color(0xFFA1A1AA),
-                onPressed: onSkip,
+              SizedBox(
+                width: double.infinity,
+                child: _JudgeButton(
+                  icon: Icons.help_outline,
+                  label: 'Unsure',
+                  color: const Color(0xFFA1A1AA),
+                  onPressed: onSkip,
+                ),
               ),
             ],
           ),
@@ -385,93 +421,170 @@ class _GroupingJudgementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 500),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Are these the same product?',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Would you consider these interchangeable?',
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _ProductCard(
-                      name: candidate.productName,
-                      brand: candidate.productBrand,
-                      pictureUrl: candidate.productPictureUrl,
+    return SingleChildScrollView(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 420;
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Are these the same product?',
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 40),
-                    child: Icon(Icons.compare_arrows, size: 32, color: Colors.grey.shade400),
-                  ),
-                  Expanded(
-                    child: _ProductCard(
-                      name: candidate.targetProductName ?? '',
-                      brand: candidate.targetProductBrand ?? '',
-                      pictureUrl: candidate.targetProductPictureUrl ?? '',
+                    const SizedBox(height: 8),
+                    Text(
+                      'Would you consider these interchangeable?',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                      textAlign: TextAlign.center,
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-              Row(
-                children: [
-                  Expanded(
-                    child: _JudgeButton(
-                      icon: Icons.close,
-                      label: 'Different',
-                      color: const Color(0xFF71717A),
-                      onPressed: () => onJudge(false),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _JudgeButton(
-                      icon: Icons.check,
-                      label: 'Same product',
-                      color: const Color(0xFF4F46E5),
-                      onPressed: () => onJudge(true),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _JudgeButton(
-                      icon: Icons.style_outlined,
-                      label: 'Flavor / Variation',
-                      color: const Color(0xFFD97706),
-                      onPressed: onFlavour,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _JudgeButton(
-                      icon: Icons.help_outline,
-                      label: 'Unsure',
-                      color: const Color(0xFFA1A1AA),
-                      onPressed: onSkip,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+                    const SizedBox(height: 24),
+                    if (compact)
+                      Column(
+                        children: [
+                          _ProductCard(
+                            name: candidate.productName,
+                            brand: candidate.productBrand,
+                            pictureUrl: candidate.productPictureUrl,
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Icon(
+                              Icons.compare_arrows,
+                              size: 32,
+                              color: Colors.grey.shade400,
+                            ),
+                          ),
+                          _ProductCard(
+                            name: candidate.targetProductName ?? '',
+                            brand: candidate.targetProductBrand ?? '',
+                            pictureUrl: candidate.targetProductPictureUrl ?? '',
+                          ),
+                        ],
+                      )
+                    else
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _ProductCard(
+                              name: candidate.productName,
+                              brand: candidate.productBrand,
+                              pictureUrl: candidate.productPictureUrl,
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 40),
+                            child: Icon(
+                              Icons.compare_arrows,
+                              size: 32,
+                              color: Colors.grey.shade400,
+                            ),
+                          ),
+                          Expanded(
+                            child: _ProductCard(
+                              name: candidate.targetProductName ?? '',
+                              brand: candidate.targetProductBrand ?? '',
+                              pictureUrl: candidate.targetProductPictureUrl ?? '',
+                            ),
+                          ),
+                        ],
+                      ),
+                    const SizedBox(height: 32),
+                    if (compact) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: _JudgeButton(
+                          icon: Icons.close,
+                          label: 'Different',
+                          color: const Color(0xFF71717A),
+                          onPressed: () => onJudge(false),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: _JudgeButton(
+                          icon: Icons.check,
+                          label: 'Same product',
+                          color: const Color(0xFF4F46E5),
+                          onPressed: () => onJudge(true),
+                        ),
+                      ),
+                    ] else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _JudgeButton(
+                              icon: Icons.close,
+                              label: 'Different',
+                              color: const Color(0xFF71717A),
+                              onPressed: () => onJudge(false),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _JudgeButton(
+                              icon: Icons.check,
+                              label: 'Same product',
+                              color: const Color(0xFF4F46E5),
+                              onPressed: () => onJudge(true),
+                            ),
+                          ),
+                        ],
+                      ),
+                    const SizedBox(height: 12),
+                    if (compact) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: _JudgeButton(
+                          icon: Icons.style_outlined,
+                          label: 'Flavor / Variation',
+                          color: const Color(0xFFD97706),
+                          onPressed: onFlavour,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: _JudgeButton(
+                          icon: Icons.help_outline,
+                          label: 'Unsure',
+                          color: const Color(0xFFA1A1AA),
+                          onPressed: onSkip,
+                        ),
+                      ),
+                    ] else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _JudgeButton(
+                              icon: Icons.style_outlined,
+                              label: 'Flavor / Variation',
+                              color: const Color(0xFFD97706),
+                              onPressed: onFlavour,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _JudgeButton(
+                              icon: Icons.help_outline,
+                              label: 'Unsure',
+                              color: const Color(0xFFA1A1AA),
+                              onPressed: onSkip,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -556,12 +669,11 @@ class _JudgeButton extends StatelessWidget {
       child: ElevatedButton.icon(
         onPressed: onPressed,
         icon: Icon(icon, color: Colors.white),
-        label: Flexible(
-          child: Text(
-            label,
-            style: const TextStyle(color: Colors.white),
-            overflow: TextOverflow.ellipsis,
-          ),
+        label: Text(
+          label,
+          style: const TextStyle(color: Colors.white),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: color,

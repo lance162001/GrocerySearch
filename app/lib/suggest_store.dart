@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
+import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:provider/provider.dart';
 
 class SuggestStorePage extends StatefulWidget {
@@ -60,14 +61,15 @@ class _SuggestStorePageState extends State<SuggestStorePage> {
   @override
   Widget build(BuildContext context) {
     final companies = context.watch<AppState>().companies;
+    final compact = MediaQuery.of(context).size.width < 420;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Suggest a Store')),
+      appBar: AppBar(title: const Text('Suggest Store')),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 450),
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.all(compact ? 16 : 24),
             child: Form(
               key: _formKey,
               child: Column(
@@ -171,6 +173,12 @@ class _SuggestStorePageState extends State<SuggestStorePage> {
               ),
             ),
           ),
+        ),
+      ),
+      bottomNavigationBar: const SafeArea(
+        top: false,
+        child: TopLevelNavigationBar(
+          currentDestination: AppTopLevelDestination.stores,
         ),
       ),
     );

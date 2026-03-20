@@ -251,7 +251,7 @@ class _StaplesOverviewState extends State<StaplesOverview> {
                   children: [
                     Icon(Icons.route, size: 20),
                     SizedBox(width: 12),
-                    Text('Bundle planner'),
+                    Text('Bundles'),
                   ],
                 ),
               ),
@@ -261,7 +261,7 @@ class _StaplesOverviewState extends State<StaplesOverview> {
                   children: [
                     Icon(Icons.rate_review_outlined, size: 20),
                     SizedBox(width: 12),
-                    Text('Help label products'),
+                    Text('Review labels'),
                   ],
                 ),
               ),
@@ -271,7 +271,7 @@ class _StaplesOverviewState extends State<StaplesOverview> {
                   children: [
                     Icon(Icons.add_business, size: 20),
                     SizedBox(width: 12),
-                    Text('Suggest a store'),
+                    Text('Suggest store'),
                   ],
                 ),
               ),

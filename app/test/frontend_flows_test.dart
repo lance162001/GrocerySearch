@@ -6,11 +6,13 @@ import 'package:flutter_front_end/bundle_plan.dart';
 import 'package:flutter_front_end/check_out.dart';
 import 'package:flutter_front_end/config/app_environment.dart';
 import 'package:flutter_front_end/config/app_routes.dart';
+import 'package:flutter_front_end/label_judgement.dart';
 import 'package:flutter_front_end/main_search.dart';
 import 'package:flutter_front_end/models/grocery_models.dart';
 import 'package:flutter_front_end/product_box.dart';
 import 'package:flutter_front_end/product_search.dart';
 import 'package:flutter_front_end/staples_overview.dart';
+import 'package:flutter_front_end/suggest_store.dart';
 import 'package:flutter_front_end/services/auth_service.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
@@ -453,6 +455,8 @@ Widget _buildTestApp({
         AppRoutes.checkout: (context) => const CheckOut(),
         AppRoutes.bundlePlan: (context) =>
             BundlePlanPage(initialUserId: appState.currentUserId ?? 42),
+        AppRoutes.labelJudgement: (context) => const LabelJudgementPage(),
+        AppRoutes.suggestStore: (context) => const SuggestStorePage(),
       },
     ),
   );
