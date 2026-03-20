@@ -408,35 +408,46 @@ class _StoreSearchState extends State<StoreSearch> {
           ),
         ],
       ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        minimum: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: selectedStores.isEmpty || _savingStores
-                    ? null
-                    : () => _openDestination(AppTopLevelDestination.staples),
-                icon: _savingStores
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.arrow_forward),
-                label: const Text('Continue to Staples'),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SafeArea(
+            top: false,
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(0, 40),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: selectedStores.isEmpty || _savingStores
+                      ? null
+                      : () => _openDestination(AppTopLevelDestination.staples),
+                  icon: _savingStores
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.arrow_forward, size: 18),
+                  label: const Text('Continue to Staples'),
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            TopLevelNavigationBar(
-              currentDestination: AppTopLevelDestination.stores,
-              onDestinationSelected: _openDestination,
-            ),
-          ],
-        ),
+          ),
+          TopLevelNavigationBar(
+            currentDestination: AppTopLevelDestination.stores,
+            onDestinationSelected: _openDestination,
+          ),
+        ],
       ),
     );
   }
