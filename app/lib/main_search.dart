@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_front_end/config/app_routes.dart';
 import 'package:flutter_front_end/models/grocery_models.dart';
-import 'package:flutter_front_end/staples_overview.dart';
 import 'package:flutter_front_end/services/auth_service.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
+import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
 import 'package:provider/provider.dart';
 
@@ -74,24 +74,35 @@ class _StoreSearchState extends State<StoreSearch> {
     return null;
   }
 
-  Future<void> _confirmStores() async {
+  Future<void> _openDestination(AppTopLevelDestination destination) async {
     final appState = context.read<AppState>();
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
 
-    setState(() => _savingStores = true);
-    try {
-      await appState.persistSelectedStores();
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
+    if (destination == AppTopLevelDestination.staples &&
+        appState.userStores.isEmpty) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Could not save stores. Please try again.')),
+        const SnackBar(content: Text('Pick at least one store to browse staples.')),
       );
-    } finally {
-      if (mounted) {
-        setState(() => _savingStores = false);
+      return;
+    }
+
+    if (destination != AppTopLevelDestination.stores &&
+        appState.userStores.isNotEmpty) {
+      setState(() => _savingStores = true);
+      try {
+        await appState.persistSelectedStores();
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Could not save stores. Please try again.')),
+        );
+      } finally {
+        if (mounted) {
+          setState(() => _savingStores = false);
+        }
       }
     }
 
@@ -99,9 +110,7 @@ class _StoreSearchState extends State<StoreSearch> {
       return;
     }
 
-    await navigator.push(
-      MaterialPageRoute(builder: (context) => const StaplesOverview()),
-    );
+    navigator.pushNamed(routeForTopLevelDestination(destination));
   }
 
   @override
@@ -402,19 +411,31 @@ class _StoreSearchState extends State<StoreSearch> {
       bottomNavigationBar: SafeArea(
         top: false,
         minimum: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-        child: SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed:
-                selectedStores.isEmpty || _savingStores ? null : _confirmStores,
-            child: _savingStores
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text('Confirm Stores (${selectedStores.length})'),
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: selectedStores.isEmpty || _savingStores
+                    ? null
+                    : () => _openDestination(AppTopLevelDestination.staples),
+                icon: _savingStores
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.arrow_forward),
+                label: const Text('Continue to Staples'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TopLevelNavigationBar(
+              currentDestination: AppTopLevelDestination.stores,
+              onDestinationSelected: _openDestination,
+            ),
+          ],
         ),
       ),
     );

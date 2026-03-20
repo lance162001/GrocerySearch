@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_front_end/chart.dart';
-import 'package:flutter_front_end/check_out.dart';
 import 'package:flutter_front_end/models/grocery_models.dart';
 import 'package:flutter_front_end/product_box.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
@@ -9,6 +8,7 @@ import 'package:flutter_front_end/utils/product_recommendation_sort.dart';
 import 'package:flutter_front_end/state/app_state.dart';
 import 'package:flutter_front_end/utils/price_utils.dart';
 import 'package:flutter_front_end/utils/scroll_utils.dart';
+import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
 import 'package:provider/provider.dart';
 
@@ -1182,22 +1182,6 @@ class _SearchPageState extends State<SearchPage> {
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Done'),
-            )
-          else
-            Row(
-              children: [
-                Text(appState.cartTotalItems.toString()),
-                IconButton(
-                  icon: const Icon(Icons.shopping_cart_checkout),
-                  iconSize: 32,
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const CheckOut()),
-                    );
-                  },
-                ),
-              ],
             ),
         ],
       ),
@@ -1388,6 +1372,14 @@ class _SearchPageState extends State<SearchPage> {
           return const Center(child: CircularProgressIndicator());
         },
       ),
+      bottomNavigationBar: widget.bundleId == null
+          ? const SafeArea(
+              top: false,
+              child: TopLevelNavigationBar(
+                currentDestination: AppTopLevelDestination.search,
+              ),
+            )
+          : null,
     );
   }
 }

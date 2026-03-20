@@ -5,6 +5,7 @@ import 'package:flutter_front_end/product_box.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
 import 'package:flutter_front_end/utils/price_utils.dart';
+import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
 import 'package:provider/provider.dart';
 
@@ -155,7 +156,7 @@ class _CheckOutState extends State<CheckOut> {
     final allProducts = [...appState.cart, ...appState.cartFinished];
     return Scaffold(
         appBar: AppBar(
-          title: Text("Checkout"),
+          title: const Text('Cart'),
           actions: [
             TextButton.icon(
               onPressed: _savingBundle ? null : _saveCartAsBundle,
@@ -300,6 +301,12 @@ class _CheckOutState extends State<CheckOut> {
                       .toList()),
             ),
           ],
+        ),
+        bottomNavigationBar: const SafeArea(
+          top: false,
+          child: TopLevelNavigationBar(
+            currentDestination: AppTopLevelDestination.cart,
+          ),
         ));
   }
 }

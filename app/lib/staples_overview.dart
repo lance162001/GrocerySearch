@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_front_end/check_out.dart';
 import 'package:flutter_front_end/config/app_routes.dart';
 import 'package:flutter_front_end/models/grocery_models.dart';
-import 'package:flutter_front_end/product_search.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
 import 'package:flutter_front_end/utils/product_grouping.dart';
+import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
 import 'package:provider/provider.dart';
 
@@ -233,33 +232,29 @@ class _StaplesOverviewState extends State<StaplesOverview> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Grocery Staples'),
+        title: const Text('Staples'),
         actions: [
-          IconButton(
-            tooltip: 'Search products',
-            icon: const Icon(Icons.search),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const SearchPage()),
-            ),
-          ),
-          IconButton(
-            tooltip: 'Checkout',
-            icon: const Icon(Icons.shopping_cart_checkout),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const CheckOut()),
-            ),
-          ),
           PopupMenuButton<String>(
             onSelected: (value) {
-              if (value == 'label') {
+              if (value == 'bundle_plan') {
+                Navigator.pushNamed(context, AppRoutes.bundlePlan);
+              } else if (value == 'label') {
                 Navigator.pushNamed(context, AppRoutes.labelJudgement);
               } else if (value == 'suggest_store') {
                 Navigator.pushNamed(context, AppRoutes.suggestStore);
               }
             },
             itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'bundle_plan',
+                child: Row(
+                  children: [
+                    Icon(Icons.route, size: 20),
+                    SizedBox(width: 12),
+                    Text('Bundle planner'),
+                  ],
+                ),
+              ),
               PopupMenuItem(
                 value: 'label',
                 child: Row(
@@ -348,37 +343,10 @@ class _StaplesOverviewState extends State<StaplesOverview> {
           );
         },
       ),
-      bottomNavigationBar: SafeArea(
+      bottomNavigationBar: const SafeArea(
         top: false,
-        minimum: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.search),
-                label: const Text('Search'),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const SearchPage()),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.shopping_cart_checkout),
-                label: Text(
-                  'Checkout (${appState.cartTotalItems})',
-                ),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const CheckOut()),
-                ),
-              ),
-            ),
-          ],
+        child: TopLevelNavigationBar(
+          currentDestination: AppTopLevelDestination.staples,
         ),
       ),
     );

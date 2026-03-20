@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_front_end/bundle_plan.dart';
 import 'package:flutter_front_end/check_out.dart';
 import 'package:flutter_front_end/config/app_environment.dart';
+import 'package:flutter_front_end/config/app_routes.dart';
 import 'package:flutter_front_end/main_search.dart';
 import 'package:flutter_front_end/models/grocery_models.dart';
 import 'package:flutter_front_end/product_box.dart';
@@ -443,7 +444,17 @@ Widget _buildTestApp({
       ChangeNotifierProvider<AuthService>.value(value: _TestAuthService()),
       ChangeNotifierProvider<AppState>.value(value: appState),
     ],
-    child: MaterialApp(home: home),
+    child: MaterialApp(
+      home: home,
+      routes: {
+        AppRoutes.storeSearch: (context) => const StoreSearch(),
+        AppRoutes.staplesOverview: (context) => const StaplesOverview(),
+        AppRoutes.search: (context) => const SearchPage(),
+        AppRoutes.checkout: (context) => const CheckOut(),
+        AppRoutes.bundlePlan: (context) =>
+            BundlePlanPage(initialUserId: appState.currentUserId ?? 42),
+      },
+    ),
   );
 }
 
@@ -644,13 +655,13 @@ void main() {
 
         expect(find.text('Dallas'), findsNothing);
 
-        await tester.tap(find.text('Confirm Stores (1)'));
+        await tester.tap(find.text('Continue to Staples'));
         await _pumpUi(tester, frames: 8);
 
         expect(find.byType(StaplesOverview), findsOneWidget);
         expect(api.savedStoreCalls.single['storeId'], _austinStore.id);
 
-        await tester.tap(find.byIcon(Icons.search).first);
+        await tester.tap(find.text('Search'));
         await _pumpUi(tester, frames: 8);
 
         expect(find.byType(SearchPage), findsOneWidget);
@@ -689,7 +700,7 @@ void main() {
         expect(appState.cartTotalItems, 1);
         expect(appState.cart.single.name, 'Apples');
 
-        await tester.tap(find.byIcon(Icons.shopping_cart_checkout));
+        await tester.tap(find.text('Cart'));
         await _pumpUi(tester, frames: 8);
 
         expect(find.byType(CheckOut), findsOneWidget);
@@ -856,6 +867,11 @@ void main() {
     testWidgets('search page defaults to recommended order for milk', (
       tester,
     ) async {
+      tester.view.physicalSize = const Size(1440, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       final chocolateMilk = _product(
         id: 1,
         instanceId: 101,
@@ -991,12 +1007,12 @@ void main() {
         await tester.tap(find.text('Austin').first);
         await _pumpUi(tester);
 
-        await tester.tap(find.text('Confirm Stores (1)'));
+        await tester.tap(find.text('Continue to Staples'));
         await _pumpUi(tester, frames: 8);
 
         expect(find.byType(StaplesOverview), findsOneWidget);
 
-        await tester.tap(find.byIcon(Icons.search).first);
+        await tester.tap(find.text('Search'));
         await _pumpUi(tester, frames: 8);
 
         expect(find.byType(SearchPage), findsOneWidget);
@@ -1018,7 +1034,7 @@ void main() {
 
         expect(find.byType(StaplesOverview), findsOneWidget);
 
-        await tester.tap(find.byIcon(Icons.search).first);
+        await tester.tap(find.text('Search'));
         await _pumpUi(tester, frames: 8);
 
         expect(find.byType(SearchPage), findsOneWidget);

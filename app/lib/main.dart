@@ -15,8 +15,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'chart.dart';
 import 'package:flutter_front_end/bundle_plan.dart';
+import 'package:flutter_front_end/check_out.dart';
 import 'package:flutter_front_end/label_judgement.dart';
+import 'package:flutter_front_end/product_search.dart';
 import 'package:flutter_front_end/suggest_store.dart';
+import 'package:flutter_front_end/staples_overview.dart';
 import 'package:flutter_front_end/user_id_cache.dart' as user_cache;
 import 'package:provider/provider.dart';
 
@@ -626,9 +629,14 @@ class _MyAppState extends State<MyApp> {
           return MaterialApp(
             home: homePage,
             routes: {
+              AppRoutes.storeSearch: (context) => const StoreSearch(),
               AppRoutes.chart: (context) => BarChartSample4(),
               AppRoutes.bundlePlan: (context) =>
                   BundlePlanPage(initialUserId: plannerUserId),
+              AppRoutes.staplesOverview: (context) =>
+                const StaplesOverview(),
+              AppRoutes.search: (context) => const SearchPage(),
+              AppRoutes.checkout: (context) => const CheckOut(),
               AppRoutes.labelJudgement: (context) =>
                   const LabelJudgementPage(),
               AppRoutes.suggestStore: (context) =>
