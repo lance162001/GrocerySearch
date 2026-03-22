@@ -10,7 +10,8 @@ from urllib.request import Request, urlopen
 
 from sqlalchemy.orm import Session
 
-from models import Product, Product_Instance, PricePoint, Tag_Instance
+from models import Product, Product_Instance, Tag_Instance
+from .persistence import StorePersistenceCache
 from .utils import (
     WF_CATEGORIES,
     WF_CATEGORY_TO_CANONICAL,
@@ -41,6 +42,7 @@ def scrape_whole_foods(
     """Scrape every category for a single Whole Foods store and persist results."""
     if collector is None:
         collector = {"products": [], "product_instances": [], "price_points": []}
+    cache = StorePersistenceCache(sess, store_id, _WF_COMPANY_ID, collector)
 
     slugs: set[str] = set()
 
@@ -49,9 +51,10 @@ def scrape_whole_foods(
         raw_products = _fetch_category(store_code, category, slugs)
         for raw in raw_products:
             try:
-                _persist_product(raw, category, store_id, sess, tags, collector)
+                _persist_product(raw, category, store_id, sess, tags, collector, cache)
             except Exception as exc:
                 sess.rollback()
+                cache = StorePersistenceCache(sess, store_id, _WF_COMPANY_ID, collector)
                 skipped += 1
                 logger.warning(
                     "WF: skipped product %r (category=%s) due to error: %s",
@@ -120,6 +123,7 @@ def _persist_product(
     sess: Session,
     tags: dict[str, int],
     collector: dict,
+    cache: StorePersistenceCache,
 ) -> None:
     """Upsert a single product + instance + price-point from raw API data."""
     raw_full_name = str(raw.get("name", ""))
@@ -135,7 +139,7 @@ def _persist_product(
 
     cleaned_name = cleaned_name.title()
 
-    prod = sess.query(Product).filter(Product.raw_name == raw_full_name).first()
+    prod = cache.get_product(raw_full_name, cleaned_name)
 
     if prod is None:
         brand = (brand_raw or "Whole Foods Market").title()
@@ -152,6 +156,7 @@ def _persist_product(
         collector["products"].append(prod)
         sess.add(prod)
         sess.flush()
+        cache.remember_product(prod)
 
         # Diet / characteristic tags — check both product name and explicit API attributes.
         name_lower = raw_full_name.lower()
@@ -174,27 +179,21 @@ def _persist_product(
         sess.add_all(tag_instances)
 
     # Upsert product instance
-    inst = (
-        sess.query(Product_Instance)
-        .filter(Product_Instance.store_id == store_id, Product_Instance.product_id == prod.id)
-        .first()
-    )
+    inst = cache.get_instance(int(prod.id))
     if inst is None:
         inst = Product_Instance(store_id=store_id, product_id=prod.id)
         collector["product_instances"].append(inst)
         sess.add(inst)
         sess.flush()
+        cache.remember_instance(inst)
 
-    # Always record a new price point
-    pricepoint = PricePoint(
+    cache.upsert_daily_price_point(
         base_price=raw.get("regularPrice"),
         sale_price=raw.get("salePrice"),
         member_price=raw.get("incrementalSalePrice"),
         size=size,
         instance_id=inst.id,
     )
-    collector["price_points"].append(pricepoint)
-    sess.add(pricepoint)
     # Commit per-product so the write lock is released between products,
     # allowing concurrent scraper threads (WG, TJ) to interleave writes.
     sess.commit()

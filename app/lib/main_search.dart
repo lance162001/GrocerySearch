@@ -322,18 +322,18 @@ class _StoreSearchState extends State<StoreSearch> {
                       final company = _companyForStore(companies, store);
                       return Card(
                         color: isSaved
-                            ? const Color(0xFFEEF2FF)
+                            ? const Color(0xFFE9F7EE)
                             : Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                           side: BorderSide(
                             color: isSaved
-                                ? const Color(0xFFC7D2FE)
+                                ? const Color(0xFF95D5B2)
                                 : const Color(0xFFE4E4E7),
                           ),
                         ),
                         child: InkWell(
-                          splashColor: const Color(0xFF6366F1).withAlpha(20),
+                          splashColor: const Color(0xFF1b4332).withAlpha(20),
                           onTap: () {
                             context.read<AppState>().toggleStore(store);
                           },
@@ -350,7 +350,7 @@ class _StoreSearchState extends State<StoreSearch> {
                                     child: Icon(
                                       Icons.check_circle,
                                       size: 18,
-                                      color: Color(0xFF4F46E5),
+                                      color: Color(0xFF1b4332),
                                     ),
                                   ),
                                 Column(

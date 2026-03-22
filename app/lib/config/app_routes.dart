@@ -7,4 +7,6 @@ abstract final class AppRoutes {
   static const checkout = '/checkout';
   static const labelJudgement = '/label-judgement';
   static const suggestStore = '/suggest-store';
+  static const unsubscribe = '/unsubscribe';
+  static const sharedBundle = '/shared-bundle';
 }

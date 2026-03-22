@@ -6,17 +6,20 @@ import argparse
 import logging
 import threading
 import time
+from collections import defaultdict
 from datetime import datetime
+from typing import Any, Callable, cast
 
 import schedule
-from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 import emailer
 from models import Company, Store, Tag
-from models.base import Base, engine
+from models.base import engine
+from models.bootstrap import ensure_runtime_schema
 from models.stores import ScraperStatus
 from scrapers import scrape_whole_foods, scrape_trader_joes, scrape_wegmans
+from scrapers.persistence import ensure_collector_shape
 from scrapers.utils import setup_seed_data, load_existing_tags, compute_variation_groups
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
@@ -30,8 +33,8 @@ def _write_status(status: str, **extra: object) -> None:
         if row is None:
             row = ScraperStatus(id=1)
             sess.add(row)
-        row.status = status
-        row.updated_at = datetime.now()
+        setattr(row, "status", status)
+        setattr(row, "updated_at", datetime.now())
         for key, val in extra.items():
             if hasattr(row, key):
                 setattr(row, key, val)
@@ -49,138 +52,131 @@ def _new_session() -> Session:
 
 
 def _new_collector() -> dict:
-    return {"products": [], "product_instances": [], "price_points": [], "stores": [], "companies": []}
+    return ensure_collector_shape({})
 
 
-_COMPANY_ALIASES: dict[str, int] = {
-    "wf": 1, "wholefoods": 1, "whole_foods": 1,
-    "tj": 2, "traderjoes": 2, "trader_joes": 2,
-    "wg": 3, "wegmans": 3,
+_SCRAPER_REGISTRY: dict[str, dict[str, object]] = {
+    "whole_foods": {
+        "aliases": {"wf", "wholefoods", "whole_foods", "whole-foods"},
+        "label": "WF",
+        "scrape": scrape_whole_foods,
+    },
+    "trader_joes": {
+        "aliases": {"tj", "traderjoes", "trader_joes", "trader-joes"},
+        "label": "TJ",
+        "scrape": scrape_trader_joes,
+    },
+    "wegmans": {
+        "aliases": {"wg", "wegmans"},
+        "label": "WG",
+        "scrape": scrape_wegmans,
+    },
 }
 
 
-def _scrape_stores(stores: list, tags: dict[str, int], collector: dict,
+def _normalize_company_token(raw: str) -> str:
+    return raw.strip().lower().replace("_", "-").replace(" ", "-")
+
+
+def _store_company_id(store: Store) -> int:
+    return int(cast(Any, store.company_id))
+
+
+def _resolve_only_company_ids(companies: list[Company], raw_filters: list[str] | None) -> set[int] | None:
+    if not raw_filters:
+        return None
+
+    alias_map: dict[str, int] = {}
+    for company in companies:
+        scraper_key = str(company.scraper_key or "")
+        normalized_scraper_key = _normalize_company_token(scraper_key)
+        normalized_name = _normalize_company_token(str(company.name or ""))
+        normalized_slug = _normalize_company_token(str(company.slug or ""))
+        alias_map[str(company.id)] = int(company.id)
+        for token in filter(None, {normalized_scraper_key, normalized_name, normalized_slug}):
+            alias_map[token] = int(company.id)
+        registry_entry = _SCRAPER_REGISTRY.get(scraper_key)
+        if registry_entry is not None:
+            for alias in cast(set[str], registry_entry["aliases"]):
+                alias_map[_normalize_company_token(str(alias))] = int(company.id)
+
+    resolved: set[int] = set()
+    for raw_filter in raw_filters:
+        token = _normalize_company_token(raw_filter)
+        if token not in alias_map:
+            raise SystemExit(
+                f"Unknown company '{raw_filter}'. Use a company id, slug, name, or registered scraper alias."
+            )
+        resolved.add(alias_map[token])
+    return resolved
+
+
+def _scrape_stores(stores: list, companies_by_id: dict[int, Company], tags: dict[str, int], collector: dict,
                    only: set[int] | None = None) -> None:
-    """Scrape all stores, running WF, TJ, and WG chains in parallel threads.
+    """Scrape all active stores, running one worker thread per company.
 
     If *only* is provided, skip companies not in the set.
     """
-    wf_stores = [s for s in stores if s.company_id == 1] if (only is None or 1 in only) else []
-    tj_stores = [s for s in stores if s.company_id == 2] if (only is None or 2 in only) else []
-    wg_stores = [s for s in stores if s.company_id == 3] if (only is None or 3 in only) else []
+    grouped_stores: dict[int, list[Store]] = defaultdict(list)
+    for store in stores:
+        store_company_id = _store_company_id(store)
+        if only is not None and store_company_id not in only:
+            continue
+        grouped_stores[store_company_id].append(store)
 
-    def _run_wf():
-        logger.info("WF thread starting: %d store(s) to scrape", len(wf_stores))
+    threads: list[threading.Thread] = []
+
+    def _run_company(company: Company, company_stores: list[Store], scrape_fn: Callable[..., None], label: str) -> None:
+        logger.info("%s thread starting: %d store(s) to scrape", label, len(company_stores))
         sess = _new_session()
         try:
-            for store in wf_stores:
-                logger.info("WF: scraping store id=%s scraper_id=%s", store.id, store.scraper_id)
+            for store in company_stores:
+                logger.info("%s: scraping store id=%s scraper_id=%s", label, store.id, store.scraper_id)
                 t0 = datetime.now()
                 try:
-                    scrape_whole_foods(store.id, store.scraper_id, sess, tags, collector)
+                    scrape_fn(store.id, store.scraper_id, sess, tags, collector)
                     logger.info(
-                        "WF: finished store id=%s in %.1fs",
-                        store.id, (datetime.now() - t0).total_seconds(),
+                        "%s: finished store id=%s in %.1fs",
+                        label,
+                        store.id,
+                        (datetime.now() - t0).total_seconds(),
                     )
                 except Exception:
                     logger.error(
-                        "WF: store id=%s failed after %.1fs",
-                        store.id, (datetime.now() - t0).total_seconds(),
+                        "%s: store id=%s failed after %.1fs",
+                        label,
+                        store.id,
+                        (datetime.now() - t0).total_seconds(),
                         exc_info=True,
                     )
                     raise
         finally:
             sess.close()
-        logger.info("WF thread done")
+        logger.info("%s thread done", label)
 
-    def _run_tj():
-        logger.info("TJ thread starting: %d store(s) to scrape", len(tj_stores))
-        sess = _new_session()
-        try:
-            for store in tj_stores:
-                logger.info("TJ: scraping store id=%s scraper_id=%s", store.id, store.scraper_id)
-                t0 = datetime.now()
-                try:
-                    scrape_trader_joes(store.id, store.scraper_id, sess, tags, collector)
-                    logger.info(
-                        "TJ: finished store id=%s in %.1fs",
-                        store.id, (datetime.now() - t0).total_seconds(),
-                    )
-                except Exception:
-                    logger.error(
-                        "TJ: store id=%s failed after %.1fs",
-                        store.id, (datetime.now() - t0).total_seconds(),
-                        exc_info=True,
-                    )
-                    raise
-        finally:
-            sess.close()
-        logger.info("TJ thread done")
+    for company_id, company_stores in grouped_stores.items():
+        company = companies_by_id.get(company_id)
+        if company is None or company.is_active is False:
+            continue
+        registry_entry = _SCRAPER_REGISTRY.get(str(company.scraper_key or ""))
+        if registry_entry is None:
+            logger.warning("Skipping company id=%s name=%s; unknown scraper_key=%r", company_id, company.name, company.scraper_key)
+            continue
+        thread = threading.Thread(
+            target=_run_company,
+            args=(company, company_stores, cast(Callable[..., None], registry_entry["scrape"]), str(registry_entry["label"])),
+            name=f"scraper-{company.scraper_key}",
+        )
+        thread.start()
+        threads.append(thread)
 
-    def _run_wg():
-        logger.info("WG thread starting: %d store(s) to scrape", len(wg_stores))
-        sess = _new_session()
-        try:
-            for store in wg_stores:
-                logger.info("WG: scraping store id=%s scraper_id=%s", store.id, store.scraper_id)
-                t0 = datetime.now()
-                try:
-                    scrape_wegmans(store.id, store.scraper_id, sess, tags, collector)
-                    logger.info(
-                        "WG: finished store id=%s in %.1fs",
-                        store.id, (datetime.now() - t0).total_seconds(),
-                    )
-                except Exception:
-                    logger.error(
-                        "WG: store id=%s failed after %.1fs",
-                        store.id, (datetime.now() - t0).total_seconds(),
-                        exc_info=True,
-                    )
-                    raise
-        finally:
-            sess.close()
-        logger.info("WG thread done")
-
-    wf_thread = threading.Thread(target=_run_wf, name="wf-scraper")
-    tj_thread = threading.Thread(target=_run_tj, name="tj-scraper")
-    wg_thread = threading.Thread(target=_run_wg, name="wg-scraper")
-    wf_thread.start()
-    tj_thread.start()
-    wg_thread.start()
-    wf_thread.join()
-    tj_thread.join()
-    wg_thread.join()
+    for thread in threads:
+        thread.join()
 
 
 def ensure_schema() -> None:
     """Create tables and run lightweight migrations."""
-    Base.metadata.create_all(engine)
-    inspector = inspect(engine)
-    product_columns = {col["name"] for col in inspector.get_columns("products")}
-    if "raw_name" not in product_columns:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE products ADD COLUMN raw_name VARCHAR(300)"))
-
-    # Widen varchar columns that were previously too narrow for real product data.
-    # PostgreSQL enforces column widths; SQLite does not, so this only matters in prod.
-    db_url = str(engine.url)
-    if "postgresql" in db_url:
-        col_type_map = {
-            col["name"]: str(col["type"]) for col in inspector.get_columns("products")
-        }
-        with engine.begin() as conn:
-            if "VARCHAR(100)" in col_type_map.get("name", "").upper() or \
-               "character varying(100)" in col_type_map.get("name", "").lower():
-                conn.execute(text("ALTER TABLE products ALTER COLUMN name TYPE VARCHAR(200)"))
-                logger.info("Migrated products.name to VARCHAR(200)")
-            if "VARCHAR(150)" in col_type_map.get("raw_name", "").upper() or \
-               "character varying(150)" in col_type_map.get("raw_name", "").lower():
-                conn.execute(text("ALTER TABLE products ALTER COLUMN raw_name TYPE VARCHAR(300)"))
-                logger.info("Migrated products.raw_name to VARCHAR(300)")
-            if "VARCHAR(255)" in col_type_map.get("picture_url", "").upper() or \
-               "character varying(255)" in col_type_map.get("picture_url", "").lower():
-                conn.execute(text("ALTER TABLE products ALTER COLUMN picture_url TYPE VARCHAR(500)"))
-                logger.info("Migrated products.picture_url to VARCHAR(500)")
+    ensure_runtime_schema()
 
 
 @schedule.repeat(schedule.every().day.at("10:30"))
@@ -192,26 +188,34 @@ def scheduled_job() -> None:
 
     sess = _new_session()
     try:
-        stores = sess.query(Store).all()
+        stores = sess.query(Store).filter(Store.is_active.isnot(False)).all()
         if not stores:
             stores, tags = setup_seed_data(sess)
         else:
             tags = load_existing_tags(sess)
+        companies = (
+            sess.query(Company)
+            .filter(Company.is_active.isnot(False))
+            .all()
+        )
+        only_ids = _resolve_only_company_ids(companies, only_filters)
+        stores_to_scrape = [s for s in stores if only_ids is None or _store_company_id(s) in only_ids]
 
         logger.info(
             "Scraping %d store(s): %s",
-            len(stores),
-            ", ".join(f"id={s.id} company={s.company_id}" for s in stores),
+            len(stores_to_scrape),
+            ", ".join(f"id={s.id} company={s.company_id}" for s in stores_to_scrape),
         )
-        collector["stores"] = stores
-        collector["companies"] = sess.query(Company).all()
+        collector["stores"] = stores_to_scrape
+        collector["companies"] = companies
 
-        _scrape_stores(stores, tags, collector, only=only_ids)
+        _scrape_stores(stores_to_scrape, {int(c.id): c for c in companies}, tags, collector, only=only_ids)
         logger.info(
-            "All stores done — products=%d instances=%d price_points=%d",
+            "All stores done — products=%d instances=%d inserted_price_points=%d updated_price_points=%d",
             len(collector["products"]),
             len(collector["product_instances"]),
             len(collector["price_points"]),
+            int(collector.get("updated_price_points", 0)),
         )
         variation_sess = _new_session()
         try:
@@ -223,10 +227,12 @@ def scheduled_job() -> None:
             f"GS Scraper Daily Run\n"
             f"Started: {start:%A, %d %B %Y %I:%M%p}\n"
             f"Ended: {datetime.now():%A, %d %B %Y %I:%M%p}\n"
-            f"Stores scraped: {len(stores)}\n"
+            f"Companies scraped: {len({_store_company_id(s) for s in stores_to_scrape})}\n"
+            f"Stores scraped: {len(stores_to_scrape)}\n"
             f"New products: {len(collector['products'])}\n"
             f"New instances: {len(collector['product_instances'])}\n"
             f"New price points: {len(collector['price_points'])}\n"
+            f"Updated same-day price points: {int(collector.get('updated_price_points', 0))}\n"
         )
         for p in collector["products"]:
             summary += f"\n  {p.name} | {p.brand} | company_id={p.company_id}"
@@ -250,10 +256,12 @@ def scheduled_job() -> None:
         "idle",
         started_at=start,
         last_finished=datetime.now(),
-        stores_scraped=len(stores),
+        companies_scraped=len({_store_company_id(s) for s in stores_to_scrape}),
+        stores_scraped=len(stores_to_scrape),
         new_products=len(collector["products"]),
         new_instances=len(collector["product_instances"]),
         new_price_points=len(collector["price_points"]),
+        updated_price_points=int(collector.get("updated_price_points", 0)),
     )
     logger.info("Scraping finished")
 
@@ -272,7 +280,7 @@ def _parse_args() -> argparse.Namespace:
         "--only", nargs="+", metavar="COMPANY",
         help=(
             "Only scrape the listed companies. "
-            "Accepted names: wf/wholefoods/whole_foods, tj/traderjoes/trader_joes, wg/wegmans."
+            "Accepted values: company id, slug, name, or registered scraper alias."
         ),
     )
     parser.add_argument(
@@ -300,15 +308,9 @@ if args.verbose:
 else:
     logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
 
-only_ids: set[int] | None = None
-if args.only:
-    only_ids = set()
-    for name in args.only:
-        key = name.lower().replace("-", "_")
-        if key not in _COMPANY_ALIASES:
-            raise SystemExit(f"Unknown company '{name}'. Choose from: {', '.join(sorted(_COMPANY_ALIASES))}")
-        only_ids.add(_COMPANY_ALIASES[key])
-    logger.info("Filtering to company ids: %s", only_ids)
+only_filters: list[str] | None = args.only or None
+if only_filters:
+    logger.info("Filtering requested for companies: %s", only_filters)
 
 if __name__ == "__main__":
     logger.info(
@@ -316,7 +318,7 @@ if __name__ == "__main__":
         debug,
         run_once,
         run_on_start,
-        only_ids,
+        only_filters,
     )
     ensure_schema()
 

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:core';
 import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_front_end/config/app_environment.dart';
 import 'package:flutter_front_end/config/app_routes.dart';
@@ -19,8 +20,11 @@ import 'package:flutter_front_end/check_out.dart';
 import 'package:flutter_front_end/label_judgement.dart';
 import 'package:flutter_front_end/product_search.dart';
 import 'package:flutter_front_end/suggest_store.dart';
+import 'package:flutter_front_end/shared_bundle_page.dart';
 import 'package:flutter_front_end/staples_overview.dart';
+import 'package:flutter_front_end/unsubscribe_page.dart';
 import 'package:flutter_front_end/user_id_cache.dart' as user_cache;
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:provider/provider.dart';
 
 dynamic extractPage(Map<String, dynamic> json) {
@@ -495,6 +499,7 @@ Widget getImage(String url, double width, double height) {
 }
 
 void main() async {
+  usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
@@ -623,6 +628,21 @@ class _MyAppState extends State<MyApp> {
       ],
       child: Builder(
         builder: (context) {
+          // Standalone flows that must not depend on AppState
+          // (AppState rebuilds reset the Navigator back to home:).
+          if (kIsWeb && (
+            Uri.base.path == AppRoutes.unsubscribe ||
+            Uri.base.path == AppRoutes.sharedBundle
+          )) {
+            final home = Uri.base.path == AppRoutes.sharedBundle
+                ? const SharedBundlePage()
+                : const UnsubscribePage();
+            return MaterialApp(
+              debugShowCheckedModeBanner: false,
+              title: 'GrocerySearch',
+              home: home,
+            );
+          }
           final appState = context.watch<AppState>();
           final plannerUserId = appState.currentUserId ?? 1;
           final homePage = _buildHomePage(context, appState);
@@ -641,6 +661,10 @@ class _MyAppState extends State<MyApp> {
                   const LabelJudgementPage(),
               AppRoutes.suggestStore: (context) =>
                   const SuggestStorePage(),
+              AppRoutes.unsubscribe: (context) =>
+                  const UnsubscribePage(),
+              AppRoutes.sharedBundle: (context) =>
+                  const SharedBundlePage(),
             },
             onUnknownRoute: (settings) =>
                 MaterialPageRoute(builder: (context) => homePage),
@@ -649,13 +673,13 @@ class _MyAppState extends State<MyApp> {
             theme: ThemeData(
               useMaterial3: true,
               colorScheme: ColorScheme.fromSeed(
-                seedColor: const Color(0xFF6366F1),
+                seedColor: const Color(0xFF1b4332),
                 brightness: Brightness.light,
               ),
-              primaryColor: const Color(0xFF4F46E5),
+              primaryColor: const Color(0xFF1b4332),
               scaffoldBackgroundColor: const Color(0xFFFAFAFA),
               appBarTheme: const AppBarTheme(
-                backgroundColor: Color(0xFF18181B),
+                backgroundColor: Color(0xFF1b4332),
                 foregroundColor: Colors.white,
                 elevation: 0,
                 scrolledUnderElevation: 0,
@@ -673,17 +697,17 @@ class _MyAppState extends State<MyApp> {
                 margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 8),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
-                  side: BorderSide(color: Color(0xFFE4E4E7)),
+                  side: BorderSide(color: Color(0xFFDCE8DC)),
                 ),
                 color: Colors.white,
               ),
               dividerTheme: const DividerThemeData(
-                color: Color(0xFFE4E4E7),
+                color: Color(0xFFDCE8DC),
                 thickness: 1,
               ),
               elevatedButtonTheme: ElevatedButtonThemeData(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF18181B),
+                  backgroundColor: const Color(0xFF1b4332),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -697,8 +721,8 @@ class _MyAppState extends State<MyApp> {
               ),
               outlinedButtonTheme: OutlinedButtonThemeData(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF18181B),
-                  side: const BorderSide(color: Color(0xFFD4D4D8)),
+                  foregroundColor: const Color(0xFF1b4332),
+                  side: const BorderSide(color: Color(0xFFDCE8DC)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -710,7 +734,7 @@ class _MyAppState extends State<MyApp> {
               ),
               textButtonTheme: TextButtonThemeData(
                 style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF4F46E5),
+                  foregroundColor: const Color(0xFF1b4332),
                   textStyle: const TextStyle(
                     fontWeight: FontWeight.w500,
                     fontSize: 14,
@@ -731,14 +755,14 @@ class _MyAppState extends State<MyApp> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.5),
+                  borderSide: const BorderSide(color: Color(0xFF1b4332), width: 1.5),
                 ),
                 hintStyle: const TextStyle(color: Color(0xFFA1A1AA), fontSize: 14),
               ),
               chipTheme: ChipThemeData(
                 backgroundColor: const Color(0xFFF4F4F5),
-                selectedColor: const Color(0xFFEEF2FF),
-                side: const BorderSide(color: Color(0xFFE4E4E7)),
+                selectedColor: const Color(0xFFE9F7EE),
+                side: const BorderSide(color: Color(0xFFDCE8DC)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -750,7 +774,7 @@ class _MyAppState extends State<MyApp> {
               tabBarTheme: const TabBarThemeData(
                 labelColor: Colors.white,
                 unselectedLabelColor: Color(0xFF71717A),
-                indicatorColor: Color(0xFF6366F1),
+                indicatorColor: Color(0xFF1b4332),
               ),
               snackBarTheme: SnackBarThemeData(
                 behavior: SnackBarBehavior.floating,
@@ -869,7 +893,7 @@ class _SignInPageState extends State<_SignInPage>
                 height: size.width * 0.6,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF6366F1).withValues(alpha: 0.06),
+                  color: const Color(0xFF1b4332).withValues(alpha: 0.06),
                 ),
               ),
             ),
@@ -881,7 +905,7 @@ class _SignInPageState extends State<_SignInPage>
                 height: size.width * 0.7,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF6366F1).withValues(alpha: 0.04),
+                  color: const Color(0xFF1b4332).withValues(alpha: 0.04),
                 ),
               ),
             ),
@@ -915,13 +939,13 @@ class _SignInPageState extends State<_SignInPage>
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                   colors: [
-                                    Color(0xFF6366F1),
-                                    Color(0xFF818CF8),
+                                    Color(0xFF1b4332),
+                                    Color(0xFF2D6A4F),
                                   ],
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF6366F1)
+                                    color: const Color(0xFF1b4332)
                                         .withValues(alpha: 0.35),
                                     blurRadius: 32,
                                     offset: const Offset(0, 8),
@@ -971,7 +995,7 @@ class _SignInPageState extends State<_SignInPage>
                             // Feature cards
                             _LandingFeatureCard(
                               icon: Icons.compare_arrows_rounded,
-                              iconColor: const Color(0xFF818CF8),
+                              iconColor: const Color(0xFF2D6A4F),
                               title: 'Compare Prices',
                               description:
                                   'Side-by-side prices from Whole Foods, Wegmans, Trader Joe\'s, and more.',
@@ -987,7 +1011,7 @@ class _SignInPageState extends State<_SignInPage>
                             const SizedBox(height: 10),
                             _LandingFeatureCard(
                               icon: Icons.inventory_2_rounded,
-                              iconColor: const Color(0xFFA78BFA),
+                              iconColor: const Color(0xFF95D5B2),
                               title: 'Bundle & Plan',
                               description:
                                   'Build shopping bundles and track your pantry staples over time.',
@@ -1019,7 +1043,7 @@ class _SignInPageState extends State<_SignInPage>
                                     ),
                                   ),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF6366F1),
+                                    backgroundColor: const Color(0xFF1b4332),
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 16),

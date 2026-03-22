@@ -50,6 +50,7 @@ class BundleCreateRequest(BaseModel):
 
 class LookupOrCreateRequest(BaseModel):
     firebase_uid: str
+    email: Optional[str] = None
 
 
 class BundleProductAddRequest(BaseModel):
@@ -146,6 +147,28 @@ class BundleSummaryWithProducts(BaseModel):
     created_at: Optional[datetime] = None
     product_count: int
     product_ids: List[int] = []
+
+
+class ShareTokenResponse(BaseModel):
+    bundle_id: int
+    token: str
+
+
+class SharedBundleProductItem(BaseModel):
+    product_id: int
+    name: str
+    brand: str
+    picture_url: str
+    instances: List[Product_Instance] = []
+
+
+class SharedBundleResponse(BaseModel):
+    """Public read-only view of a bundle shared via token link."""
+    bundle_id: int
+    name: str
+    created_at: Optional[datetime] = None
+    product_count: int
+    products: List[SharedBundleProductItem] = []
 
 
 class UserDashboard(BaseModel):

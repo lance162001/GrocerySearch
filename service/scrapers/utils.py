@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Tuple
+from typing import Any, Tuple, cast
 
 from sqlalchemy.orm import Session
 
@@ -215,32 +215,42 @@ def strip_brand_from_name(name: str, brand: str) -> str:
 
 def setup_seed_data(sess: Session) -> tuple[list, dict[str, int]]:
     """Insert initial companies, stores, tags and return (stores, tag-id map)."""
+    whole_foods = Company(
+        slug="whole-foods",
+        scraper_key="whole_foods",
+        logo_url="https://external-content.duckduckgo.com/iu/?u=http%3A%2F%2Fwww.sott.net%2Fimage%2Fimage%2Fs5%2F102602%2Ffull%2Fwholefoods.png&f=1&nofb=1",
+        name="Whole Foods",
+    )
+    trader_joes = Company(
+        slug="trader-joes",
+        scraper_key="trader_joes",
+        logo_url="https://logos-world.net/wp-content/uploads/2022/02/Trader-Joes-Emblem.png",
+        name="Trader Joes",
+    )
+    wegmans = Company(
+        slug="wegmans",
+        scraper_key="wegmans",
+        logo_url="https://images.wegmans.com/is/image/wegmanscsprod/Wegmans-Logo-Icon-thumb?fmt=webp-alpha",
+        name="Wegmans",
+    )
+
+    sess.add_all([whole_foods, trader_joes, wegmans])
+    sess.flush()
+
     to_add = [
-        Company(
-            logo_url="https://external-content.duckduckgo.com/iu/?u=http%3A%2F%2Fwww.sott.net%2Fimage%2Fimage%2Fs5%2F102602%2Ffull%2Fwholefoods.png&f=1&nofb=1",
-            name="Whole Foods",
-        ),
-        Company(
-            logo_url="https://logos-world.net/wp-content/uploads/2022/02/Trader-Joes-Emblem.png",
-            name="Trader Joes",
-        ),
-        Company(
-            logo_url="https://images.wegmans.com/is/image/wegmanscsprod/Wegmans-Logo-Icon-thumb?fmt=webp-alpha",
-            name="Wegmans",
-        ),
-        Store(company_id=1, scraper_id=10413, address="442 Washington St",
+        Store(company_id=whole_foods.id, scraper_id=10413, address="442 Washington St",
               zipcode="02482", town="Wellesley", state="Massachusetts"),
-        Store(company_id=2, scraper_id=509, address="958 Highland Ave",
+        Store(company_id=trader_joes.id, scraper_id=509, address="958 Highland Ave",
               zipcode="02494", town="Needham", state="Massachusetts"),
-        Store(company_id=1, scraper_id=10319, address="300 Legacy Pl",
+        Store(company_id=whole_foods.id, scraper_id=10319, address="300 Legacy Pl",
               zipcode="02026", town="Dedham", state="Massachusetts"),
-        Store(company_id=2, scraper_id=512, address="375 Russell St",
+        Store(company_id=trader_joes.id, scraper_id=512, address="375 Russell St",
               zipcode="01035", town="Hadley", state="Massachusetts"),
-        Store(company_id=1, scraper_id=10156, address="575 Worcester Rd",
+        Store(company_id=whole_foods.id, scraper_id=10156, address="575 Worcester Rd",
               zipcode="01701", town="Framingham", state="Massachusetts"),
-        Store(company_id=1, scraper_id=10145, address="525 N Lamar Blvd",
+        Store(company_id=whole_foods.id, scraper_id=10145, address="525 N Lamar Blvd",
               zipcode="78703", town="Austin", state="Texas"),
-        Store(company_id=3, scraper_id=57, address="169 University Ave",
+        Store(company_id=wegmans.id, scraper_id=57, address="169 University Ave",
               zipcode="02090", town="Westwood", state="Massachusetts"),
     ]
 
@@ -260,7 +270,7 @@ def setup_seed_data(sess: Session) -> tuple[list, dict[str, int]]:
 
 def load_existing_tags(sess: Session) -> dict[str, int]:
     """Load the tag-name→id mapping from an already-seeded database."""
-    return {t.name: t.id for t in sess.query(Tag).all()}
+    return {str(t.name): int(t.id) for t in sess.query(Tag).all()}
 
 
 # ---------------------------------------------------------------------------
@@ -376,8 +386,8 @@ def compute_variation_groups(sess: Session, *, batch_size: int = 5000) -> int:
     updated = 0
     for prod in products:
         target = assigned.get(prod.id)
-        if prod.variation_group != target:
-            prod.variation_group = target
+        if cast(str | None, prod.variation_group) != target:
+            prod.variation_group = cast(Any, target)
             updated += 1
 
     # 5. Clear variation_group for products with no brand (safety sweep).
@@ -390,7 +400,7 @@ def compute_variation_groups(sess: Session, *, batch_size: int = 5000) -> int:
         .all()
     )
     for prod in cleared:
-        prod.variation_group = None
+        prod.variation_group = cast(Any, None)
         updated += 1
 
     sess.commit()

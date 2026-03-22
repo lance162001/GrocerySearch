@@ -1,9 +1,12 @@
 import re
+import secrets
 from collections import defaultdict
+from datetime import datetime
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends
 from fastapi.exceptions import HTTPException
+from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -14,6 +17,37 @@ import schemas
 user_router = APIRouter()
 
 _price_pattern = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+@user_router.get("/users/unsubscribe", response_class=HTMLResponse, include_in_schema=False)
+async def unsubscribe_newsletter(token: str, sess: Session = Depends(get_db)):
+    """Unsubscribe a user from newsletters using a one-click token link."""
+    if token == "test-do-not-unsubscribe":
+        return HTMLResponse(
+            content="<h2>Test unsubscribe — no action taken.</h2>",
+            status_code=200,
+        )
+    user = sess.query(models.User).filter(models.User.unsubscribe_token == token).first()
+    if user is None:
+        return HTMLResponse(
+            content=(
+                "<h2>Link invalid</h2>"
+                "<p>That unsubscribe link is invalid or already expired.</p>"
+            ),
+            status_code=404,
+        )
+
+    setattr(user, "newsletter_opt_in", False)
+    setattr(user, "newsletter_unsubscribed_at", datetime.now())
+    sess.commit()
+
+    return HTMLResponse(
+        content=(
+            "<h2>You are unsubscribed</h2>"
+            "<p>You will no longer receive GrocerySearch newsletter emails.</p>"
+        ),
+        status_code=200,
+    )
 
 
 def _parse_price(value: Optional[str]) -> Optional[float]:
@@ -65,10 +99,13 @@ async def lookup_or_create_user(
 
     user = sess.query(models.User).filter(models.User.firebase_uid == firebase_uid).first()
     if user is None:
-        user = models.User(recent_zipcode="00000", firebase_uid=firebase_uid)
+        user = models.User(recent_zipcode="00000", firebase_uid=firebase_uid, email=payload.email)
         sess.add(user)
         sess.commit()
         sess.refresh(user)
+    elif payload.email and not user.email:
+        user.email = payload.email
+        sess.commit()
 
     return schemas.User(id=int(user.id), recent_zipcode=str(user.recent_zipcode))
 
@@ -128,6 +165,18 @@ async def add_product_to_bundle(
         name=str(bundle.name),
         created_at=bundle.created_at,
     )
+
+
+@user_router.post("/bundles/{bundle_id}/share", response_model=schemas.ShareTokenResponse)
+async def create_bundle_share_link(bundle_id: int, sess: Session = Depends(get_db)):
+    """Generate (or return the existing) share token for a bundle."""
+    bundle = sess.get(models.Product_Bundle, bundle_id)
+    if not bundle:
+        raise HTTPException(404, detail=f"Bundle with id {bundle_id} not found")
+    if not bundle.share_token:
+        bundle.share_token = secrets.token_urlsafe(32)
+        sess.commit()
+    return schemas.ShareTokenResponse(bundle_id=int(bundle.id), token=str(bundle.share_token))
 
 
 @user_router.post("/users/{user_id}/saved-stores", response_model=schemas.SavedStoreSummary)
@@ -324,6 +373,40 @@ def _build_bundle_product_details(
             )
         )
     return result
+
+
+@user_router.get("/bundles/shared/{token}", response_model=schemas.SharedBundleResponse)
+async def get_shared_bundle(token: str, sess: Session = Depends(get_db)):
+    """Public endpoint — returns a shared bundle by its share token."""
+    bundle = (
+        sess.query(models.Product_Bundle)
+        .options(joinedload(models.Product_Bundle.products))
+        .filter(models.Product_Bundle.share_token == token)
+        .first()
+    )
+    if not bundle:
+        raise HTTPException(404, detail="Bundle not found or link has expired")
+
+    products = _build_bundle_product_details(bundle, sess)
+
+    items = [
+        schemas.SharedBundleProductItem(
+            product_id=p.product_id,
+            name=p.name,
+            brand=p.brand,
+            picture_url=p.picture_url,
+            instances=p.instances,
+        )
+        for p in products
+    ]
+
+    return schemas.SharedBundleResponse(
+        bundle_id=int(bundle.id),
+        name=str(bundle.name),
+        created_at=bundle.created_at,
+        product_count=len(bundle.products),
+        products=items,
+    )
 
 
 @user_router.get("/bundles/{bundle_id}/detail", response_model=schemas.BundleDetailResponse)

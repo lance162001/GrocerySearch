@@ -172,8 +172,8 @@ function renderScraper(sc) {
     html += '</div>';
   }
 
-  const countFields = ['stores_scraped', 'new_products', 'new_instances', 'new_price_points'];
-  const countLabels = { stores_scraped: 'Stores Scraped', new_products: 'New Products', new_instances: 'New Instances', new_price_points: 'New Price Points' };
+  const countFields = ['companies_scraped', 'stores_scraped', 'new_products', 'new_instances', 'new_price_points', 'updated_price_points'];
+  const countLabels = { companies_scraped: 'Companies Scraped', stores_scraped: 'Stores Scraped', new_products: 'New Products', new_instances: 'New Instances', new_price_points: 'New Price Points', updated_price_points: 'Updated Same-Day Prices' };
   const countItems = countFields.filter(f => sc[f] != null);
   if (countItems.length) {
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;">';

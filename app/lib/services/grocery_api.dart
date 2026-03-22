@@ -80,7 +80,7 @@ class GroceryApi {
     if (firebaseUser != null) {
       final response = await post(
         buildUri('/users/lookup-or-create'),
-        body: jsonEncode({'firebase_uid': firebaseUser.uid}),
+        body: jsonEncode({'firebase_uid': firebaseUser.uid, 'email': firebaseUser.email}),
       );
       if (response.statusCode != 200) {
         throw Exception(
@@ -270,6 +270,19 @@ class GroceryApi {
     if (response.statusCode != 200) {
       throw Exception('Failed to add product $productId (${response.statusCode})');
     }
+  }
+
+  Future<String> createShareLink(int bundleId) async {
+    final response = await post(buildUri('/bundles/$bundleId/share'));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to create share link (${response.statusCode})');
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final token = data['token'] as String?;
+    if (token == null || token.isEmpty) {
+      throw Exception('Invalid token returned by backend');
+    }
+    return token;
   }
 
   Future<Map<String, List<Product>>> fetchStapleProducts(

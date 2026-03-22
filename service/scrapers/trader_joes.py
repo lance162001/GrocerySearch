@@ -6,13 +6,14 @@ import json
 import logging
 import os
 import time
-from typing import Optional
+from typing import Any, Optional, cast
 from urllib.request import Request, urlopen
 
 from curl_cffi import requests
 from sqlalchemy.orm import Session
 
-from models import Product, Product_Instance, PricePoint, Store, Tag_Instance
+from models import Product, Product_Instance, Store, Tag_Instance
+from .persistence import StorePersistenceCache
 from .utils import (
     TJ_CATEGORIES,
     TJ_CATEGORY_TO_CANONICAL,
@@ -78,12 +79,26 @@ def scrape_trader_joes(
     """Scrape all products for a single Trader Joe's store."""
     if collector is None:
         collector = {"products": [], "product_instances": [], "price_points": []}
+    cache = StorePersistenceCache(sess, store_id, _TJ_COMPANY_ID, collector)
 
     img_session = requests.Session(impersonate=_TJ_IMPERSONATE_BROWSER)
     try:
         raw_products = _fetch_all_products(store_code, img_session)
+        skipped = 0
         for raw in raw_products:
-            _persist_product(raw, store_id, sess, tags, collector, img_session)
+            try:
+                _persist_product(raw, store_id, sess, tags, collector, cache, img_session)
+            except Exception as exc:
+                sess.rollback()
+                cache = StorePersistenceCache(sess, store_id, _TJ_COMPANY_ID, collector)
+                skipped += 1
+                logger.warning(
+                    "TJ: skipped product %r due to error: %s",
+                    raw.get("item_title", "?")[:80],
+                    exc,
+                )
+        if skipped:
+            logger.warning("TJ store %s: skipped %d products due to errors", store_code, skipped)
         sess.commit()
     finally:
         img_session.close()
@@ -231,6 +246,7 @@ def _persist_product(
     sess: Session,
     tags: dict[str, int],
     collector: dict,
+    cache: StorePersistenceCache,
     img_session: Optional[requests.Session] = None,
 ) -> None:
     """Upsert a single TJ product + instance + price-point."""
@@ -238,7 +254,7 @@ def _persist_product(
     sku = str(raw.get("sku", ""))
     image_path = raw.get("primary_image", "")
 
-    prod = sess.query(Product).filter(Product.name == name, Product.company_id == _TJ_COMPANY_ID).first()
+    prod = cache.get_product(name, name)
 
     is_new = prod is None
     if prod is None:
@@ -249,18 +265,22 @@ def _persist_product(
         prod = Product(
             brand="Trader Joes",
             name=name,
+            raw_name=name,
             company_id=_TJ_COMPANY_ID,
             picture_url=picture_url,
         )
-    elif img_session is not None and image_path and isinstance(prod.picture_url, str) and prod.picture_url.startswith("https://traderjoes.com"):
-        local_url = _download_tj_image(sku, image_path, img_session)
-        if local_url:
-            prod.picture_url = local_url
+    else:
+        picture_url = cast(str | None, prod.picture_url)
+        if img_session is not None and image_path and isinstance(picture_url, str) and picture_url.startswith("https://traderjoes.com"):
+            local_url = _download_tj_image(sku, image_path, img_session)
+            if local_url:
+                prod.picture_url = cast(Any, local_url)
 
     if is_new:
         collector["products"].append(prod)
         sess.add(prod)
         sess.flush()
+        cache.remember_product(prod)
 
         # Characteristic tags — normalise to lower-case with spaces so strings
         # like "Gluten-Free" and "gluten free" both match the tag keys.
@@ -285,27 +305,22 @@ def _persist_product(
         sess.add_all(tag_instances)
 
     # Upsert product instance
-    inst = (
-        sess.query(Product_Instance)
-        .filter(Product_Instance.store_id == store_id, Product_Instance.product_id == prod.id)
-        .first()
-    )
+    inst = cache.get_instance(int(prod.id))
     if inst is None:
         inst = Product_Instance(store_id=store_id, product_id=prod.id)
         collector["product_instances"].append(inst)
         sess.add(inst)
         sess.flush()
+        cache.remember_instance(inst)
 
     raw_size = f"{raw.get('sales_size', '')} {raw.get('sales_uom_description', '')}".strip()
-    pricepoint = PricePoint(
+    cache.upsert_daily_price_point(
         base_price=raw.get("retail_price"),
         sale_price=None,
         member_price=None,
         size=normalize_size_string(raw_size) or raw_size,
         instance_id=inst.id,
     )
-    collector["price_points"].append(pricepoint)
-    sess.add(pricepoint)
     # Commit per-product so the write lock is released between products,
     # allowing concurrent scraper threads (WF, WG) to interleave writes.
     sess.commit()

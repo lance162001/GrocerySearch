@@ -67,6 +67,31 @@ Use the file and workflow map in [frontend-map](./references/frontend-map.md).
 5. Add or update widget tests when behavior changes across routes or shared state.
 6. Run `flutter analyze` and the most relevant `flutter test` target.
 
+## Color Scheme
+The app uses the same dark green palette as the email newsletter for brand consistency.
+All theme colors are set in `app/lib/main.dart` via `ThemeData`. Do not introduce new ad-hoc hex values — use the color role below or reference it via `Theme.of(context).colorScheme`.
+
+| Role | Hex | Usage |
+|------|-----|-------|
+| **Primary** | `#1b4332` | AppBar, buttons (elevated/text/outlined), seed color, focused input borders |
+| **Medium green** | `#2D6A4F` | Secondary accents, chart "normal" bars |
+| **Light mint** | `#95D5B2` | Chart light bars, selected chip/filter borders |
+| **Light green surface** | `#E9F7EE` | Selected chip/filter background, highlighted rows |
+| **Light green border** | `#DCE8DC` | Card borders, dividers, outlined button side |
+| **Scaffold background** | `#FAFAFA` | Page background |
+| **Card surface** | `#FFFFFF` | Card fill |
+| **Muted text** | `#71717A` | Hint text, unselected tab labels |
+| **Neutral border** | `#D4D4D8` | Input borders (enabled, unfocused) |
+
+Newsletter reference colors (for future email/UI parity):
+- Body bg: `#f0f4f0`, callout bg: `#f8fbf8`, header subtitle: `#95d5b2`, pill text: `#157347`
+
+### Rules
+1. Never add a new indigo/purple hex (`#6366F1`, `#4F46E5`, `#312E81`, etc.) — these were the legacy palette.
+2. For new primary-action elements use `Color(0xFF1b4332)`.
+3. For subtle green highlights/badges use `Color(0xFFE9F7EE)` background with `Color(0xFF1b4332)` or `Color(0xFF2D6A4F)` text.
+4. Prefer `Theme.of(context).colorScheme.primary` over hardcoding `#1b4332` in widget code.
+
 ## Key Files
 - `app/lib/main.dart`
 - `app/lib/config/app_environment.dart`

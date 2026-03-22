@@ -1,21 +1,18 @@
-Your Grocery Search
-Current Stores
-{% for company in companies %}
-  {% for store in stores %}
-    {% if store.company_id == company.id %}
-{{ company.name }}
-{{ store.address }} {{ store.town }} {{ store.state }}
-    {% endif %}
-  {% endfor %}
+New at your stores — {{ date }}
+{{ total_count }} new item{{ 's' if total_count != 1 else '' }} spotted this week
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{% if price_changes %}
+Price changes on products from your bundles
+{% for change in price_changes %}  • {{ change.product_name }}{% if change.product_brand %} ({{ change.product_brand }}){% endif %} at {{ change.store_name }}: {{ change.old_price }} -> {{ change.new_price }} ({{ change.change_label }})
 {% endfor %}
-
-New Products
-{% for product in products %}
-
-{{ product.name }} {{ product.brand }} 
-
-{% endfor %}
-
-
-
-this is a txt and not html
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{% endif %}
+{% for section in sections %}
+{{ section.store.company_name }}  ·  {{ section.store.address }}, {{ section.store.town }}
+{% for p in section.products %}  • {{ p.prod.name if p.prod else 'Unknown' }}{% if p.prod and p.prod.brand %} ({{ p.prod.brand }}){% endif %} — {{ p.price }}
+{% endfor %}{% if section.has_more %}  ... and {{ section.total_count - 10 }} more items
+{% endif %}
+{% endfor %}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GrocerySearch · Happy shopping!
+{% if bundle_url %}View all {{ total_count }} new item{{ 's' if total_count != 1 else '' }}: {{ bundle_url }}
+{% endif %}{% if unsubscribe_url %}Unsubscribe: {{ unsubscribe_url }}{% endif %}

@@ -358,7 +358,7 @@ class _StapleJudgementCard extends StatelessWidget {
                         _JudgeButton(
                           icon: Icons.thumb_up_outlined,
                           label: 'Staple',
-                          color: const Color(0xFF4F46E5),
+                          color: const Color(0xFF1b4332),
                           onPressed: () => onJudge(true),
                         ),
                       ],
@@ -379,7 +379,7 @@ class _StapleJudgementCard extends StatelessWidget {
                         child: _JudgeButton(
                           icon: Icons.thumb_up_outlined,
                           label: 'Staple',
-                          color: const Color(0xFF4F46E5),
+                          color: const Color(0xFF1b4332),
                           onPressed: () => onJudge(true),
                         ),
                       ),
@@ -512,7 +512,7 @@ class _GroupingJudgementCard extends StatelessWidget {
                         child: _JudgeButton(
                           icon: Icons.check,
                           label: 'Same product',
-                          color: const Color(0xFF4F46E5),
+                          color: const Color(0xFF1b4332),
                           onPressed: () => onJudge(true),
                         ),
                       ),
@@ -532,7 +532,7 @@ class _GroupingJudgementCard extends StatelessWidget {
                             child: _JudgeButton(
                               icon: Icons.check,
                               label: 'Same product',
-                              color: const Color(0xFF4F46E5),
+                              color: const Color(0xFF1b4332),
                               onPressed: () => onJudge(true),
                             ),
                           ),

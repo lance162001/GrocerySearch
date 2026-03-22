@@ -5,9 +5,9 @@ import 'package:flutter_front_end/models/grocery_models.dart';
 class BarChartSample4 extends StatefulWidget {
   BarChartSample4({super.key});
 
-  final Color dark = const Color(0xFF312E81);
-  final Color normal = const Color(0xFF6366F1);
-  final Color light = const Color(0xFFC7D2FE);
+  final Color dark = const Color(0xFF1b4332);
+  final Color normal = const Color(0xFF2D6A4F);
+  final Color light = const Color(0xFF95D5B2);
   @override
   State<StatefulWidget> createState() => BarChartSample4State();
 }

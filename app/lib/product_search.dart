@@ -337,15 +337,15 @@ class _SearchPageState extends State<SearchPage> {
         ? Icon(
             Icons.storefront_outlined,
             size: 16,
-            color: const Color(0xFF4F46E5),
+            color: const Color(0xFF1b4332),
           )
         : ProductImage(url: logoUrl, width: 18, height: 18);
     return _buildSummaryChip(
       label: label,
       leading: leading,
-      backgroundColor: const Color(0xFFEEF2FF),
-      borderColor: const Color(0xFFC7D2FE),
-      textColor: const Color(0xFF3730A3),
+      backgroundColor: const Color(0xFFE9F7EE),
+      borderColor: const Color(0xFF95D5B2),
+      textColor: const Color(0xFF1b4332),
     );
   }
 
@@ -377,9 +377,9 @@ class _SearchPageState extends State<SearchPage> {
     final isBestOption = option.instanceId == group.primaryProduct.instanceId;
 
     var label = 'Lowest price';
-    var backgroundColor = const Color(0xFFEEF2FF);
-    var borderColor = const Color(0xFFC7D2FE);
-    var textColor = const Color(0xFF3730A3);
+    var backgroundColor = const Color(0xFFE9F7EE);
+    var borderColor = const Color(0xFF95D5B2);
+    var textColor = const Color(0xFF1b4332);
 
     if (!isBestOption) {
       if (bestPrice == null || optionPrice == null) {
@@ -389,9 +389,9 @@ class _SearchPageState extends State<SearchPage> {
         textColor = const Color(0xFF52525B);
       } else if (productPricesMatch(optionPrice, bestPrice)) {
         label = 'Same as lowest';
-        backgroundColor = const Color(0xFFEEF2FF);
-        borderColor = const Color(0xFFC7D2FE);
-        textColor = const Color(0xFF3730A3);
+        backgroundColor = const Color(0xFFE9F7EE);
+        borderColor = const Color(0xFF95D5B2);
+        textColor = const Color(0xFF1b4332);
       } else {
         label = '+${_formatAmount(optionPrice - bestPrice)} vs lowest';
         backgroundColor = Colors.orange.shade50;
@@ -429,10 +429,10 @@ class _SearchPageState extends State<SearchPage> {
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: quantity > 0 ? const Color(0xFFEEF2FF) : Colors.white,
+          color: quantity > 0 ? const Color(0xFFE9F7EE) : Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: quantity > 0 ? const Color(0xFFC7D2FE) : const Color(0xFFE4E4E7),
+            color: quantity > 0 ? const Color(0xFF95D5B2) : const Color(0xFFDCE8DC),
           ),
         ),
         child: Column(
@@ -693,16 +693,16 @@ class _SearchPageState extends State<SearchPage> {
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFEEF2FF),
+                                color: const Color(0xFFE9F7EE),
                                 borderRadius: BorderRadius.circular(999),
                                 border: Border.all(
-                                  color: const Color(0xFFC7D2FE),
+                                  color: const Color(0xFF95D5B2),
                                 ),
                               ),
                               child: Text(
                                 '$groupQuantity in cart',
                                 style: const TextStyle(
-                                  color: Color(0xFF3730A3),
+                                  color: Color(0xFF1b4332),
                                   fontWeight: FontWeight.w700,
                                   fontSize: 12,
                                 ),
@@ -974,11 +974,11 @@ class _SearchPageState extends State<SearchPage> {
   }) {
     final amountLabel = _formatAmount(amount);
     final foregroundColor =
-        isBestPrice ? const Color(0xFF4F46E5) : Colors.orange.shade900;
+        isBestPrice ? const Color(0xFF1b4332) : Colors.orange.shade900;
     final backgroundColor =
-        isBestPrice ? const Color(0xFFEEF2FF) : Colors.orange.shade50;
+        isBestPrice ? const Color(0xFFE9F7EE) : Colors.orange.shade50;
     final borderColor =
-        isBestPrice ? const Color(0xFFC7D2FE) : Colors.orange.shade200;
+        isBestPrice ? const Color(0xFF95D5B2) : Colors.orange.shade200;
     final icon =
         isBestPrice ? Icons.savings_outlined : Icons.trending_up_rounded;
     final label = isBestPrice ? 'Save $amountLabel' : '+$amountLabel';
@@ -1332,11 +1332,11 @@ class _SearchPageState extends State<SearchPage> {
 
                 return Card(
                   color: groupQuantity > 0
-                      ? const Color(0xFFF5F3FF)
+                      ? const Color(0xFFE9F7EE)
                       : Colors.white,
                   clipBehavior: Clip.hardEdge,
                   child: InkWell(
-                    splashColor: const Color(0xFF6366F1).withAlpha(20),
+                    splashColor: const Color(0xFF1b4332).withAlpha(20),
                     onTap: () {
                       _toggleGroupedProduct(group, appState);
                     },

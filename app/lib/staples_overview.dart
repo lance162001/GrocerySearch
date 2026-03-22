@@ -480,7 +480,7 @@ class _StapleProductTile extends StatelessWidget {
       onLongPress: () => _showProductDetail(context),
       child: Container(
         decoration: BoxDecoration(
-          color: inCart ? const Color(0xFFF5F3FF) : null,
+          color: inCart ? const Color(0xFFE9F7EE) : null,
           border: Border(
             bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
           ),
@@ -565,14 +565,14 @@ class _StapleProductTile extends StatelessWidget {
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
-                  color: inCart ? const Color(0xFF4F46E5) : null,
+                  color: inCart ? const Color(0xFF1b4332) : null,
                 ),
               ),
             const SizedBox(width: 4),
             Icon(
               inCart ? Icons.check_circle : Icons.add_circle_outline,
               size: 20,
-              color: inCart ? const Color(0xFF6366F1) : const Color(0xFFA1A1AA),
+              color: inCart ? const Color(0xFF2D6A4F) : const Color(0xFFA1A1AA),
             ),
           ],
         ),

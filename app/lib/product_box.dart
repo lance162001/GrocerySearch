@@ -74,7 +74,7 @@ class ProductBox extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: const Color(0xFF4F46E5),
+                          color: const Color(0xFF1b4332),
                         ),
                       ),
                     ),

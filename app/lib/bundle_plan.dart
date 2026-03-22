@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_front_end/product_search.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/utils/price_utils.dart';
@@ -339,6 +341,32 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
     }
   }
 
+  Future<void> _shareBundle() async {
+    final bundle = _selectedBundle;
+    if (bundle == null) return;
+    setState(() => _loading = true);
+    try {
+      final token = await _api.createShareLink(bundle.id);
+      if (!mounted) return;
+      final String url;
+      if (kIsWeb) {
+        url = '${Uri.base.origin}/shared-bundle?token=$token';
+      } else {
+        url = '/shared-bundle?token=$token';
+      }
+      await Clipboard.setData(ClipboardData(text: url));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Shareable link copied to clipboard!')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _setError('Failed to create share link: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Build
   // ---------------------------------------------------------------------------
@@ -571,21 +599,32 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
         ),
         const SizedBox(height: 8),
 
-        // ---- Add items ----
+        // ---- Actions (add items + share) ----
         LayoutBuilder(
           builder: (context, constraints) {
-            final compact = constraints.maxWidth < 420;
-            return Align(
-              alignment: Alignment.centerLeft,
-              child: SizedBox(
-                width: compact ? double.infinity : null,
-                child: FilledButton.icon(
-                  icon: const Icon(Icons.add_shopping_cart, size: 18),
-                  label: const Text('Add items to bundle'),
-                  onPressed:
-                      _loading ? null : () => _addItemsToBundle(bundle.id, bundle.name),
-                ),
-              ),
+            final compact = constraints.maxWidth < 520;
+            final addButton = FilledButton.icon(
+              icon: const Icon(Icons.add_shopping_cart, size: 18),
+              label: const Text('Add items'),
+              onPressed: _loading ? null : () => _addItemsToBundle(bundle.id, bundle.name),
+            );
+            final shareButton = OutlinedButton.icon(
+              icon: const Icon(Icons.link, size: 18),
+              label: const Text('Create Shareable Link'),
+              onPressed: _loading ? null : _shareBundle,
+            );
+            if (compact) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [addButton, const SizedBox(height: 8), shareButton],
+              );
+            }
+            return Row(
+              children: [
+                addButton,
+                const SizedBox(width: 10),
+                shareButton,
+              ],
             );
           },
         ),

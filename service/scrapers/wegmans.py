@@ -6,13 +6,14 @@ import json
 import logging
 import os
 import re
-from typing import Optional
+from typing import Any, Optional, cast
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from sqlalchemy.orm import Session
 
-from models import Product, Product_Instance, PricePoint, Tag_Instance
+from models import Product, Product_Instance, Tag_Instance
+from .persistence import StorePersistenceCache
 from .utils import (
     CANONICAL_CATEGORIES,
     DIET_TYPES,
@@ -113,15 +114,17 @@ def scrape_wegmans(
     """Scrape all products for a single Wegmans store and persist results."""
     if collector is None:
         collector = {"products": [], "product_instances": [], "price_points": []}
+    cache = StorePersistenceCache(sess, store_id, _WG_COMPANY_ID, collector)
 
     raw_products = _fetch_all_products(store_code)
 
     skipped = 0
     for raw in raw_products:
         try:
-            _persist_product(raw, store_id, sess, tags, collector)
+            _persist_product(raw, store_id, sess, tags, collector, cache)
         except Exception as exc:
             sess.rollback()
+            cache = StorePersistenceCache(sess, store_id, _WG_COMPANY_ID, collector)
             skipped += 1
             logger.warning(
                 "Wegmans: skipped product %r due to error: %s",
@@ -355,6 +358,7 @@ def _persist_product(
     sess: Session,
     tags: dict[str, int],
     collector: dict,
+    cache: StorePersistenceCache,
 ) -> None:
     """Upsert a single Wegmans product + instance + price-point."""
     raw_full_name = str(raw.get("name", "") or raw.get("productName", ""))
@@ -368,10 +372,7 @@ def _persist_product(
     cleaned_name = strip_brand_from_name(cleaned_name, brand_raw)
     cleaned_name = cleaned_name.title()
 
-    prod = sess.query(Product).filter(
-        Product.raw_name == raw_full_name,
-        Product.company_id == _WG_COMPANY_ID,
-    ).first()
+    prod = cache.get_product(raw_full_name, cleaned_name)
 
     images = raw.get("images") or []
     image = images[0] if images else WG_FALLBACK_IMAGE
@@ -390,6 +391,7 @@ def _persist_product(
         collector["products"].append(prod)
         sess.add(prod)
         sess.flush()
+        cache.remember_product(prod)
 
         # Diet / characteristic tags
         tag_instances: list[Tag_Instance] = []
@@ -436,20 +438,17 @@ def _persist_product(
         sess.add_all(tag_instances)
 
     # Update thumbnail if it's still the fallback
-    if prod.picture_url == WG_FALLBACK_IMAGE and image != WG_FALLBACK_IMAGE:
-        prod.picture_url = image
+    if cast(str | None, prod.picture_url) == WG_FALLBACK_IMAGE and image != WG_FALLBACK_IMAGE:
+        prod.picture_url = cast(Any, image)
 
     # Upsert product instance
-    inst = (
-        sess.query(Product_Instance)
-        .filter(Product_Instance.store_id == store_id, Product_Instance.product_id == prod.id)
-        .first()
-    )
+    inst = cache.get_instance(int(prod.id))
     if inst is None:
         inst = Product_Instance(store_id=store_id, product_id=prod.id)
         collector["product_instances"].append(inst)
         sess.add(inst)
         sess.flush()
+        cache.remember_instance(inst)
 
     # Record a new price point
     instore = raw.get("price_inStore") or {}
@@ -474,15 +473,13 @@ def _persist_product(
             raw_pack = raw.get("packSize") or ""
             size = normalize_size_string(raw_pack) if raw_pack else "N/A"
 
-    pricepoint = PricePoint(
+    cache.upsert_daily_price_point(
         base_price=base_price,
         sale_price=sale_price,
         member_price=member_price,
         size=size,
         instance_id=inst.id,
     )
-    collector["price_points"].append(pricepoint)
-    sess.add(pricepoint)
     # Commit per-product so the write lock is released between products,
     # allowing concurrent scraper threads (WF, TJ) to interleave writes.
     sess.commit()

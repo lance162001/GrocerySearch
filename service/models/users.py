@@ -8,6 +8,10 @@ class User(Base, BaseModel):
     __tablename__ = 'users'
     recent_zipcode = Column(String(5))
     firebase_uid = Column(String(128), unique=True, nullable=True, index=True)
+    email = Column(String(255), nullable=True)
+    newsletter_opt_in = Column(Boolean, nullable=False, default=True)
+    newsletter_unsubscribed_at = Column(DateTime, nullable=True)
+    unsubscribe_token = Column(String(64), nullable=True, unique=True, index=True)
     bundles = relationship("Product_Bundle", back_populates="user", order_by="Product_Bundle.created_at.desc()")
 
 class Saved_Store(Base):
@@ -30,6 +34,7 @@ class Product_Bundle(Base, BaseModel):
     user_id = Column(Integer, ForeignKey("users.id"))
     name = Column(String(255))
     created_at = Column(DateTime, default=datetime.now)
+    share_token = Column(String(64), nullable=True, unique=True, index=True)
     products = relationship("Saved_Product", back_populates="bundle", lazy="joined")
     user = relationship("User", back_populates="bundles")
 
