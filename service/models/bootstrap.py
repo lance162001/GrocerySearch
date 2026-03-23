@@ -45,7 +45,7 @@ def _backfill_company_metadata() -> None:
                     UPDATE companies
                     SET slug = COALESCE(NULLIF(slug, ''), :slug),
                         scraper_key = COALESCE(NULLIF(scraper_key, ''), :scraper_key),
-                        is_active = COALESCE(is_active, 1)
+                        is_active = COALESCE(is_active, TRUE)
                     WHERE lower(name) = lower(:name)
                     """
                 ),
