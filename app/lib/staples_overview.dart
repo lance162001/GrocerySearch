@@ -4,8 +4,9 @@ import 'package:flutter_front_end/models/grocery_models.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
 import 'package:flutter_front_end/utils/product_grouping.dart';
-import 'package:flutter_front_end/widgets/top_level_navigation.dart';
+import 'package:flutter_front_end/widgets/app_bar_user_menu.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
+import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:provider/provider.dart';
 
 const List<String> _stapleNames = [
@@ -234,6 +235,7 @@ class _StaplesOverviewState extends State<StaplesOverview> {
       appBar: AppBar(
         title: const Text('Staples'),
         actions: [
+          const AppBarUserMenu(),
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'bundle_plan') {

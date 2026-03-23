@@ -78,6 +78,28 @@ def _get_or_create_user(user_id: int, sess: Session) -> models.User:
     return user
 
 
+@user_router.get("/users/{user_id}/newsletter", response_model=schemas.NewsletterStatus)
+async def get_newsletter_status(user_id: int, sess: Session = Depends(get_db)):
+    """Return the newsletter opt-in status for a user."""
+    user = _get_or_create_user(user_id, sess)
+    return schemas.NewsletterStatus(opted_in=bool(user.newsletter_opt_in))
+
+
+@user_router.post("/users/{user_id}/newsletter", response_model=schemas.NewsletterStatus)
+async def update_newsletter_status(
+    user_id: int,
+    payload: schemas.NewsletterUpdateRequest,
+    sess: Session = Depends(get_db),
+):
+    """Subscribe or unsubscribe a user from the newsletter."""
+    user = _get_or_create_user(user_id, sess)
+    setattr(user, "newsletter_opt_in", payload.opt_in)
+    if not payload.opt_in:
+        setattr(user, "newsletter_unsubscribed_at", datetime.now())
+    sess.commit()
+    return schemas.NewsletterStatus(opted_in=payload.opt_in)
+
+
 @user_router.post("/users/create", response_model=schemas.User)
 async def create_user(sess: Session = Depends(get_db)):
     user = models.User(recent_zipcode="00000")
@@ -306,23 +328,17 @@ def _build_bundle_product_details(
     bundle: models.Product_Bundle,
     sess: Session,
 ) -> List[schemas.BundleProductDetail]:
-    """Resolve every product in a bundle with its latest price points across all instances."""
+    """Resolve every product in a bundle with its full price history across all instances."""
     product_ids = [int(sp.product_id) for sp in bundle.products]
     if not product_ids:
         return []
 
-    latest_pp_id = (
-        select(func.max(models.PricePoint.id))
-        .where(models.PricePoint.instance_id == models.Product_Instance.id)
-        .correlate(models.Product_Instance)
-        .scalar_subquery()
-    )
-
     rows = (
         sess.query(models.Product, models.Product_Instance, models.PricePoint)
         .join(models.Product_Instance, models.Product_Instance.product_id == models.Product.id)
-        .outerjoin(models.PricePoint, models.PricePoint.id == latest_pp_id)
+        .outerjoin(models.PricePoint, models.PricePoint.instance_id == models.Product_Instance.id)
         .filter(models.Product.id.in_(product_ids))
+        .order_by(models.Product.id, models.Product_Instance.id, models.PricePoint.created_at)
         .all()
     )
 

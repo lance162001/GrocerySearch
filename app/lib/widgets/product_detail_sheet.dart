@@ -267,7 +267,9 @@ class _ProductDetailContent extends StatelessWidget {
     final details = _secondaryPriceDetails(option);
     final storeLabel = store == null
         ? 'Store ${option.storeId}'
-        : '${store.town}, ${store.state}';
+        : store.state.isNotEmpty
+            ? '${store.town}, ${store.state}'
+            : store.town;
 
     return InkWell(
       key: ValueKey<String>('product-option-${option.instanceId}'),

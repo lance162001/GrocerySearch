@@ -7,8 +7,9 @@ import 'package:flutter_front_end/utils/product_recommendation_sort.dart';
 import 'package:flutter_front_end/state/app_state.dart';
 import 'package:flutter_front_end/utils/scroll_utils.dart';
 import 'package:flutter_front_end/widgets/product_detail_sheet.dart';
-import 'package:flutter_front_end/widgets/top_level_navigation.dart';
+import 'package:flutter_front_end/widgets/app_bar_user_menu.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
+import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:provider/provider.dart';
 
 String _formatAmount(double amount) => '\$${amount.toStringAsFixed(2)}';
@@ -658,6 +659,7 @@ class _SearchPageState extends State<SearchPage> {
           ),
         ),
         actions: [
+          const AppBarUserMenu(),
           IconButton(
             iconSize: 32,
             icon: const Icon(Icons.more_vert),

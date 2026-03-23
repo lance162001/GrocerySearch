@@ -9,4 +9,5 @@ abstract final class AppRoutes {
   static const suggestStore = '/suggest-store';
   static const unsubscribe = '/unsubscribe';
   static const sharedBundle = '/shared-bundle';
+  static const preferences = '/preferences';
 }

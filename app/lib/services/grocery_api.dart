@@ -456,4 +456,25 @@ class GroceryApi {
       throw Exception('Failed to suggest store: ${response.statusCode}');
     }
   }
+
+  Future<bool> fetchNewsletterStatus(int userId) async {
+    final response = await get(buildUri('/users/$userId/newsletter'));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to fetch newsletter status: ${response.statusCode}');
+    }
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    return decoded['opted_in'] as bool;
+  }
+
+  Future<bool> updateNewsletterStatus(int userId, {required bool optIn}) async {
+    final response = await post(
+      buildUri('/users/$userId/newsletter'),
+      body: jsonEncode({'opt_in': optIn}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update newsletter status: ${response.statusCode}');
+    }
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    return decoded['opted_in'] as bool;
+  }
 }

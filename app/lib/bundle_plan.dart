@@ -7,8 +7,9 @@ import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/utils/price_utils.dart';
 import 'package:flutter_front_end/utils/product_grouping.dart';
 import 'package:flutter_front_end/widgets/product_detail_sheet.dart';
-import 'package:flutter_front_end/widgets/top_level_navigation.dart';
+import 'package:flutter_front_end/widgets/app_bar_user_menu.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
+import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:provider/provider.dart';
 
 // ---------------------------------------------------------------------------
@@ -247,7 +248,7 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
   String? _error;
 
   List<_BundleSummary> _userBundles = [];
-  final Map<int, String> _storeLabels = {};
+  final Map<int, Store> _stores = {};
 
   // Selected bundle detail
   _BundleDetail? _selectedBundle;
@@ -296,18 +297,11 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
   }
 
   Future<void> _ensureStoreLabels() async {
-    if (_storeLabels.isNotEmpty) return;
+    if (_stores.isNotEmpty) return;
     try {
       final stores = await _api.fetchAllStores();
       for (final store in stores) {
-        final id = store.id;
-        String label = 'Store $id';
-        if (store.town.isNotEmpty && store.state.isNotEmpty) {
-          label = '${store.town}, ${store.state}';
-        } else if (store.address.isNotEmpty) {
-          label = store.address;
-        }
-        _storeLabels[id] = label;
+        _stores[store.id] = store;
       }
     } catch (_) {}
   }
@@ -446,6 +440,7 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
       appBar: AppBar(
         title: const Text('Bundle Planner'),
         actions: [
+          const AppBarUserMenu(),
           if (_selectedBundle != null)
             IconButton(
               tooltip: 'Back to bundles',
@@ -815,20 +810,7 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
     await showProductDetailSheet(
       context: context,
       group: group,
-      storeLookup: (id) {
-        final label = _storeLabels[id];
-        if (label == null) return null;
-        // Wrap the label in a lightweight Store-like object understood by the sheet.
-        return Store(
-          id: id,
-          companyId: 0,
-          scraperId: 0,
-          town: label,
-          state: '',
-          address: '',
-          zipcode: '',
-        );
-      },
+      storeLookup: (id) => _stores[id],
     );
   }
 }

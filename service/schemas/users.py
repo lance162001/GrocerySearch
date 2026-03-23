@@ -44,6 +44,14 @@ class Store_Visit(BaseModel):
     date_visited: Optional[datetime] = None
 
 
+class NewsletterStatus(BaseModel):
+    opted_in: bool
+
+
+class NewsletterUpdateRequest(BaseModel):
+    opt_in: bool
+
+
 class BundleCreateRequest(BaseModel):
     name: str
 

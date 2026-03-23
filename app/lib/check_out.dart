@@ -5,8 +5,9 @@ import 'package:flutter_front_end/product_box.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
 import 'package:flutter_front_end/utils/price_utils.dart';
-import 'package:flutter_front_end/widgets/top_level_navigation.dart';
+import 'package:flutter_front_end/widgets/app_bar_user_menu.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
+import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:provider/provider.dart';
 
 class CheckOut extends StatefulWidget {
@@ -377,6 +378,7 @@ class _CheckOutState extends State<CheckOut> {
         appBar: AppBar(
           title: const Text('Cart'),
           actions: [
+            const AppBarUserMenu(),
             if (compactAction)
               IconButton(
                 tooltip: 'Save Bundle',

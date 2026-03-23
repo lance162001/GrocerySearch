@@ -23,6 +23,7 @@ import 'package:flutter_front_end/suggest_store.dart';
 import 'package:flutter_front_end/shared_bundle_page.dart';
 import 'package:flutter_front_end/staples_overview.dart';
 import 'package:flutter_front_end/unsubscribe_page.dart';
+import 'package:flutter_front_end/preferences_page.dart';
 import 'package:flutter_front_end/user_id_cache.dart' as user_cache;
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:provider/provider.dart';
@@ -665,6 +666,8 @@ class _MyAppState extends State<MyApp> {
                   const UnsubscribePage(),
               AppRoutes.sharedBundle: (context) =>
                   const SharedBundlePage(),
+              AppRoutes.preferences: (context) =>
+                  const PreferencesPage(),
             },
             onUnknownRoute: (settings) =>
                 MaterialPageRoute(builder: (context) => homePage),
