@@ -52,6 +52,16 @@ Use the detailed table and relationship map in [schema-map](./references/schema-
    - The scraper currently contains one manual schema evolution step for `products.raw_name`.
    - Some API payloads expose fields that are not persisted directly and should be described as such.
 
+6. Write all DDL and SQL to be PostgreSQL-compatible.
+   - The production database is **PostgreSQL**; local development may use SQLite. DDL must be valid on both where possible, and PostgreSQL must never be broken.
+   - **Boolean defaults**: use `DEFAULT TRUE` / `DEFAULT FALSE`, never `DEFAULT 1` / `DEFAULT 0`. PostgreSQL rejects integer literals as boolean defaults with a `DatatypeMismatch` error.
+   - **Timestamp type**: use `TIMESTAMP`, not `DATETIME`. PostgreSQL has no `DATETIME` type; using it raises `UndefinedObject`.
+   - **Date/time casts**: use `CAST(x AS DATE)` rather than the SQLite-only `date(x)` function (the bootstrap already branches on `"postgresql" in db_url` for this — keep that pattern).
+   - **Partial indexes**: `WHERE` clauses in `CREATE INDEX` are supported by PostgreSQL but not SQLite; wrap them in `_run_ddl_statements` so failures are logged and non-fatal on SQLite.
+   - **`ALTER TABLE … ADD COLUMN`**: PostgreSQL does not allow `NOT NULL` columns without a `DEFAULT` unless the table is empty. Always supply a default or make the column nullable when adding to an existing table via `_ensure_column`.
+   - **`AUTOINCREMENT`**: use SQLAlchemy's `Integer` primary key without explicit `AUTOINCREMENT`; SQLAlchemy emits the correct dialect-specific syntax automatically.
+   - **String length**: PostgreSQL enforces `VARCHAR(n)` limits strictly; ensure lengths are not under-sized for real data before committing a schema change.
+
 ## Quality Checks
 - Use exact table and column names from the model layer.
 - Separate DB schema facts from API schema facts.
@@ -67,6 +77,13 @@ Use the detailed table and relationship map in [schema-map](./references/schema-
 5. Decide how existing databases will be upgraded, because `create_all` is not a full migration strategy.
 6. Check derived query logic that depends on latest price points, bundle joins, saved stores, or visit history.
 7. If the change is backward-incompatible, state the data migration or rollout risk explicitly.
+8. **PostgreSQL compatibility check** — before finishing any DDL or raw SQL:
+   - Boolean defaults use `TRUE`/`FALSE`, not `1`/`0`.
+   - Timestamp columns use `TIMESTAMP`, not `DATETIME` (PostgreSQL has no `DATETIME` type).
+   - New `NOT NULL` columns added to existing tables have a `DEFAULT` value.
+   - Date/time conversion uses `CAST(… AS DATE)` (branch on `"postgresql" in db_url` for SQLite fallbacks).
+   - `ALTER TABLE` syntax is standard SQL, not SQLite-specific.
+   - `VARCHAR(n)` lengths are adequate for the expected data.
 
 ## Key Files
 - `service/models/base.py`

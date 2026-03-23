@@ -132,7 +132,7 @@ def ensure_runtime_schema() -> None:
     _ensure_column("users", "firebase_uid", "firebase_uid VARCHAR(128)")
     _ensure_column("users", "email", "email VARCHAR(255)")
     _ensure_column("users", "newsletter_opt_in", "newsletter_opt_in BOOLEAN DEFAULT TRUE")
-    _ensure_column("users", "newsletter_unsubscribed_at", "newsletter_unsubscribed_at DATETIME")
+    _ensure_column("users", "newsletter_unsubscribed_at", "newsletter_unsubscribed_at TIMESTAMP")
     _ensure_column("users", "unsubscribe_token", "unsubscribe_token VARCHAR(64)")
     _ensure_column("product_bundles", "share_token", "share_token VARCHAR(64)")
     _ensure_column("label_judgements", "staple_name", "staple_name VARCHAR(50)")
