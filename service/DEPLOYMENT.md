@@ -45,6 +45,7 @@ Minimum required values:
 
 - `POSTGRES_PASSWORD`
 - `ALLOWED_ORIGINS`
+- `BASE_URL`
 - `FRONTEND_USE_LOCAL_BACKEND=true`
 - `FRONTEND_WEB_USE_SAME_ORIGIN_API=true`
 - `ALGOLIA_API_KEY`
@@ -54,6 +55,12 @@ Set `ALLOWED_ORIGINS` to include the frontend origin, for example:
 
 ```env
 ALLOWED_ORIGINS=http://your-server-ip:3000,https://yourdomain.com
+```
+
+Set `BASE_URL` to the public frontend origin used in newsletter links, for example:
+
+```env
+BASE_URL=https://yourdomain.com
 ```
 
 ## 3) Build and Start Frontend + API + Database

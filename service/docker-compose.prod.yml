@@ -38,6 +38,7 @@ services:
       DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
       DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-20}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://yourdomain.com}
+      BASE_URL: ${BASE_URL:-https://yourdomain.com}
       DISABLE_DOCS: ${DISABLE_DOCS:-1}
       UVICORN_WORKERS: ${UVICORN_WORKERS:-4}
       UVICORN_PORT: 8000
@@ -90,6 +91,7 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_RECEIVER: ${EMAIL_RECEIVER:-}
+      BASE_URL: ${BASE_URL:-https://yourdomain.com}
     command: ["python", "scraper.py", "--run-on-start"]
     volumes:
       - static_data:/app/static
@@ -112,6 +114,7 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_RECEIVER: ${EMAIL_RECEIVER:-}
+      BASE_URL: ${BASE_URL:-https://yourdomain.com}
     command: ["python", "scraper.py", "--run-once"]
     volumes:
       - static_data:/app/static

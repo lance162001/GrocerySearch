@@ -10,6 +10,8 @@ from collections import defaultdict
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from functools import lru_cache
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -27,7 +29,6 @@ _SMTP_PORT = 465
 _PASSWORD = os.getenv("SMTP_PASSWORD")
 _SENDER = os.getenv("SMTP_USERNAME")
 _RECEIVER = os.getenv("EMAIL_RECEIVER")
-_BASE_URL = os.getenv("BASE_URL", "http://localhost:3000")
 _TEST_UNSUBSCRIBE_TOKEN = "test-do-not-unsubscribe"
 _TEST_BUNDLE_TOKEN = "test-shared-bundle"
 _MAX_PRODUCTS_PER_STORE = 10
@@ -86,9 +87,34 @@ def _price_change_label(old_value: float, new_value: float) -> str:
     return f"Down {_fmt_money(abs(delta))}"
 
 
+@lru_cache(maxsize=1)
+def _frontend_base_url() -> str:
+    raw_value = (os.getenv("BASE_URL") or os.getenv("base_url") or "").strip()
+    if not raw_value:
+        fallback = "http://localhost:3000"
+        logger.warning("BASE_URL is not set; falling back to %s for newsletter links", fallback)
+        return fallback
+
+    normalized = raw_value
+    if "://" not in normalized:
+        scheme = "http" if normalized.startswith(("localhost", "127.0.0.1")) else "https"
+        normalized = f"{scheme}://{normalized.lstrip('/')}"
+        logger.warning(
+            "BASE_URL=%s is missing a scheme; using %s for newsletter links",
+            raw_value,
+            normalized,
+        )
+
+    parsed = urlsplit(normalized)
+    if not parsed.scheme or not parsed.netloc:
+        raise RuntimeError(
+            "BASE_URL must be an absolute frontend URL, for example https://yourdomain.com",
+        )
+    return normalized.rstrip("/")
+
+
 def _unsubscribe_url(token: str) -> str:
-    base = _BASE_URL.rstrip("/")
-    return f"{base}/unsubscribe?token={token}"
+    return f"{_frontend_base_url()}/unsubscribe?token={token}"
 
 
 def _ensure_unsubscribe_token(user: User, sess: Session) -> str:
@@ -120,7 +146,7 @@ def _ensure_test_bundle(sess: Session, product_ids: list[int]) -> str:
     for pid in set(product_ids):
         sess.add(Saved_Product(product_id=pid, bundle_id=bundle_id))
     sess.commit()
-    return f"{_BASE_URL.rstrip('/')}/shared-bundle?token={_TEST_BUNDLE_TOKEN}"
+    return f"{_frontend_base_url()}/shared-bundle?token={_TEST_BUNDLE_TOKEN}"
 
 
 def _enrich_instances(data: dict, sess: Session) -> None:
@@ -193,7 +219,7 @@ def _create_newsletter_bundle(
     for pid in set(product_ids):
         sess.add(Saved_Product(product_id=pid, bundle_id=int(bundle.id)))
     sess.commit()
-    return f"{_BASE_URL.rstrip('/')}/shared-bundle?token={token}"
+    return f"{_frontend_base_url()}/shared-bundle?token={token}"
 
 
 def _bundle_price_changes(
