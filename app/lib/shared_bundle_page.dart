@@ -2,8 +2,11 @@ import 'dart:html' as html;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_front_end/models/grocery_models.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/utils/price_utils.dart';
+import 'package:flutter_front_end/utils/product_grouping.dart';
+import 'package:flutter_front_end/widgets/product_detail_sheet.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
 import 'package:provider/provider.dart';
 
@@ -85,6 +88,76 @@ class _SharedProduct {
       }
     }
     return best;
+  }
+
+  ProductGroup toProductGroup() {
+    final options = <Product>[];
+    for (final inst in instances) {
+      if (inst.pricePoints.isEmpty) continue;
+      _PricePointData? best;
+      for (final pp in inst.pricePoints) {
+        if (best == null ||
+            (pp.effectivePrice ?? double.infinity) <
+                (best.effectivePrice ?? double.infinity)) {
+          best = pp;
+        }
+      }
+      best ??= inst.pricePoints.first;
+
+      final history = inst.pricePoints.map((pp) {
+        return PricePoint(
+          basePrice: pp.basePrice,
+          salePrice: pp.salePrice ?? '',
+          memberPrice: pp.memberPrice ?? '',
+          size: pp.size ?? '',
+          timestamp: DateTime.fromMillisecondsSinceEpoch(0),
+        );
+      }).toList();
+
+      final syntheticId =
+          Object.hash(productId, inst.storeId) & 0x3fffffff;
+      options.add(Product(
+        id: productId,
+        instanceId: syntheticId,
+        lastUpdated: DateTime.fromMillisecondsSinceEpoch(0),
+        name: name,
+        brand: brand,
+        pictureUrl: pictureUrl,
+        companyId: 0,
+        storeId: inst.storeId,
+        basePrice: best.basePrice,
+        salePrice: best.salePrice ?? '',
+        memberPrice: best.memberPrice ?? '',
+        size: best.size ?? '',
+        priceHistory: history,
+      ));
+    }
+
+    if (options.isEmpty) {
+      options.add(Product(
+        id: productId,
+        instanceId: productId,
+        lastUpdated: DateTime.fromMillisecondsSinceEpoch(0),
+        name: name,
+        brand: brand,
+        pictureUrl: pictureUrl,
+        companyId: 0,
+        storeId: 0,
+        basePrice: '0',
+        salePrice: '',
+        memberPrice: '',
+        size: '',
+        priceHistory: const [],
+      ));
+    }
+
+    options.sort((a, b) {
+      final pa = productEffectivePrice(a) ?? double.infinity;
+      final pb = productEffectivePrice(b) ?? double.infinity;
+      return pa.compareTo(pb);
+    });
+
+    return ProductGroup(options: options);
   }
 }
 
@@ -222,224 +295,100 @@ class _SharedBundlePageState extends State<SharedBundlePage> {
   }
 
   Widget _buildProductCard(_SharedProduct product, ColorScheme cs) {
-    String? money(double? v) =>
-        v == null ? null : '\$${v.toStringAsFixed(2)}';
+    final bestPriceText = product.bestPrice != null
+        ? '\$${product.bestPrice!.toStringAsFixed(2)}'
+        : null;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ---- Product header ----
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final compact = constraints.maxWidth < 360;
-                final details = Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+      clipBehavior: Clip.hardEdge,
+      child: InkWell(
+        onTap: () => showProductDetailSheet(
+          context: context,
+          group: product.toProductGroup(),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 360;
+              final details = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.name,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 15),
+                  ),
+                  if (product.brand.isNotEmpty)
                     Text(
-                      product.name,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 15),
+                      product.brand,
+                      style:
+                          TextStyle(fontSize: 13, color: Colors.grey.shade600),
                     ),
-                    if (product.brand.isNotEmpty)
-                      Text(
-                        product.brand,
-                        style: TextStyle(
-                            fontSize: 13, color: Colors.grey.shade600),
-                      ),
-                  ],
-                );
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tap for price details & history',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: cs.primary.withValues(alpha: 0.7)),
+                  ),
+                ],
+              );
 
-                final leading = Row(
+              final leading = Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (product.pictureUrl.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: ProductImage(
+                        url: product.pictureUrl,
+                        width: 48,
+                        height: 48,
+                      ),
+                    ),
+                  if (product.pictureUrl.isNotEmpty) const SizedBox(width: 10),
+                  Expanded(child: details),
+                ],
+              );
+
+              final priceWidget = bestPriceText != null
+                  ? Text(
+                      bestPriceText,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: cs.primary,
+                      ),
+                    )
+                  : null;
+
+              if (compact) {
+                return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (product.pictureUrl.isNotEmpty)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: ProductImage(
-                          url: product.pictureUrl,
-                          width: 48,
-                          height: 48,
-                        ),
-                      ),
-                    if (product.pictureUrl.isNotEmpty)
-                      const SizedBox(width: 10),
-                    Expanded(child: details),
-                  ],
-                );
-
-                final bestPriceText = money(product.bestPrice);
-                final priceWidget = bestPriceText != null
-                    ? Text(
-                        bestPriceText,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: cs.primary,
-                        ),
-                      )
-                    : null;
-
-                if (compact) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      leading,
-                      if (priceWidget != null) ...[
-                        const SizedBox(height: 8),
-                        priceWidget,
-                      ],
-                    ],
-                  );
-                }
-
-                return Row(
-                  children: [
-                    Expanded(child: leading),
+                    leading,
                     if (priceWidget != null) ...[
-                      const SizedBox(width: 12),
+                      const SizedBox(height: 8),
                       priceWidget,
                     ],
                   ],
                 );
-              },
-            ),
+              }
 
-            // ---- Price points by store ----
-            if (product.instances.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              const Divider(height: 1),
-              const SizedBox(height: 8),
-              Text(
-                'Price Points by Store',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 6),
-              ...product.instances.map((inst) => Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest
-                            .withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Store ${inst.storeId}',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 13),
-                          ),
-                          const SizedBox(height: 4),
-                          if (inst.pricePoints.isEmpty)
-                            Text(
-                              'No price data',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade500),
-                            ),
-                          ...inst.pricePoints.map((pp) => Padding(
-                                padding:
-                                    const EdgeInsets.only(bottom: 2),
-                                child: Wrap(
-                                  spacing: 8,
-                                  runSpacing: 6,
-                                  crossAxisAlignment:
-                                      WrapCrossAlignment.center,
-                                  children: [
-                                    if (pp.size != null &&
-                                        pp.size!.isNotEmpty)
-                                      Container(
-                                        padding:
-                                            const EdgeInsets.symmetric(
-                                                horizontal: 6,
-                                                vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: cs.secondaryContainer,
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          pp.size!,
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color:
-                                                cs.onSecondaryContainer,
-                                          ),
-                                        ),
-                                      ),
-                                    Text(
-                                      formatPriceString(pp.basePrice),
-                                      style: (pp.salePrice != null &&
-                                                  pp.salePrice!
-                                                      .isNotEmpty) ||
-                                              (pp.memberPrice != null &&
-                                                  pp.memberPrice!
-                                                      .isNotEmpty)
-                                          ? TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey,
-                                              decoration: TextDecoration
-                                                  .lineThrough,
-                                            )
-                                          : const TextStyle(
-                                              fontSize: 13,
-                                              fontWeight:
-                                                  FontWeight.w600),
-                                    ),
-                                    if (pp.salePrice != null &&
-                                        pp.salePrice!.isNotEmpty)
-                                      Text(
-                                        formatPriceString(pp.salePrice!),
-                                        style: const TextStyle(
-                                          color: Colors.redAccent,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    if (pp.memberPrice != null &&
-                                        pp.memberPrice!.isNotEmpty)
-                                      Container(
-                                        padding:
-                                            const EdgeInsets.symmetric(
-                                                horizontal: 6,
-                                                vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: cs.primary
-                                              .withValues(alpha: 0.1),
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          formatPriceString(
-                                              pp.memberPrice!),
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.bold,
-                                            color: cs.primary,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              )),
-                        ],
-                      ),
-                    ),
-                  )),
-            ],
-          ],
+              return Row(
+                children: [
+                  Expanded(child: leading),
+                  if (priceWidget != null) ...[
+                    const SizedBox(width: 12),
+                    priceWidget,
+                  ],
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
