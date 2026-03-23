@@ -249,11 +249,19 @@ def scheduled_job() -> None:
 
         try:
             emailer.simple_send(summary)
+        except Exception as exc:
+            if debug:
+                logger.warning("Summary email skipped in debug mode: %s", exc)
+            else:
+                logger.warning("Summary email skipped: %s", exc)
+
+        try:
             emailer.send(collector)
         except Exception as exc:
             if debug:
-                logger.warning("Email skipped in debug mode: %s", exc)
+                logger.warning("Newsletter skipped in debug mode: %s", exc)
             else:
+                logger.error("Newsletter delivery failed: %s", exc, exc_info=True)
                 raise
     except Exception as exc:
         logger.error("Scraping run failed: %s", exc, exc_info=True)
