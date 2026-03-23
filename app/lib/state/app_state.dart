@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show ChangeNotifier, debugPrint, kDebugMode;
 import 'package:flutter_front_end/models/grocery_models.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
+import 'package:flutter_front_end/utils/hints_pref_cache.dart';
 
 class AppState extends ChangeNotifier {
   AppState({required this.api});
@@ -18,6 +19,7 @@ class AppState extends ChangeNotifier {
   final Map<int, int> cartQuantities = <int, int>{};
   List<Tag> userTags = [];
   String searchTerm = '';
+  bool hideHints = false;
   bool _initialized = false;
 
   Future<void> initialize({bool force = false}) async {
@@ -28,6 +30,13 @@ class AppState extends ChangeNotifier {
     bootstrappingUser = true;
     userBootstrapError = null;
     notifyListeners();
+
+    // Load local-only preferences before the network bootstrap completes so
+    // they are ready as early as possible.
+    readHideHints().then((value) {
+      hideHints = value;
+      notifyListeners();
+    }).catchError((_) {});
 
     try {
       final metadataFuture = Future.wait<dynamic>([
@@ -92,6 +101,12 @@ class AppState extends ChangeNotifier {
       userStores = [...userStores, store];
     }
     notifyListeners();
+  }
+
+  Future<void> setHideHints(bool value) async {
+    hideHints = value;
+    notifyListeners();
+    await writeHideHints(value);
   }
 
   void clearSelectedStores() {

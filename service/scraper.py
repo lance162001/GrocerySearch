@@ -125,6 +125,8 @@ def _scrape_stores(stores: list, companies_by_id: dict[int, Company], tags: dict
         grouped_stores[store_company_id].append(store)
 
     threads: list[threading.Thread] = []
+    worker_errors: list[tuple[str, Exception]] = []
+    worker_errors_lock = threading.Lock()
 
     def _run_company(company: Company, company_stores: list[Store], scrape_fn: Callable[..., None], label: str) -> None:
         logger.info("%s thread starting: %d store(s) to scrape", label, len(company_stores))
@@ -150,6 +152,10 @@ def _scrape_stores(stores: list, companies_by_id: dict[int, Company], tags: dict
                         exc_info=True,
                     )
                     raise
+        except Exception as exc:
+            sess.rollback()
+            with worker_errors_lock:
+                worker_errors.append((label, exc))
         finally:
             sess.close()
         logger.info("%s thread done", label)
@@ -172,6 +178,10 @@ def _scrape_stores(stores: list, companies_by_id: dict[int, Company], tags: dict
 
     for thread in threads:
         thread.join()
+
+    if worker_errors:
+        labels = ", ".join(sorted({label for label, _ in worker_errors}))
+        raise RuntimeError(f"Scraper worker failure for: {labels}") from worker_errors[0][1]
 
 
 def ensure_schema() -> None:

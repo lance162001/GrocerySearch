@@ -13,7 +13,7 @@ from curl_cffi import requests
 from sqlalchemy.orm import Session
 
 from models import Product, Product_Instance, Store, Tag_Instance
-from .persistence import StorePersistenceCache
+from .persistence import StorePersistenceCache, snapshot_instance, snapshot_price_point, snapshot_product
 from .utils import (
     TJ_CATEGORIES,
     TJ_CATEGORY_TO_CANONICAL,
@@ -277,7 +277,6 @@ def _persist_product(
                 prod.picture_url = cast(Any, local_url)
 
     if is_new:
-        collector["products"].append(prod)
         sess.add(prod)
         sess.flush()
         cache.remember_product(prod)
@@ -306,15 +305,16 @@ def _persist_product(
 
     # Upsert product instance
     inst = cache.get_instance(int(prod.id))
+    created_instance = False
     if inst is None:
         inst = Product_Instance(store_id=store_id, product_id=prod.id)
-        collector["product_instances"].append(inst)
         sess.add(inst)
         sess.flush()
         cache.remember_instance(inst)
+        created_instance = True
 
     raw_size = f"{raw.get('sales_size', '')} {raw.get('sales_uom_description', '')}".strip()
-    cache.upsert_daily_price_point(
+    price_point, created_price_point, updated_price_point = cache.upsert_daily_price_point(
         base_price=raw.get("retail_price"),
         sale_price=None,
         member_price=None,
@@ -324,3 +324,11 @@ def _persist_product(
     # Commit per-product so the write lock is released between products,
     # allowing concurrent scraper threads (WF, WG) to interleave writes.
     sess.commit()
+    if is_new:
+        collector["products"].append(snapshot_product(prod))
+    if created_instance:
+        collector["product_instances"].append(snapshot_instance(inst))
+    if created_price_point:
+        collector["price_points"].append(snapshot_price_point(price_point))
+    if updated_price_point:
+        collector["updated_price_points"] += 1

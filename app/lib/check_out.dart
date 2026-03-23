@@ -6,6 +6,7 @@ import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
 import 'package:flutter_front_end/utils/price_utils.dart';
 import 'package:flutter_front_end/widgets/app_bar_user_menu.dart';
+import 'package:flutter_front_end/widgets/hint_banner.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
 import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:provider/provider.dart';
@@ -405,8 +406,19 @@ class _CheckOutState extends State<CheckOut> {
               ),
           ],
         ),
-        body: compactLayout
-            ? ListView(
+        body: Column(
+          children: [
+            const HintBanner(
+              hintKey: 'cart',
+              message:
+                  'Items are grouped by store for efficient shopping. '
+                  'Tap a product to mark it done; tap again to move it back. '
+                  'Use "Save Bundle" to preserve this list for future trips.',
+              icon: Icons.shopping_cart_outlined,
+            ),
+            Expanded(
+              child: compactLayout
+                  ? ListView(
                 padding: const EdgeInsets.only(bottom: 12),
                 children: [
                   _buildCheckoutSummary(appState),
@@ -488,6 +500,9 @@ class _CheckOutState extends State<CheckOut> {
                   ),
                 ],
               ),
+            ),
+          ],
+        ),
         bottomNavigationBar: const SafeArea(
           top: false,
           child: TopLevelNavigationBar(

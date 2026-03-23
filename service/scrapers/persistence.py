@@ -1,10 +1,73 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date, datetime
 
 from sqlalchemy.orm import Session
 
 from models import PricePoint, Product, Product_Instance
+
+
+@dataclass
+class ProductSnapshot:
+    id: int | None
+    name: str | None
+    brand: str | None
+    company_id: int | None
+    picture_url: str | None
+
+
+@dataclass
+class ProductInstanceSnapshot:
+    id: int | None
+    store_id: int | None
+    product_id: int | None
+    prod: object | None = None
+    image_url: str | None = None
+    price: str | None = None
+
+
+@dataclass
+class PricePointSnapshot:
+    id: int | None
+    instance_id: int | None
+    base_price: str | None
+    sale_price: str | None
+    member_price: str | None
+    size: str | None
+    created_at: datetime | None
+    collected_on: date | None
+
+
+def snapshot_product(product: Product) -> ProductSnapshot:
+    return ProductSnapshot(
+        id=int(product.id) if product.id is not None else None,
+        name=str(product.name) if product.name is not None else None,
+        brand=str(product.brand) if product.brand is not None else None,
+        company_id=int(product.company_id) if product.company_id is not None else None,
+        picture_url=str(product.picture_url) if product.picture_url is not None else None,
+    )
+
+
+def snapshot_instance(instance: Product_Instance) -> ProductInstanceSnapshot:
+    return ProductInstanceSnapshot(
+        id=int(instance.id) if instance.id is not None else None,
+        store_id=int(instance.store_id) if instance.store_id is not None else None,
+        product_id=int(instance.product_id) if instance.product_id is not None else None,
+    )
+
+
+def snapshot_price_point(price_point: PricePoint) -> PricePointSnapshot:
+    return PricePointSnapshot(
+        id=int(price_point.id) if price_point.id is not None else None,
+        instance_id=int(price_point.instance_id) if price_point.instance_id is not None else None,
+        base_price=str(price_point.base_price) if price_point.base_price is not None else None,
+        sale_price=str(price_point.sale_price) if price_point.sale_price is not None else None,
+        member_price=str(price_point.member_price) if price_point.member_price is not None else None,
+        size=str(price_point.size) if price_point.size is not None else None,
+        created_at=price_point.created_at,
+        collected_on=price_point.collected_on,
+    )
 
 
 def ensure_collector_shape(collector: dict) -> dict:
@@ -24,7 +87,7 @@ class StorePersistenceCache:
         self.sess = sess
         self.store_id = store_id
         self.company_id = company_id
-        self.collector = ensure_collector_shape(collector)
+        ensure_collector_shape(collector)
         self.today = date.today()
         self.products_by_raw_name: dict[str, Product] = {}
         self.instances_by_product_id: dict[int, Product_Instance] = {}
@@ -108,7 +171,6 @@ class StorePersistenceCache:
                 **new_values,
             )
             self.sess.add(price_point)
-            self.collector["price_points"].append(price_point)
             self.price_points_by_instance_id[instance_id] = price_point
             return price_point, True, False
 
@@ -117,5 +179,4 @@ class StorePersistenceCache:
             for field, value in new_values.items():
                 setattr(price_point, field, value)
             price_point.created_at = datetime.now()
-            self.collector["updated_price_points"] += 1
         return price_point, False, changed

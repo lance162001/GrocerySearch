@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
 import 'package:flutter_front_end/widgets/app_bar_user_menu.dart';
+import 'package:flutter_front_end/widgets/hint_banner.dart';
+import 'package:flutter_front_end/widgets/overflow_menu_nudge.dart';
 import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:provider/provider.dart';
 
@@ -87,10 +89,40 @@ class _PreferencesPageState extends State<PreferencesPage> {
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8),
         children: [
+          _SectionHeader(label: 'Appearance'),
+          _hintsTile(context),
           _SectionHeader(label: 'Newsletter'),
           _newsletterTile(),
         ],
       ),
+    );
+  }
+
+  Widget _hintsTile(BuildContext context) {
+    final hideHints = context.watch<AppState>().hideHints;
+    return SwitchListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      secondary: Icon(
+        Icons.tips_and_updates_outlined,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+      title: const Text('Show hints'),
+      subtitle: Text(
+        hideHints
+            ? 'Onboarding hints are hidden.'
+            : 'Brief tips are shown on each screen.',
+        style: const TextStyle(color: Color(0xFF71717A)),
+      ),
+      value: !hideHints,
+      onChanged: (value) {
+        context.read<AppState>().setHideHints(!value);
+        if (value) {
+          // Re-allow dismissed hints so they re-appear when hints are turned
+          // back on next time the user visits each screen.
+          HintBanner.dismissed.clear();
+          OverflowMenuNudge.dismissed.clear();
+        }
+      },
     );
   }
 

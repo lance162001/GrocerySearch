@@ -6,6 +6,8 @@ import 'package:flutter_front_end/models/grocery_models.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
 import 'package:flutter_front_end/widgets/app_bar_user_menu.dart';
+import 'package:flutter_front_end/widgets/hint_banner.dart';
+import 'package:flutter_front_end/widgets/overflow_menu_nudge.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
 import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:provider/provider.dart';
@@ -196,8 +198,10 @@ class _StoreSearchState extends State<StoreSearch> {
           ),
         ],
       ),
-      body: Column(
+      body: Stack(
         children: [
+          Column(
+            children: [
           Container(
             width: double.infinity,
             margin: const EdgeInsets.fromLTRB(8, 8, 8, 4),
@@ -230,6 +234,14 @@ class _StoreSearchState extends State<StoreSearch> {
                 ),
               ],
             ),
+          ),
+          const HintBanner(
+            hintKey: 'stores',
+            message:
+                'Search by zip code, city, or address to find nearby stores. '
+                'Tap a card to select it — pick as many as you like. '
+                'Your selections are saved to your account.',
+            icon: Icons.store_outlined,
           ),
           Expanded(
             child: FutureBuilder<List<Store>>(
@@ -368,6 +380,16 @@ class _StoreSearchState extends State<StoreSearch> {
                 }
                 return const Center(child: CircularProgressIndicator());
               },
+            ),
+          ),
+        ],
+          ),
+          const Positioned(
+            top: 4,
+            right: 4,
+            child: OverflowMenuNudge(
+              nudgeKey: 'stores_overflow',
+              message: 'Tap ⋮ for bundles & more',
             ),
           ),
         ],

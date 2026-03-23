@@ -5,6 +5,8 @@ import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
 import 'package:flutter_front_end/utils/product_grouping.dart';
 import 'package:flutter_front_end/widgets/app_bar_user_menu.dart';
+import 'package:flutter_front_end/widgets/hint_banner.dart';
+import 'package:flutter_front_end/widgets/overflow_menu_nudge.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
 import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:provider/provider.dart';
@@ -251,7 +253,7 @@ class _StaplesOverviewState extends State<StaplesOverview> {
                 value: 'bundle_plan',
                 child: Row(
                   children: [
-                    Icon(Icons.route, size: 20),
+                    Icon(Icons.route, size: 20, color: Color(0xFF2D6A4F)),
                     SizedBox(width: 12),
                     Text('Bundles'),
                   ],
@@ -261,7 +263,7 @@ class _StaplesOverviewState extends State<StaplesOverview> {
                 value: 'label',
                 child: Row(
                   children: [
-                    Icon(Icons.rate_review_outlined, size: 20),
+                    Icon(Icons.rate_review_outlined, size: 20, color: Color(0xFF2D6A4F)),
                     SizedBox(width: 12),
                     Text('Review labels'),
                   ],
@@ -271,7 +273,7 @@ class _StaplesOverviewState extends State<StaplesOverview> {
                 value: 'suggest_store',
                 child: Row(
                   children: [
-                    Icon(Icons.add_business, size: 20),
+                    Icon(Icons.add_business, size: 20, color: Color(0xFF2D6A4F)),
                     SizedBox(width: 12),
                     Text('Suggest store'),
                   ],
@@ -281,9 +283,11 @@ class _StaplesOverviewState extends State<StaplesOverview> {
           ),
         ],
       ),
-      body: FutureBuilder<Map<String, List<Product>>>(
-        future: _staplesFuture,
-        builder: (context, snapshot) {
+      body: Stack(
+        children: [
+          FutureBuilder<Map<String, List<Product>>>(
+            future: _staplesFuture,
+            builder: (context, snapshot) {
           // Show loading state until the cache is populated by the .then() callback.
           if (_cachedRawStaples == null) {
             if (snapshot.hasError) {
@@ -300,7 +304,18 @@ class _StaplesOverviewState extends State<StaplesOverview> {
 
           // Selections are pre-computed in state and updated only when inputs
           // change (data, judgements, heuristics, denials) — not on cart updates.
-          return GridView.builder(
+          return Column(
+            children: [
+              const HintBanner(
+                hintKey: 'staples',
+                message:
+                    'Everyday staples compared across your selected stores. '
+                    'Tap a card to add it to your cart. '
+                    'Long-press for other flavors, and prices at other stores.',
+                icon: Icons.local_grocery_store_outlined,
+              ),
+              Expanded(
+                child: GridView.builder(
             padding: const EdgeInsets.all(8),
             // Keep ~600 px beyond the viewport pre-built so scrolling into the
             // next row of cards feels instant.
@@ -342,8 +357,21 @@ class _StaplesOverviewState extends State<StaplesOverview> {
                 ),
               );
             },
+          ),
+              ),
+            ],
           );
         },
+          ),
+          const Positioned(
+            top: 4,
+            right: 4,
+            child: OverflowMenuNudge(
+              nudgeKey: 'staples_overflow',
+              message: 'Tap ⋮ for bundles & more',
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: const SafeArea(
         top: false,

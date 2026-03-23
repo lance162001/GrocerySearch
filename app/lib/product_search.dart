@@ -8,6 +8,8 @@ import 'package:flutter_front_end/state/app_state.dart';
 import 'package:flutter_front_end/utils/scroll_utils.dart';
 import 'package:flutter_front_end/widgets/product_detail_sheet.dart';
 import 'package:flutter_front_end/widgets/app_bar_user_menu.dart';
+import 'package:flutter_front_end/widgets/hint_banner.dart';
+import 'package:flutter_front_end/widgets/overflow_menu_nudge.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
 import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:provider/provider.dart';
@@ -677,8 +679,21 @@ class _SearchPageState extends State<SearchPage> {
             ),
         ],
       ),
-      body: FutureBuilder<List<Product>>(
-        future: _productsFuture,
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              const HintBanner(
+                hintKey: 'search',
+                message:
+                    'Type a product name and press enter to search. '
+                    'Green "Save" badges mark the best price across your stores. '
+                    'Tap to add to cart, long-press for details and alternate stores.',
+                icon: Icons.search,
+              ),
+              Expanded(
+                child: FutureBuilder<List<Product>>(
+                  future: _productsFuture,
         builder: (context, snapshot) {
           if (snapshot.hasData) {
             if (stores.isEmpty) {
@@ -840,6 +855,19 @@ class _SearchPageState extends State<SearchPage> {
           }
           return const Center(child: CircularProgressIndicator());
         },
+      ),
+          ),
+            ],
+          ),
+          const Positioned(
+            top: 4,
+            right: 4,
+            child: OverflowMenuNudge(
+              nudgeKey: 'search_overflow',
+              message: 'Tap ⋮ to filter by sale, spread, or tags',
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: widget.bundleId == null
           ? const SafeArea(

@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 from sqlalchemy.orm import Session
 
 from models import Product, Product_Instance, Tag_Instance
-from .persistence import StorePersistenceCache
+from .persistence import StorePersistenceCache, snapshot_instance, snapshot_price_point, snapshot_product
 from .utils import (
     WF_CATEGORIES,
     WF_CATEGORY_TO_CANONICAL,
@@ -140,6 +140,7 @@ def _persist_product(
     cleaned_name = cleaned_name.title()
 
     prod = cache.get_product(raw_full_name, cleaned_name)
+    created_product = False
 
     if prod is None:
         brand = (brand_raw or "Whole Foods Market").title()
@@ -153,10 +154,10 @@ def _persist_product(
             picture_url=image,
             tags=[],
         )
-        collector["products"].append(prod)
         sess.add(prod)
         sess.flush()
         cache.remember_product(prod)
+        created_product = True
 
         # Diet / characteristic tags — check both product name and explicit API attributes.
         name_lower = raw_full_name.lower()
@@ -180,14 +181,15 @@ def _persist_product(
 
     # Upsert product instance
     inst = cache.get_instance(int(prod.id))
+    created_instance = False
     if inst is None:
         inst = Product_Instance(store_id=store_id, product_id=prod.id)
-        collector["product_instances"].append(inst)
         sess.add(inst)
         sess.flush()
         cache.remember_instance(inst)
+        created_instance = True
 
-    cache.upsert_daily_price_point(
+    price_point, created_price_point, updated_price_point = cache.upsert_daily_price_point(
         base_price=raw.get("regularPrice"),
         sale_price=raw.get("salePrice"),
         member_price=raw.get("incrementalSalePrice"),
@@ -197,3 +199,11 @@ def _persist_product(
     # Commit per-product so the write lock is released between products,
     # allowing concurrent scraper threads (WG, TJ) to interleave writes.
     sess.commit()
+    if created_product:
+        collector["products"].append(snapshot_product(prod))
+    if created_instance:
+        collector["product_instances"].append(snapshot_instance(inst))
+    if created_price_point:
+        collector["price_points"].append(snapshot_price_point(price_point))
+    if updated_price_point:
+        collector["updated_price_points"] += 1

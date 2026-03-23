@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 from sqlalchemy.orm import Session
 
 from models import Product, Product_Instance, Tag_Instance
-from .persistence import StorePersistenceCache
+from .persistence import StorePersistenceCache, snapshot_instance, snapshot_price_point, snapshot_product
 from .utils import (
     CANONICAL_CATEGORIES,
     DIET_TYPES,
@@ -388,10 +388,10 @@ def _persist_product(
             picture_url=image,
             tags=[],
         )
-        collector["products"].append(prod)
         sess.add(prod)
         sess.flush()
         cache.remember_product(prod)
+        created_product = True
 
         # Diet / characteristic tags
         tag_instances: list[Tag_Instance] = []
@@ -436,6 +436,8 @@ def _persist_product(
             tag_instances.append(Tag_Instance(product_id=prod.id, tag_id=tags[canonical]))
 
         sess.add_all(tag_instances)
+    else:
+        created_product = False
 
     # Update thumbnail if it's still the fallback
     if cast(str | None, prod.picture_url) == WG_FALLBACK_IMAGE and image != WG_FALLBACK_IMAGE:
@@ -443,12 +445,13 @@ def _persist_product(
 
     # Upsert product instance
     inst = cache.get_instance(int(prod.id))
+    created_instance = False
     if inst is None:
         inst = Product_Instance(store_id=store_id, product_id=prod.id)
-        collector["product_instances"].append(inst)
         sess.add(inst)
         sess.flush()
         cache.remember_instance(inst)
+        created_instance = True
 
     # Record a new price point
     instore = raw.get("price_inStore") or {}
@@ -473,7 +476,7 @@ def _persist_product(
             raw_pack = raw.get("packSize") or ""
             size = normalize_size_string(raw_pack) if raw_pack else "N/A"
 
-    cache.upsert_daily_price_point(
+    price_point, created_price_point, updated_price_point = cache.upsert_daily_price_point(
         base_price=base_price,
         sale_price=sale_price,
         member_price=member_price,
@@ -483,3 +486,11 @@ def _persist_product(
     # Commit per-product so the write lock is released between products,
     # allowing concurrent scraper threads (WF, TJ) to interleave writes.
     sess.commit()
+    if created_product:
+        collector["products"].append(snapshot_product(prod))
+    if created_instance:
+        collector["product_instances"].append(snapshot_instance(inst))
+    if created_price_point:
+        collector["price_points"].append(snapshot_price_point(price_point))
+    if updated_price_point:
+        collector["updated_price_points"] += 1
