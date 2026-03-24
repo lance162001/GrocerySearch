@@ -8,12 +8,18 @@ from .base import Base, engine
 
 logger = logging.getLogger(__name__)
 
+# Registry of every (table, column) pair that _ensure_column handles.
+# Checked by tests/test_bootstrap_coverage.py to catch new model columns
+# that were not accompanied by a migration entry.
+_ENSURED_COLUMNS: set[tuple[str, str]] = set()
+
 
 def _has_column(inspector, table_name: str, column_name: str) -> bool:
     return column_name in {col["name"] for col in inspector.get_columns(table_name)}
 
 
 def _ensure_column(table_name: str, column_name: str, ddl: str) -> None:
+    _ENSURED_COLUMNS.add((table_name, column_name))
     inspector = inspect(engine)
     if _has_column(inspector, table_name, column_name):
         return
@@ -132,6 +138,8 @@ def ensure_runtime_schema() -> None:
     _ensure_column("users", "firebase_uid", "firebase_uid VARCHAR(128)")
     _ensure_column("users", "email", "email VARCHAR(255)")
     _ensure_column("users", "newsletter_opt_in", "newsletter_opt_in BOOLEAN DEFAULT TRUE")
+    _ensure_column("users", "newsletter_frequency", "newsletter_frequency VARCHAR(16) DEFAULT 'weekly'")
+    _ensure_column("users", "newsletter_last_sent_at", "newsletter_last_sent_at TIMESTAMP")
     _ensure_column("users", "newsletter_unsubscribed_at", "newsletter_unsubscribed_at TIMESTAMP")
     _ensure_column("users", "unsubscribe_token", "unsubscribe_token VARCHAR(64)")
     _ensure_column("product_bundles", "share_token", "share_token VARCHAR(64)")
