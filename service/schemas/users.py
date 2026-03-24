@@ -46,10 +46,12 @@ class Store_Visit(BaseModel):
 
 class NewsletterStatus(BaseModel):
     opted_in: bool
+    frequency: str = 'weekly'
 
 
 class NewsletterUpdateRequest(BaseModel):
     opt_in: bool
+    frequency: Optional[str] = None  # 'daily' or 'weekly'
 
 
 class BundleCreateRequest(BaseModel):

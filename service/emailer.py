@@ -7,7 +7,7 @@ import os
 import smtplib
 import ssl
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from functools import lru_cache
@@ -111,6 +111,19 @@ def _frontend_base_url() -> str:
             "BASE_URL must be an absolute frontend URL, for example https://yourdomain.com",
         )
     return normalized.rstrip("/")
+
+
+def _should_receive_newsletter(user: User) -> bool:
+    """Return True if this user is due for a newsletter based on their frequency pref."""
+    frequency = str(getattr(user, 'newsletter_frequency', None) or 'weekly')
+    last_sent = getattr(user, 'newsletter_last_sent_at', None)
+    if last_sent is None or not isinstance(last_sent, datetime):
+        return True
+    elapsed = datetime.now() - last_sent
+    if frequency == 'daily':
+        return elapsed >= timedelta(hours=20)
+    # weekly (default)
+    return elapsed >= timedelta(days=6)
 
 
 def _unsubscribe_url(token: str) -> str:
@@ -397,6 +410,14 @@ def send(data: dict, recipient_override: str | None = None) -> None:
 
         for uid, store_ids in user_store_ids.items():
             user = user_objects[uid]
+            if not _should_receive_newsletter(user):
+                logger.info(
+                    "newsletter: skipping user_id=%s (frequency=%s, last_sent=%s)",
+                    uid,
+                    getattr(user, 'newsletter_frequency', 'weekly'),
+                    getattr(user, 'newsletter_last_sent_at', None),
+                )
+                continue
             user_stores = [s for s in data["stores"] if int(s.id) in store_ids]
             user_instances = [pi for pi in data["product_instances"] if pi.store_id in store_ids]
             if not user_instances:
@@ -423,6 +444,8 @@ def send(data: dict, recipient_override: str | None = None) -> None:
                 unsubscribe_url=unsubscribe_url,
                 bundle_url=bundle_url,
             )
+            setattr(user, 'newsletter_last_sent_at', datetime.now())
+            sess.commit()
             logger.info(
                 "newsletter: sent to user_id=%s stores=%s items=%s",
                 uid, store_ids, total_count,

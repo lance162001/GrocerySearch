@@ -12,7 +12,8 @@
     .header .sub { font-size: 13px; color: #95d5b2; }
     .store-block { padding: 20px 32px; }
     .store-block + .store-block { border-top: 1px solid #eef1ee; }
-    .callout { margin: 18px 32px 8px; border: 1px solid #dce8dc; border-radius: 10px; background: #f8fbf8; padding: 14px 14px 10px; }
+    .section-label { font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: #2D6A4F; padding: 10px 32px 4px; border-top: 2px solid #dce8dc; margin-top: 4px; }
+    .callout { margin: 18px 32px 8px; border: 1px solid #95D5B2; border-radius: 10px; background: #e9f7ee; padding: 14px 14px 10px; }
     .callout-title { font-size: 13px; font-weight: 700; color: #1b4332; margin-bottom: 6px; }
     .change { font-size: 12px; color: #283428; padding: 6px 0; border-top: 1px solid #e8efe8; }
     .change:first-of-type { border-top: 0; }
@@ -26,7 +27,7 @@
     .product + .product { border-top: 1px solid #f3f5f3; }
     .product img { width: 46px; height: 46px; border-radius: 7px; object-fit: cover; flex-shrink: 0; background: #f5f5f5; }
     .product .info { flex: 1; min-width: 0; }
-    .product .name { font-size: 13px; font-weight: 600; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .product .name { font-size: 13px; font-weight: 600; color: #1a1a1a; word-break: break-word; }
     .product .brand { font-size: 11px; color: #aaa; margin-top: 2px; }
     .product .price { font-size: 13px; font-weight: 700; color: #1b4332; white-space: nowrap; margin-left: 4px; }
     .footer { padding: 16px 32px; background: #f8faf8; text-align: center; font-size: 11px; color: #9aa59a; border-top: 1px solid #eef1ee; line-height: 1.6; }
@@ -43,17 +44,19 @@
 
   {% if price_changes %}
   <div class="callout">
-    <div class="callout-title">Price changes on products from your bundles</div>
+    <div class="callout-title">&#128200; Price changes on your saved items</div>
     {% for change in price_changes %}
     <div class="change">
-      <strong>{{ change.product_name }}</strong>{% if change.product_brand %} ({{ change.product_brand }}){% endif %}
-      at {{ change.store_name }}
+      <strong>{{ change.product_name }}</strong>{% if change.product_brand %} <span style="color:#777">({{ change.product_brand }})</span>{% endif %}
+      &mdash; {{ change.store_name }}
       <span class="pill">{{ change.change_label }}</span><br>
-      {{ change.old_price }} &rarr; {{ change.new_price }}
+      <span style="color:#777">{{ change.old_price }}</span> &rarr; <strong>{{ change.new_price }}</strong>
     </div>
     {% endfor %}
   </div>
   {% endif %}
+
+  <div class="section-label">&#127381; New at your stores</div>
 
   {% for section in sections %}
   <div class="store-block">

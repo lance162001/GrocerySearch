@@ -10,6 +10,8 @@ class User(Base, BaseModel):
     firebase_uid = Column(String(128), unique=True, nullable=True, index=True)
     email = Column(String(255), nullable=True)
     newsletter_opt_in = Column(Boolean, nullable=False, default=True)
+    newsletter_frequency = Column(String(16), nullable=False, default='weekly')
+    newsletter_last_sent_at = Column(DateTime, nullable=True)
     newsletter_unsubscribed_at = Column(DateTime, nullable=True)
     unsubscribe_token = Column(String(64), nullable=True, unique=True, index=True)
     bundles = relationship("Product_Bundle", back_populates="user", order_by="Product_Bundle.created_at.desc()")

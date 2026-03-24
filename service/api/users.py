@@ -80,9 +80,12 @@ def _get_or_create_user(user_id: int, sess: Session) -> models.User:
 
 @user_router.get("/users/{user_id}/newsletter", response_model=schemas.NewsletterStatus)
 async def get_newsletter_status(user_id: int, sess: Session = Depends(get_db)):
-    """Return the newsletter opt-in status for a user."""
+    """Return the newsletter opt-in status and frequency for a user."""
     user = _get_or_create_user(user_id, sess)
-    return schemas.NewsletterStatus(opted_in=bool(user.newsletter_opt_in))
+    return schemas.NewsletterStatus(
+        opted_in=bool(user.newsletter_opt_in),
+        frequency=str(getattr(user, 'newsletter_frequency', None) or 'weekly'),
+    )
 
 
 @user_router.post("/users/{user_id}/newsletter", response_model=schemas.NewsletterStatus)
@@ -91,13 +94,20 @@ async def update_newsletter_status(
     payload: schemas.NewsletterUpdateRequest,
     sess: Session = Depends(get_db),
 ):
-    """Subscribe or unsubscribe a user from the newsletter."""
+    """Subscribe or unsubscribe a user from the newsletter, and optionally set frequency."""
     user = _get_or_create_user(user_id, sess)
     setattr(user, "newsletter_opt_in", payload.opt_in)
     if not payload.opt_in:
         setattr(user, "newsletter_unsubscribed_at", datetime.now())
+    if payload.frequency is not None:
+        if payload.frequency not in ('daily', 'weekly'):
+            raise HTTPException(400, detail="frequency must be 'daily' or 'weekly'")
+        setattr(user, "newsletter_frequency", payload.frequency)
     sess.commit()
-    return schemas.NewsletterStatus(opted_in=payload.opt_in)
+    return schemas.NewsletterStatus(
+        opted_in=payload.opt_in,
+        frequency=str(getattr(user, 'newsletter_frequency', None) or 'weekly'),
+    )
 
 
 @user_router.post("/users/create", response_model=schemas.User)

@@ -457,24 +457,28 @@ class GroceryApi {
     }
   }
 
-  Future<bool> fetchNewsletterStatus(int userId) async {
+  Future<Map<String, dynamic>> fetchNewsletterStatus(int userId) async {
     final response = await get(buildUri('/users/$userId/newsletter'));
     if (response.statusCode != 200) {
       throw Exception('Failed to fetch newsletter status: ${response.statusCode}');
     }
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    return decoded['opted_in'] as bool;
+    return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  Future<bool> updateNewsletterStatus(int userId, {required bool optIn}) async {
+  Future<Map<String, dynamic>> updateNewsletterStatus(
+    int userId, {
+    required bool optIn,
+    String? frequency,
+  }) async {
+    final body = <String, dynamic>{'opt_in': optIn};
+    if (frequency != null) body['frequency'] = frequency;
     final response = await post(
       buildUri('/users/$userId/newsletter'),
-      body: jsonEncode({'opt_in': optIn}),
+      body: jsonEncode(body),
     );
     if (response.statusCode != 200) {
       throw Exception('Failed to update newsletter status: ${response.statusCode}');
     }
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    return decoded['opted_in'] as bool;
+    return jsonDecode(response.body) as Map<String, dynamic>;
   }
 }

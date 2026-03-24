@@ -289,19 +289,18 @@ class _StapleJudgementCard extends StatelessWidget {
         ? candidate.stapleName![0].toUpperCase() +
             candidate.stapleName!.substring(1)
         : 'grocery staple';
-    return SingleChildScrollView(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Is this $displayName?',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'Is this $displayName?',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               const SizedBox(height: 8),
               Text(
                 'Should this product appear under "$displayName" in the staples screen?',
@@ -310,7 +309,7 @@ class _StapleJudgementCard extends StatelessWidget {
               if (candidate.heuristicScore != null &&
                   (candidate.heuristicScore! - 0.5).abs() < 0.05)
                 Padding(
-                  padding: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.only(top: 6),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 4),
@@ -334,13 +333,14 @@ class _StapleJudgementCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               _ProductCard(
                 name: candidate.productName,
                 brand: candidate.productBrand,
                 pictureUrl: candidate.productPictureUrl,
+                imageSize: 96,
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 20),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final compact = constraints.maxWidth < 360;
@@ -351,14 +351,14 @@ class _StapleJudgementCard extends StatelessWidget {
                         _JudgeButton(
                           icon: Icons.thumb_down_outlined,
                           label: 'Not a staple',
-                          color: const Color(0xFF71717A),
+                          color: const Color(0xFFB91C1C),
                           onPressed: () => onJudge(false),
                         ),
                         const SizedBox(height: 8),
                         _JudgeButton(
                           icon: Icons.thumb_up_outlined,
                           label: 'Staple',
-                          color: const Color(0xFF1b4332),
+                          color: const Color(0xFF2D6A4F),
                           onPressed: () => onJudge(true),
                         ),
                       ],
@@ -370,7 +370,7 @@ class _StapleJudgementCard extends StatelessWidget {
                         child: _JudgeButton(
                           icon: Icons.thumb_down_outlined,
                           label: 'Not a staple',
-                          color: const Color(0xFF71717A),
+                          color: const Color(0xFFB91C1C),
                           onPressed: () => onJudge(false),
                         ),
                       ),
@@ -379,7 +379,7 @@ class _StapleJudgementCard extends StatelessWidget {
                         child: _JudgeButton(
                           icon: Icons.thumb_up_outlined,
                           label: 'Staple',
-                          color: const Color(0xFF1b4332),
+                          color: const Color(0xFF2D6A4F),
                           onPressed: () => onJudge(true),
                         ),
                       ),
@@ -387,13 +387,13 @@ class _StapleJudgementCard extends StatelessWidget {
                   );
                 },
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
                 child: _JudgeButton(
                   icon: Icons.help_outline,
                   label: 'Unsure',
-                  color: const Color(0xFFA1A1AA),
+                  color: const Color(0xFF52525B),
                   onPressed: onSkip,
                 ),
               ),
@@ -401,7 +401,6 @@ class _StapleJudgementCard extends StatelessWidget {
           ),
         ),
       ),
-    ),
     );
   }
 }
@@ -421,127 +420,83 @@ class _GroupingJudgementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 500),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final compact = constraints.maxWidth < 420;
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Are these the same product?',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Would you consider these interchangeable?',
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    if (compact)
-                      Column(
-                        children: [
-                          _ProductCard(
-                            name: candidate.productName,
-                            brand: candidate.productBrand,
-                            pictureUrl: candidate.productPictureUrl,
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: Icon(
-                              Icons.compare_arrows,
-                              size: 32,
-                              color: Colors.grey.shade400,
-                            ),
-                          ),
-                          _ProductCard(
-                            name: candidate.targetProductName ?? '',
-                            brand: candidate.targetProductBrand ?? '',
-                            pictureUrl: candidate.targetProductPictureUrl ?? '',
-                          ),
-                        ],
-                      )
-                    else
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _ProductCard(
-                              name: candidate.productName,
-                              brand: candidate.productBrand,
-                              pictureUrl: candidate.productPictureUrl,
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 40),
-                            child: Icon(
-                              Icons.compare_arrows,
-                              size: 32,
-                              color: Colors.grey.shade400,
-                            ),
-                          ),
-                          Expanded(
-                            child: _ProductCard(
-                              name: candidate.targetProductName ?? '',
-                              brand: candidate.targetProductBrand ?? '',
-                              pictureUrl: candidate.targetProductPictureUrl ?? '',
-                            ),
-                          ),
-                        ],
+    return LayoutBuilder(
+      builder: (context, outerConstraints) {
+        final imageSize = outerConstraints.maxWidth < 420 ? 72.0 : 100.0;
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Are these the same product?',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Would you consider these interchangeable?',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _ProductCard(
+                          name: candidate.productName,
+                          brand: candidate.productBrand,
+                          pictureUrl: candidate.productPictureUrl,
+                          imageSize: imageSize,
+                        ),
                       ),
-                    const SizedBox(height: 32),
-                    if (compact) ...[
-                      SizedBox(
-                        width: double.infinity,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 32),
+                        child: Icon(
+                          Icons.compare_arrows,
+                          size: 28,
+                          color: Colors.grey.shade400,
+                        ),
+                      ),
+                      Expanded(
+                        child: _ProductCard(
+                          name: candidate.targetProductName ?? '',
+                          brand: candidate.targetProductBrand ?? '',
+                          pictureUrl: candidate.targetProductPictureUrl ?? '',
+                          imageSize: imageSize,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
                         child: _JudgeButton(
                           icon: Icons.close,
                           label: 'Different',
-                          color: const Color(0xFF71717A),
+                          color: const Color(0xFFB91C1C),
                           onPressed: () => onJudge(false),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
+                      const SizedBox(width: 8),
+                      Expanded(
                         child: _JudgeButton(
                           icon: Icons.check,
                           label: 'Same product',
-                          color: const Color(0xFF1b4332),
+                          color: const Color(0xFF2D6A4F),
                           onPressed: () => onJudge(true),
                         ),
                       ),
-                    ] else
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _JudgeButton(
-                              icon: Icons.close,
-                              label: 'Different',
-                              color: const Color(0xFF71717A),
-                              onPressed: () => onJudge(false),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _JudgeButton(
-                              icon: Icons.check,
-                              label: 'Same product',
-                              color: const Color(0xFF1b4332),
-                              onPressed: () => onJudge(true),
-                            ),
-                          ),
-                        ],
-                      ),
-                    const SizedBox(height: 12),
-                    if (compact) ...[
-                      SizedBox(
-                        width: double.infinity,
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
                         child: _JudgeButton(
                           icon: Icons.style_outlined,
                           label: 'Flavor / Variation',
@@ -549,45 +504,23 @@ class _GroupingJudgementCard extends StatelessWidget {
                           onPressed: onFlavour,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
+                      const SizedBox(width: 8),
+                      Expanded(
                         child: _JudgeButton(
                           icon: Icons.help_outline,
                           label: 'Unsure',
-                          color: const Color(0xFFA1A1AA),
+                          color: const Color(0xFF52525B),
                           onPressed: onSkip,
                         ),
                       ),
-                    ] else
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _JudgeButton(
-                              icon: Icons.style_outlined,
-                              label: 'Flavor / Variation',
-                              color: const Color(0xFFD97706),
-                              onPressed: onFlavour,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _JudgeButton(
-                              icon: Icons.help_outline,
-                              label: 'Unsure',
-                              color: const Color(0xFFA1A1AA),
-                              onPressed: onSkip,
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
-                );
-              },
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -597,11 +530,13 @@ class _ProductCard extends StatelessWidget {
     required this.name,
     required this.brand,
     required this.pictureUrl,
+    this.imageSize = 120,
   });
 
   final String name;
   final String brand;
   final String pictureUrl;
+  final double imageSize;
 
   @override
   Widget build(BuildContext context) {
@@ -612,7 +547,7 @@ class _ProductCard extends StatelessWidget {
         side: const BorderSide(color: Color(0xFFE4E4E7)),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -620,23 +555,23 @@ class _ProductCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               child: ProductImage(
                 url: pictureUrl,
-                width: 120,
-                height: 120,
+                width: imageSize,
+                height: imageSize,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Text(
               name,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
               textAlign: TextAlign.center,
-              maxLines: 2,
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
             if (brand.isNotEmpty) ...[
               const SizedBox(height: 4),
               Text(
                 brand,
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

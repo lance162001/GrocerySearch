@@ -17,6 +17,7 @@ class PreferencesPage extends StatefulWidget {
 class _PreferencesPageState extends State<PreferencesPage> {
   _LoadState _loadState = _LoadState.loading;
   bool _newsletterOptedIn = false;
+  String _newsletterFrequency = 'weekly';
   bool _updating = false;
 
   @override
@@ -32,10 +33,11 @@ class _PreferencesPageState extends State<PreferencesPage> {
       return;
     }
     try {
-      final optedIn = await context.read<GroceryApi>().fetchNewsletterStatus(userId);
+      final data = await context.read<GroceryApi>().fetchNewsletterStatus(userId);
       if (!mounted) return;
       setState(() {
-        _newsletterOptedIn = optedIn;
+        _newsletterOptedIn = data['opted_in'] as bool? ?? false;
+        _newsletterFrequency = data['frequency'] as String? ?? 'weekly';
         _loadState = _LoadState.ready;
       });
     } catch (_) {
@@ -49,14 +51,19 @@ class _PreferencesPageState extends State<PreferencesPage> {
     if (userId == null) return;
     setState(() => _updating = true);
     try {
-      final newValue =
-          await context.read<GroceryApi>().updateNewsletterStatus(userId, optIn: !_newsletterOptedIn);
+      final data = await context.read<GroceryApi>().updateNewsletterStatus(
+            userId,
+            optIn: !_newsletterOptedIn,
+          );
       if (!mounted) return;
-      setState(() => _newsletterOptedIn = newValue);
+      setState(() {
+        _newsletterOptedIn = data['opted_in'] as bool? ?? !_newsletterOptedIn;
+        _newsletterFrequency = data['frequency'] as String? ?? _newsletterFrequency;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            newValue
+            _newsletterOptedIn
                 ? 'You are now subscribed to the newsletter.'
                 : 'You have been unsubscribed from the newsletter.',
           ),
@@ -68,6 +75,33 @@ class _PreferencesPageState extends State<PreferencesPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Could not update newsletter preference. Please try again.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
+  }
+
+  Future<void> _setFrequency(String frequency) async {
+    final userId = context.read<AppState>().currentUserId;
+    if (userId == null) return;
+    setState(() => _updating = true);
+    try {
+      final data = await context.read<GroceryApi>().updateNewsletterStatus(
+            userId,
+            optIn: _newsletterOptedIn,
+            frequency: frequency,
+          );
+      if (!mounted) return;
+      setState(() {
+        _newsletterFrequency = data['frequency'] as String? ?? frequency;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not update frequency. Please try again.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -93,6 +127,7 @@ class _PreferencesPageState extends State<PreferencesPage> {
           _hintsTile(context),
           _SectionHeader(label: 'Newsletter'),
           _newsletterTile(),
+          if (_loadState == _LoadState.ready && _newsletterOptedIn) _frequencyTile(),
         ],
       ),
     );
@@ -164,10 +199,10 @@ class _PreferencesPageState extends State<PreferencesPage> {
             _newsletterOptedIn ? Icons.email : Icons.email_outlined,
             color: Theme.of(context).colorScheme.primary,
           ),
-          title: const Text('Weekly newsletter'),
+          title: const Text('Newsletter'),
           subtitle: Text(
             _newsletterOptedIn
-                ? 'You are subscribed to weekly price updates.'
+                ? 'You are subscribed to price updates.'
                 : 'You are not receiving newsletters.',
             style: const TextStyle(color: Color(0xFF71717A)),
           ),
@@ -192,6 +227,48 @@ class _PreferencesPageState extends State<PreferencesPage> {
                 ),
         );
     }
+  }
+
+  Widget _frequencyTile() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        children: [
+          const SizedBox(width: 40), // align with ListTile content
+          const Expanded(
+            child: Text(
+              'Email frequency',
+              style: TextStyle(fontSize: 14, color: Color(0xFF3F3F46)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'weekly', label: Text('Weekly')),
+              ButtonSegment(value: 'daily', label: Text('Daily')),
+            ],
+            selected: {_newsletterFrequency},
+            onSelectionChanged: _updating
+                ? null
+                : (selection) => _setFrequency(selection.first),
+            style: ButtonStyle(
+              backgroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return const Color(0xFF1b4332);
+                }
+                return null;
+              }),
+              foregroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Colors.white;
+                }
+                return const Color(0xFF1b4332);
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
