@@ -292,11 +292,13 @@ class _StapleJudgementCard extends StatelessWidget {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 400),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
               Text(
                 'Is this $displayName?',
                 style: Theme.of(context).textTheme.titleLarge,
@@ -345,21 +347,24 @@ class _StapleJudgementCard extends StatelessWidget {
                 builder: (context, constraints) {
                   final compact = constraints.maxWidth < 360;
                   if (compact) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                    return Row(
                       children: [
-                        _JudgeButton(
-                          icon: Icons.thumb_down_outlined,
-                          label: 'Not a staple',
-                          color: const Color(0xFFB91C1C),
-                          onPressed: () => onJudge(false),
+                        Expanded(
+                          child: _JudgeButton(
+                            icon: Icons.thumb_down_outlined,
+                            label: 'Not a staple',
+                            color: const Color(0xFFB91C1C),
+                            onPressed: () => onJudge(false),
+                          ),
                         ),
-                        const SizedBox(height: 8),
-                        _JudgeButton(
-                          icon: Icons.thumb_up_outlined,
-                          label: 'Staple',
-                          color: const Color(0xFF2D6A4F),
-                          onPressed: () => onJudge(true),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _JudgeButton(
+                            icon: Icons.help_outline,
+                            label: 'Unsure',
+                            color: const Color(0xFF52525B),
+                            onPressed: onSkip,
+                          ),
                         ),
                       ],
                     );
@@ -377,6 +382,15 @@ class _StapleJudgementCard extends StatelessWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: _JudgeButton(
+                          icon: Icons.help_outline,
+                          label: 'Unsure',
+                          color: const Color(0xFF52525B),
+                          onPressed: onSkip,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _JudgeButton(
                           icon: Icons.thumb_up_outlined,
                           label: 'Staple',
                           color: const Color(0xFF2D6A4F),
@@ -386,16 +400,6 @@ class _StapleJudgementCard extends StatelessWidget {
                     ],
                   );
                 },
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: _JudgeButton(
-                  icon: Icons.help_outline,
-                  label: 'Unsure',
-                  color: const Color(0xFF52525B),
-                  onPressed: onSkip,
-                ),
               ),
             ],
           ),
