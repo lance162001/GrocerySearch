@@ -10,4 +10,5 @@ abstract final class AppRoutes {
   static const unsubscribe = '/unsubscribe';
   static const sharedBundle = '/shared-bundle';
   static const preferences = '/preferences';
+  static const game = '/game';
 }

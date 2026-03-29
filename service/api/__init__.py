@@ -30,8 +30,10 @@ from .products import product_router  # noqa: E402
 from .stores import store_router  # noqa: E402
 from .users import user_router  # noqa: E402
 from .admin import admin_router  # noqa: E402
+from .game import game_router  # noqa: E402
 
 router.include_router(product_router)
 router.include_router(store_router)
 router.include_router(user_router)
 router.include_router(admin_router)
+router.include_router(game_router)

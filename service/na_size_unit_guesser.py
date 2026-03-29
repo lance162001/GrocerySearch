@@ -107,7 +107,7 @@ EACH_KEYWORDS = {
 
 LB_FRIENDLY_CATEGORIES = {"meat", "seafood"}
 EACH_FRIENDLY_CATEGORIES = {
-    "dairy-eggs",
+    "dairy & eggs",
     "pantry",
     "bakery",
     "desserts",

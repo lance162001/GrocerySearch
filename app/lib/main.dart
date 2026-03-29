@@ -24,6 +24,7 @@ import 'package:flutter_front_end/shared_bundle_page.dart';
 import 'package:flutter_front_end/staples_overview.dart';
 import 'package:flutter_front_end/unsubscribe_page.dart';
 import 'package:flutter_front_end/preferences_page.dart';
+import 'package:flutter_front_end/game_page.dart';
 import 'package:flutter_front_end/user_id_cache.dart' as user_cache;
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:provider/provider.dart';
@@ -633,8 +634,29 @@ class _MyAppState extends State<MyApp> {
           // (AppState rebuilds reset the Navigator back to home:).
           if (kIsWeb && (
             Uri.base.path == AppRoutes.unsubscribe ||
-            Uri.base.path == AppRoutes.sharedBundle
+            Uri.base.path == AppRoutes.sharedBundle ||
+            Uri.base.path == AppRoutes.game
           )) {
+            // Game needs GroceryApi; wrap with explicit providers so the page
+            // can make API calls without depending on AppState.
+            if (Uri.base.path == AppRoutes.game) {
+              return MultiProvider(
+                providers: [
+                  Provider<AppEnvironment>.value(value: environment),
+                  Provider<GroceryApi>(
+                    create: (_) => GroceryApi(environment: environment),
+                  ),
+                ],
+                child: MaterialApp(
+                  debugShowCheckedModeBanner: false,
+                  title: 'GrocerySearch',
+                  initialRoute: AppRoutes.game,
+                  routes: {
+                    AppRoutes.game: (context) => const GamePage(),
+                  },
+                ),
+              );
+            }
             final home = Uri.base.path == AppRoutes.sharedBundle
                 ? const SharedBundlePage()
                 : const UnsubscribePage();
@@ -668,6 +690,7 @@ class _MyAppState extends State<MyApp> {
                   const SharedBundlePage(),
               AppRoutes.preferences: (context) =>
                   const PreferencesPage(),
+              AppRoutes.game: (context) => const GamePage(),
             },
             onUnknownRoute: (settings) =>
                 MaterialPageRoute(builder: (context) => homePage),

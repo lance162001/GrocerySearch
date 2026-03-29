@@ -405,7 +405,8 @@ class _StapleJudgementCard extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }
 

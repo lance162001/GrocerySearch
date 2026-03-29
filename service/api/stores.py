@@ -98,7 +98,7 @@ async def full_product_search(
                 models.Product.tags.any(
                     models.Tag_Instance.tag_id.in_(
                         select(models.Tag.id).where(
-                            func.lower(models.Tag.name) == search.lower()
+                            models.Tag.name.ilike(f"%{search}%")
                         )
                     )
                 ),

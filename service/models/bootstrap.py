@@ -37,6 +37,19 @@ def _run_ddl_statements(statements: list[str]) -> None:
             logger.warning("Failed DDL statement: %s", statement)
 
 
+def _rename_canonical_tags() -> None:
+    renames = [
+        ("dairy-eggs", "dairy & eggs"),
+        ("prepared-foods", "prepared foods"),
+    ]
+    with engine.begin() as conn:
+        for old_name, new_name in renames:
+            conn.execute(
+                text("UPDATE tags SET name = :new WHERE name = :old"),
+                {"old": old_name, "new": new_name},
+            )
+
+
 def _backfill_company_metadata() -> None:
     updates = [
         ("whole-foods", "whole_foods", "Whole Foods"),
@@ -155,6 +168,7 @@ def ensure_runtime_schema() -> None:
     _ensure_column("scraper_status", "updated_price_points", "updated_price_points INTEGER")
     _ensure_column("price_points", "collected_on", "collected_on DATE")
 
+    _rename_canonical_tags()
     _backfill_company_metadata()
     _backfill_product_raw_names()
     _backfill_price_point_collection_dates()

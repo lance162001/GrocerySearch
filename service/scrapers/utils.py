@@ -26,10 +26,10 @@ WF_CATEGORIES = [
 # Explicit WF-slug → canonical-category mapping (used instead of fragile index arithmetic).
 WF_CATEGORY_TO_CANONICAL: dict[str, str] = {
     "produce": "produce",
-    "dairy-eggs": "dairy-eggs",
+    "dairy-eggs": "dairy & eggs",
     "meat": "meat",
     "seafood": "seafood",
-    "prepared-foods": "prepared-foods",
+    "prepared-foods": "prepared foods",
     "pantry-essentials": "pantry",
     "breads-rolls-bakery": "bakery",
     "desserts": "desserts",
@@ -55,7 +55,7 @@ TJ_CATEGORY_TO_CANONICAL: dict[str, str] = {
     # Department level (hierarchy[1])
     "Fresh Fruits and Veggies": "produce",
     "Flowers & Plants": "produce",
-    "Dairy & Eggs": "dairy-eggs",
+    "Dairy & Eggs": "dairy & eggs",
     "Meat, Seafood & Plant-based": "meat",
     "For the Pantry": "pantry",
     "Bakery": "bakery",
@@ -68,9 +68,9 @@ TJ_CATEGORY_TO_CANONICAL: dict[str, str] = {
     "Health & Beauty": "pantry",
     "Household": "pantry",
     # Sub-department / leaf level (hierarchy[2])
-    "Cheese": "dairy-eggs",
-    "Milk, Cream & More": "dairy-eggs",
-    "Eggs": "dairy-eggs",
+    "Cheese": "dairy & eggs",
+    "Milk, Cream & More": "dairy & eggs",
+    "Eggs": "dairy & eggs",
     "Meat & Poultry": "meat",
     "Seafood": "seafood",
     "Fish": "seafood",
@@ -94,7 +94,7 @@ TJ_CATEGORY_TO_CANONICAL: dict[str, str] = {
 }
 
 CANONICAL_CATEGORIES = [
-    "produce", "dairy-eggs", "meat", "prepared-foods", "pantry",
+    "produce", "dairy & eggs", "meat", "prepared foods", "pantry",
     "bakery", "desserts", "frozen", "snacks", "seafood", "beverages",
 ]
 

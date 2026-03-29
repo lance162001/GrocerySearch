@@ -9,12 +9,13 @@ import 'package:flutter_front_end/utils/scroll_utils.dart';
 import 'package:flutter_front_end/widgets/product_detail_sheet.dart';
 import 'package:flutter_front_end/widgets/app_bar_user_menu.dart';
 import 'package:flutter_front_end/widgets/hint_banner.dart';
-import 'package:flutter_front_end/widgets/overflow_menu_nudge.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
 import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:provider/provider.dart';
 
 String _formatAmount(double amount) => '\$${amount.toStringAsFixed(2)}';
+
+enum _SortOrder { recommended, priceLow, priceHigh }
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key, this.bundleId, this.bundleName});
@@ -39,6 +40,7 @@ class _SearchPageState extends State<SearchPage> {
   int page = 1;
   bool showOnlySpread = false;
   bool showOnlySale = false;
+  _SortOrder _sortOrder = _SortOrder.recommended;
   bool _initialized = false;
   bool _isLoadingMore = false;
   bool _hasMore = true;
@@ -165,6 +167,17 @@ class _SearchPageState extends State<SearchPage> {
       groups = groups
           .where((group) => group.hasPriceSpread)
           .toList(growable: false);
+    }
+    if (_sortOrder != _SortOrder.recommended) {
+      final sorted = List<ProductGroup>.from(groups);
+      sorted.sort((a, b) {
+        final pa = a.minPrice ?? double.infinity;
+        final pb = b.minPrice ?? double.infinity;
+        return _sortOrder == _SortOrder.priceLow
+            ? pa.compareTo(pb)
+            : pb.compareTo(pa);
+      });
+      groups = sorted;
     }
     return groups;
   }
@@ -538,85 +551,143 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  Widget _buildFilterSheet(AppState appState) {
+  static const _kDietaryTags = {
+    'organic', 'vegan', 'kosher', 'gluten free', 'dairy free', 'vegetarian',
+  };
+
+  Widget _buildTagChips(
+    List<dynamic> tags,
+    AppState appState,
+    StateSetter modalSetState,
+  ) {
+    return Wrap(
+      runSpacing: 2,
+      spacing: 5,
+      children: tags
+          .map(
+            (tag) => FilterChip(
+              label: Text(tag.name),
+              selected: appState.userTags.contains(tag),
+              onSelected: (selected) {
+                appState.toggleTag(tag);
+                _reloadProducts();
+                modalSetState(() {});
+              },
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildFilterBar(AppState appState) {
+    final activeTags = appState.userTags.toList();
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: Row(
+        children: [
+          FilterChip(
+            label: const Text('On Sale'),
+            selected: showOnlySale,
+            onSelected: (value) {
+              setState(() => showOnlySale = value);
+              _reloadProducts();
+            },
+          ),
+          const SizedBox(width: 8),
+          FilterChip(
+            label: const Text('Price Spread'),
+            selected: showOnlySpread,
+            onSelected: (value) {
+              setState(() => showOnlySpread = value);
+              _reloadProducts();
+            },
+          ),
+          ...activeTags.map((tag) => Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: FilterChip(
+              label: Text(tag.name),
+              selected: true,
+              onSelected: (_) {
+                appState.toggleTag(tag);
+                _reloadProducts();
+              },
+              deleteIcon: const Icon(Icons.close, size: 16),
+              onDeleted: () {
+                appState.toggleTag(tag);
+                _reloadProducts();
+              },
+            ),
+          )),
+          const SizedBox(width: 8),
+          ActionChip(
+            avatar: const Icon(Icons.label_outline, size: 16),
+            label: const Text('Tags'),
+            onPressed: () {
+              showModalBottomSheet<void>(
+                context: context,
+                builder: (context) => _buildTagSheet(appState),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTagSheet(AppState appState) {
+    final categoryTags = appState.tags
+        .where((t) => !_kDietaryTags.contains(t.name))
+        .toList();
+    final dietaryTags = appState.tags
+        .where((t) => _kDietaryTags.contains(t.name))
+        .toList();
+
     return StatefulBuilder(
       builder: (context, modalSetState) {
         return SizedBox(
-          height: 320,
-          child: Column(
-            children: [
-              const Text(
-                'Filters',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Show only items on sale',
-                      style: TextStyle(fontSize: 14),
+          height: 360,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 16, bottom: 12),
+                    child: Text(
+                      'Filter by Tags',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
-                    Switch(
-                      value: showOnlySale,
-                      onChanged: (value) {
-                        modalSetState(() => showOnlySale = value);
-                        _reloadProducts();
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Show items with price spread',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                    Switch(
-                      value: showOnlySpread,
-                      onChanged: (value) {
-                        modalSetState(() => showOnlySpread = value);
-                        _reloadProducts();
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(),
-              const Text(
-                'Filter By Tags',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 5),
-              SizedBox(
-                height: 150,
-                child: SingleChildScrollView(
-                  child: Wrap(
-                    runSpacing: 2,
-                    spacing: 5,
-                    children: appState.tags
-                        .map(
-                          (tag) => FilterChip(
-                            label: Text(tag.name),
-                            selected: appState.userTags.contains(tag),
-                            onSelected: (selected) {
-                              appState.toggleTag(tag);
-                              _reloadProducts();
-                              modalSetState(() {});
-                            },
-                          ),
-                        )
-                        .toList(),
                   ),
                 ),
-              ),
-            ],
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Category',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _buildTagChips(categoryTags, appState, modalSetState),
+                ),
+                const SizedBox(height: 12),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Dietary',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _buildTagChips(dietaryTags, appState, modalSetState),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         );
       },
@@ -662,15 +733,51 @@ class _SearchPageState extends State<SearchPage> {
         ),
         actions: [
           const AppBarUserMenu(),
-          IconButton(
-            iconSize: 32,
-            icon: const Icon(Icons.more_vert),
-            onPressed: () {
-              showModalBottomSheet<void>(
-                context: context,
-                builder: (context) => _buildFilterSheet(appState),
-              );
-            },
+          PopupMenuButton<_SortOrder>(
+            icon: const Icon(Icons.sort),
+            tooltip: 'Sort results',
+            onSelected: (order) => setState(() => _sortOrder = order),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: _SortOrder.recommended,
+                child: Row(children: [
+                  SizedBox(
+                    width: 20,
+                    child: _sortOrder == _SortOrder.recommended
+                        ? const Icon(Icons.check, size: 18)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Best match'),
+                ]),
+              ),
+              PopupMenuItem(
+                value: _SortOrder.priceLow,
+                child: Row(children: [
+                  SizedBox(
+                    width: 20,
+                    child: _sortOrder == _SortOrder.priceLow
+                        ? const Icon(Icons.check, size: 18)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Price: low to high'),
+                ]),
+              ),
+              PopupMenuItem(
+                value: _SortOrder.priceHigh,
+                child: Row(children: [
+                  SizedBox(
+                    width: 20,
+                    child: _sortOrder == _SortOrder.priceHigh
+                        ? const Icon(Icons.check, size: 18)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Price: high to low'),
+                ]),
+              ),
+            ],
           ),
           if (widget.bundleId != null)
             TextButton(
@@ -679,19 +786,19 @@ class _SearchPageState extends State<SearchPage> {
             ),
         ],
       ),
-      body: Stack(
+      body: Column(
         children: [
-          Column(
-            children: [
-              const HintBanner(
-                hintKey: 'search',
-                message:
-                    'Type a product name and press enter to search. '
-                    'Green "Save" badges mark the best price across your stores. '
-                    'Tap to add to cart, long-press for details and alternate stores.',
-                icon: Icons.search,
-              ),
-              Expanded(
+          const HintBanner(
+            hintKey: 'search',
+            message:
+                'Type a product name and press enter to search. '
+                'Green "Save" badges mark the best price across your stores. '
+                'Tap to add to cart, long-press for details and alternate stores.',
+            icon: Icons.search,
+          ),
+          _buildFilterBar(appState),
+          const Divider(height: 1),
+          Expanded(
                 child: FutureBuilder<List<Product>>(
                   future: _productsFuture,
         builder: (context, snapshot) {
@@ -856,16 +963,6 @@ class _SearchPageState extends State<SearchPage> {
           return const Center(child: CircularProgressIndicator());
         },
       ),
-          ),
-            ],
-          ),
-          const Positioned(
-            top: 4,
-            right: 4,
-            child: OverflowMenuNudge(
-              nudgeKey: 'search_overflow',
-              message: 'Tap ⋮ to filter by sale, spread, or tags',
-            ),
           ),
         ],
       ),

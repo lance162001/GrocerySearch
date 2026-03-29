@@ -160,7 +160,8 @@ def _persist_product(
         created_product = True
 
         # Diet / characteristic tags — check both product name and explicit API attributes.
-        name_lower = raw_full_name.lower()
+        # Normalize hyphens so "Gluten-Free" in the name matches the "gluten free" tag.
+        name_lower = raw_full_name.lower().replace("-", " ")
         api_attrs: set[str] = {
             str(a).lower().replace("-", " ")
             for a in (raw.get("attributes") or raw.get("dietaryFlags") or [])

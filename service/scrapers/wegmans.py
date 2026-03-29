@@ -74,30 +74,54 @@ WG_FALLBACK_IMAGE = (
     "Wegmans_logo.svg/1200px-Wegmans_logo.svg.png"
 )
 
-# Mapping from Wegmans Algolia facet department names to canonical categories.
+# Mapping from Wegmans Algolia facet department/subDepartment names (browse API)
+# and categories.lvl0/lvl1 leaf names (search API fallback) to canonical categories.
 _DEPARTMENT_MAP: dict[str, str] = {
+    # Produce
     "Produce": "produce",
-    "Dairy": "dairy-eggs",
-    "Cheese": "dairy-eggs",
-    "Eggs": "dairy-eggs",
+    "Produce & Floral": "produce",
+    "Floral": "produce",
+    # Dairy / eggs
+    "Dairy": "dairy & eggs",
+    "Cheese": "dairy & eggs",
+    "Eggs": "dairy & eggs",
+    # Meat
     "Meat": "meat",
     "Poultry": "meat",
-    "Deli & Meals": "prepared-foods",
-    "Prepared Foods": "prepared-foods",
+    # Prepared / deli
+    "Deli & Meals": "prepared foods",
+    "Deli": "prepared foods",
+    "Prepared Foods": "prepared foods",
+    # Pantry (catch-all for shelf-stable grocery)
     "Pantry": "pantry",
     "International Foods": "pantry",
     "Bulk": "pantry",
     "Organic & Natural": "pantry",
+    "Breakfast": "pantry",
+    "Soups & Broths": "pantry",
+    "Baking & Baking Ingredients": "pantry",
+    "Condiments & Sauces": "pantry",
+    "Pasta, Grains & Beans": "pantry",
+    # Bakery
     "Bakery": "bakery",
     "Breads & Rolls": "bakery",
+    # Desserts
     "Desserts": "desserts",
     "Cakes & Pies": "desserts",
+    # Frozen
     "Frozen": "frozen",
+    # Snacks
     "Snacks": "snacks",
+    "Chips & Snack Foods": "snacks",
+    "Protein & Snack Bars": "snacks",
+    "Candy": "snacks",
+    # Seafood
     "Seafood": "seafood",
+    # Beverages
     "Beverages": "beverages",
     "Beer & Wine": "beverages",
     "Beer, Wine & Spirits": "beverages",
+    "Wine, Beer & Spirits": "beverages",
     "Wine": "beverages",
     "Beer": "beverages",
     "Coffee & Tea": "beverages",
@@ -426,14 +450,25 @@ def _persist_product(
         if raw.get("isLocal") and "local" in tags:
             tag_instances.append(Tag_Instance(product_id=prod.id, tag_id=tags["local"]))
 
-        # Department → canonical category tag; fall back to subDepartment.
-        department = raw.get("department", "")
-        canonical = _DEPARTMENT_MAP.get(department)
-        if canonical is None:
-            sub_dept = raw.get("subDepartment", "")
-            canonical = _DEPARTMENT_MAP.get(sub_dept)
+        # Department → canonical category tag.
+        # Browse API uses `department`/`subDepartment`; the search API fallback
+        # uses `categories.lvl0` (top-level) and `categories.lvl1` (path like
+        # "Grocery > Chips & Snack Foods") — extract the leaf from lvl1.
+        department = raw.get("department") or ""
+        sub_dept = raw.get("subDepartment") or ""
+        cats = raw.get("categories") or {}
+        if not department:
+            department = cats.get("lvl0") or ""
+        if not sub_dept and cats.get("lvl1"):
+            sub_dept = str(cats["lvl1"]).split(" > ")[-1].strip()
+        canonical = _DEPARTMENT_MAP.get(department) or _DEPARTMENT_MAP.get(sub_dept)
         if canonical and canonical in tags:
             tag_instances.append(Tag_Instance(product_id=prod.id, tag_id=tags[canonical]))
+        elif not canonical and (department or sub_dept):
+            logger.debug(
+                "Wegmans: unmapped department %r / %r for %r",
+                department, sub_dept, raw_full_name[:60],
+            )
 
         sess.add_all(tag_instances)
     else:

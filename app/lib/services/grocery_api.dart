@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_front_end/config/app_environment.dart';
+import 'package:flutter_front_end/models/game_models.dart';
 import 'package:flutter_front_end/models/grocery_models.dart';
 import 'package:flutter_front_end/user_id_cache.dart' as user_cache;
 import 'package:http/http.dart' as http;
@@ -480,5 +481,70 @@ class GroceryApi {
       throw Exception('Failed to update newsletter status: ${response.statusCode}');
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Game (Grocery Wordle) API
+  // ---------------------------------------------------------------------------
+
+  /// Search for products to use as game guesses.
+  Future<List<GameProduct>> gameSearch(String q, {int limit = 10, String? companyName}) async {
+    final params = <String, String>{'q': q, 'limit': '$limit'};
+    if (companyName != null) params['company'] = companyName;
+    final response = await get(buildUri('/game/search', params));
+    if (response.statusCode != 200) {
+      throw Exception('Game search failed: ${response.statusCode}');
+    }
+    final decoded = jsonDecode(response.body) as List<dynamic>;
+    return decoded
+        .map((e) => GameProduct.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  /// Submit a guess and get attribute comparison results.
+  Future<GuessResult> submitGameGuess({
+    required int productId,
+    required String gameDate,
+    int round = 0,
+  }) async {
+    final response = await post(
+      buildUri('/game/guess'),
+      body: jsonEncode({
+        'product_id': productId,
+        'game_date': gameDate,
+        'round': round,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Guess submission failed: ${response.statusCode}');
+    }
+    return GuessResult.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// Reveal the target product. Call only after the game is complete.
+  Future<RevealResult> revealDailyAnswer(String gameDate, {int round = 0}) async {
+    final response = await get(buildUri('/game/reveal',
+        {'game_date': gameDate, 'round': '$round'}));
+    if (response.statusCode != 200) {
+      throw Exception('Reveal failed: ${response.statusCode}');
+    }
+    return RevealResult.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// Fetch a one-time hint revealing one target attribute.
+  Future<GameHint> getGameHint(String gameDate,
+      {int round = 0, List<String> skipKeys = const []}) async {
+    final params = <String, String>{
+      'game_date': gameDate,
+      'round': '$round',
+      if (skipKeys.isNotEmpty) 'skip': skipKeys.join(','),
+    };
+    final response = await get(buildUri('/game/hint', params));
+    if (response.statusCode != 200) {
+      throw Exception('Hint failed: ${response.statusCode}');
+    }
+    return GameHint.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 }
