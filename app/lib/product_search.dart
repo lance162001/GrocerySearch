@@ -10,6 +10,7 @@ import 'package:flutter_front_end/widgets/product_detail_sheet.dart';
 import 'package:flutter_front_end/widgets/app_bar_user_menu.dart';
 import 'package:flutter_front_end/widgets/hint_banner.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
+import 'package:flutter_front_end/widgets/product_card_skeleton.dart';
 import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:provider/provider.dart';
 
@@ -31,7 +32,8 @@ class SearchPage extends StatefulWidget {
 }
 
 class _SearchPageState extends State<SearchPage> {
-  static const int pageLength = 100;
+  static const int pageLength = 20;
+  static const int _minSearchLength = 2;
 
   final Map<int, int> quantities = <int, int>{};
   final ScrollController scrollController = ScrollController();
@@ -56,7 +58,9 @@ class _SearchPageState extends State<SearchPage> {
     }
     final appState = context.read<AppState>();
     searchFieldController.text = appState.searchTerm;
-    _productsFuture = _loadProducts(resetPage: true);
+    if (appState.searchTerm.length >= _minSearchLength) {
+      _productsFuture = _loadProducts(resetPage: true);
+    }
     setupScrollListener(
       scrollController: scrollController,
       onAtBottom: _loadMoreProducts,
@@ -243,6 +247,15 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Future<void> _reloadProducts() async {
+    final searchTerm = context.read<AppState>().searchTerm;
+    if (searchTerm.length < _minSearchLength) {
+      if (_productsFuture != null) {
+        setState(() {
+          _productsFuture = null;
+        });
+      }
+      return;
+    }
     setState(() {
       _productsFuture = _loadProducts(resetPage: true);
     });
@@ -799,7 +812,21 @@ class _SearchPageState extends State<SearchPage> {
           _buildFilterBar(appState),
           const Divider(height: 1),
           Expanded(
-                child: FutureBuilder<List<Product>>(
+                child: _productsFuture == null
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.search, size: 48, color: Colors.grey[400]),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Enter at least $_minSearchLength characters to search',
+                              style: TextStyle(fontSize: 15, color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                      )
+                    : FutureBuilder<List<Product>>(
                   future: _productsFuture,
         builder: (context, snapshot) {
           if (snapshot.hasData) {
@@ -960,18 +987,54 @@ class _SearchPageState extends State<SearchPage> {
           if (snapshot.hasError) {
             return Center(child: Text('${snapshot.error}'));
           }
-          return const Center(child: CircularProgressIndicator());
+          return ListView(
+            padding: const EdgeInsets.all(1),
+            children: const [
+              ProductCardSkeleton(opacity: 1.0),
+              ProductCardSkeleton(opacity: 1.0),
+              ProductCardSkeleton(opacity: 0.8),
+              ProductCardSkeleton(opacity: 0.55),
+              ProductCardSkeleton(opacity: 0.3),
+            ],
+          );
         },
       ),
           ),
         ],
       ),
       bottomNavigationBar: widget.bundleId == null
-          ? const SafeArea(
-              top: false,
-              child: TopLevelNavigationBar(
-                currentDestination: AppTopLevelDestination.search,
-              ),
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SafeArea(
+                  top: false,
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(0, 40),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () => navigateToTopLevelDestination(
+                            context, AppTopLevelDestination.staples),
+                        icon: const Icon(Icons.arrow_forward, size: 18),
+                        label: const Text('Continue to Staples'),
+                      ),
+                    ),
+                  ),
+                ),
+                const TopLevelNavigationBar(
+                  currentDestination: AppTopLevelDestination.search,
+                ),
+              ],
             )
           : null,
     );
