@@ -586,6 +586,41 @@ async def build_bundle_plan(
     )
 
 
+@user_router.delete("/bundles/{bundle_id}", status_code=204)
+async def delete_bundle(bundle_id: int, sess: Session = Depends(get_db)):
+    """Delete a bundle and all of its saved products."""
+    bundle = sess.get(models.Product_Bundle, bundle_id)
+    if not bundle:
+        raise HTTPException(404, detail=f"Bundle with id {bundle_id} not found")
+    sess.query(models.Saved_Product).filter(models.Saved_Product.bundle_id == bundle_id).delete()
+    sess.delete(bundle)
+    sess.commit()
+
+
+@user_router.delete("/bundles/{bundle_id}/products/{product_id}", status_code=204)
+async def remove_product_from_bundle(
+    bundle_id: int,
+    product_id: int,
+    sess: Session = Depends(get_db),
+):
+    """Remove a single product from a bundle."""
+    bundle = sess.get(models.Product_Bundle, bundle_id)
+    if not bundle:
+        raise HTTPException(404, detail=f"Bundle with id {bundle_id} not found")
+    saved = (
+        sess.query(models.Saved_Product)
+        .filter(
+            models.Saved_Product.bundle_id == bundle_id,
+            models.Saved_Product.product_id == product_id,
+        )
+        .first()
+    )
+    if not saved:
+        raise HTTPException(404, detail=f"Product {product_id} not in bundle {bundle_id}")
+    sess.delete(saved)
+    sess.commit()
+
+
 @user_router.post("/bundles/{bundle_id}/visit", response_model=schemas.VisitResponse)
 async def log_bundle_visit(
     bundle_id: int,

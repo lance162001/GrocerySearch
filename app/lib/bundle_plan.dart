@@ -402,6 +402,78 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
     }
   }
 
+  Future<void> _deleteBundle(int bundleId, String bundleName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete bundle?'),
+        content: Text('Delete "$bundleName" and all its products? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _loading = true);
+    try {
+      await _api.deleteBundle(bundleId);
+      if (!mounted) return;
+      setState(() {
+        _userBundles.removeWhere((b) => b.id == bundleId);
+        if (_selectedBundle?.id == bundleId) _selectedBundle = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      _setError('Failed to delete bundle: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _removeProductFromBundle(int bundleId, int productId, String productName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove product?'),
+        content: Text('Remove "$productName" from this bundle?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _loading = true);
+    try {
+      await _api.removeProductFromBundle(bundleId, productId);
+      if (!mounted) return;
+      // Refresh the bundle detail to reflect the removal.
+      await _openBundle(bundleId);
+    } catch (e) {
+      if (!mounted) return;
+      _setError('Failed to remove product: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   Future<void> _shareBundle() async {
     final bundle = _selectedBundle;
     if (bundle == null) return;
@@ -568,7 +640,18 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
               ),
               title: Text(bundle.name, style: const TextStyle(fontWeight: FontWeight.w600)),
               subtitle: Text('${bundle.productCount} product(s) \u2022 $dateStr'),
-              trailing: const Icon(Icons.chevron_right),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Delete bundle',
+                    icon: const Icon(Icons.delete_outline),
+                    color: Colors.red.shade700,
+                    onPressed: _loading ? null : () => _deleteBundle(bundle.id, bundle.name),
+                  ),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
               onTap: () => _openBundle(bundle.id),
             ),
           );
@@ -708,6 +791,7 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
   }
 
   Widget _buildProductCard(_BundleProduct product, ColorScheme cs) {
+    final bundle = _selectedBundle!;
     final bestPriceText = product.bestPrice != null
         ? _money(product.bestPrice)
         : null;
@@ -719,7 +803,7 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
       child: InkWell(
         onTap: () => _openProductDetails(product),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final compact = constraints.maxWidth < 360;
@@ -775,15 +859,36 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
                     )
                   : null;
 
+              final removeButton = IconButton(
+                tooltip: 'Remove from bundle',
+                icon: const Icon(Icons.remove_circle_outline),
+                color: Colors.red.shade700,
+                onPressed: _loading
+                    ? null
+                    : () => _removeProductFromBundle(
+                          bundle.id,
+                          product.productId,
+                          product.name,
+                        ),
+              );
+
               if (compact) {
-                return Column(
+                return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    leading,
-                    if (priceWidget != null) ...[
-                      const SizedBox(height: 8),
-                      priceWidget,
-                    ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          leading,
+                          if (priceWidget != null) ...[
+                            const SizedBox(height: 8),
+                            priceWidget,
+                          ],
+                        ],
+                      ),
+                    ),
+                    removeButton,
                   ],
                 );
               }
@@ -795,6 +900,8 @@ class _BundlePlanPageState extends State<BundlePlanPage> {
                     const SizedBox(width: 12),
                     priceWidget,
                   ],
+                  const SizedBox(width: 4),
+                  removeButton,
                 ],
               );
             },

@@ -269,12 +269,33 @@ class TestGroceryApi extends GroceryApi {
     return bundleId;
   }
 
+  final List<int> deleteBundleCalls = <int>[];
+  final List<Map<String, int>> removeProductCalls = <Map<String, int>>[];
+
   @override
   Future<void> addProductToBundle(int bundleId, int productId) async {
     addProductCalls.add(<String, int>{
       'bundleId': bundleId,
       'productId': productId,
     });
+  }
+
+  @override
+  Future<void> deleteBundle(int bundleId) async {
+    deleteBundleCalls.add(bundleId);
+    userBundlesResponse.removeWhere((b) => b['id'] == bundleId);
+    bundleDetails.remove(bundleId);
+  }
+
+  @override
+  Future<void> removeProductFromBundle(int bundleId, int productId) async {
+    removeProductCalls.add(<String, int>{'bundleId': bundleId, 'productId': productId});
+    final detail = bundleDetails[bundleId];
+    if (detail != null) {
+      final products = detail['products'] as List<Map<String, dynamic>>;
+      products.removeWhere((p) => p['product_id'] == productId);
+      detail['product_count'] = products.length;
+    }
   }
 
   @override
@@ -1098,6 +1119,171 @@ void main() {
 
       expect(appState.cart, <Product>[apples]);
       expect(appState.cartFinished, isEmpty);
+    });
+
+    testWidgets('bundle planner deletes a bundle after confirmation', (
+      tester,
+    ) async {
+      final api = TestGroceryApi(
+        allStores: <Store>[_austinStore],
+        allProducts: <Product>[],
+        userBundlesResponse: <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 50,
+            'user_id': 42,
+            'name': 'Old Bundle',
+            'created_at': '2026-03-13T10:00:00',
+            'product_count': 0,
+            'product_ids': <int>[],
+          },
+          <String, dynamic>{
+            'id': 51,
+            'user_id': 42,
+            'name': 'Keep Bundle',
+            'created_at': '2026-03-13T10:00:00',
+            'product_count': 0,
+            'product_ids': <int>[],
+          },
+        ],
+        bundleDetails: <int, Map<String, dynamic>>{
+          50: _bundleDetail(bundleId: 50, name: 'Old Bundle', products: []),
+          51: _bundleDetail(bundleId: 51, name: 'Keep Bundle', products: []),
+        },
+      );
+      final appState = _seededState(api);
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          home: const BundlePlanPage(initialUserId: 42),
+          api: api,
+          appState: appState,
+        ),
+      );
+      await _pumpUi(tester, frames: 8);
+
+      expect(find.text('Old Bundle'), findsOneWidget);
+      expect(find.text('Keep Bundle'), findsOneWidget);
+
+      // Tap the delete icon for the first bundle.
+      final deleteButtons = find.byIcon(Icons.delete_outline);
+      expect(deleteButtons, findsNWidgets(2));
+      await tester.tap(deleteButtons.first);
+      await _pumpUi(tester);
+
+      // Confirmation dialog appears.
+      expect(find.text('Delete bundle?'), findsOneWidget);
+      await tester.tap(find.text('Delete'));
+      await _pumpUi(tester, frames: 6);
+
+      // The deleted bundle is gone; the other remains.
+      expect(api.deleteBundleCalls, <int>[50]);
+      expect(find.text('Old Bundle'), findsNothing);
+      expect(find.text('Keep Bundle'), findsOneWidget);
+    });
+
+    testWidgets('bundle planner removes a product from detail view', (
+      tester,
+    ) async {
+      final api = TestGroceryApi(
+        allStores: <Store>[_austinStore],
+        allProducts: <Product>[],
+        userBundlesResponse: <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 60,
+            'user_id': 42,
+            'name': 'My Bundle',
+            'created_at': '2026-03-13T10:00:00',
+            'product_count': 2,
+            'product_ids': <int>[11, 12],
+          },
+        ],
+        bundleDetails: <int, Map<String, dynamic>>{
+          60: _bundleDetail(
+            bundleId: 60,
+            name: 'My Bundle',
+            products: <Map<String, dynamic>>[
+              _bundleProductJson(productId: 11, name: 'Butter', basePrice: '4.99'),
+              _bundleProductJson(productId: 12, name: 'Eggs', basePrice: '3.49'),
+            ],
+          ),
+        },
+      );
+      final appState = _seededState(api);
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          home: BundlePlanPage(
+            initialUserId: 42,
+            initialBundleId: 60,
+          ),
+          api: api,
+          appState: appState,
+        ),
+      );
+      await _pumpUi(tester, frames: 8);
+
+      expect(find.text('Butter'), findsOneWidget);
+      expect(find.text('Eggs'), findsOneWidget);
+
+      // Tap the remove icon on the first product card (Butter).
+      final removeButtons = find.byIcon(Icons.remove_circle_outline);
+      expect(removeButtons, findsNWidgets(2));
+      await tester.tap(removeButtons.first);
+      await _pumpUi(tester);
+
+      // Confirmation dialog appears.
+      expect(find.text('Remove product?'), findsOneWidget);
+      await tester.tap(find.text('Remove'));
+      await _pumpUi(tester, frames: 8);
+
+      expect(api.removeProductCalls, hasLength(1));
+      expect(api.removeProductCalls.single['bundleId'], 60);
+      expect(find.text('Eggs'), findsOneWidget);
+    });
+
+    testWidgets('bundle planner cancel delete keeps bundle intact', (
+      tester,
+    ) async {
+      final api = TestGroceryApi(
+        allStores: <Store>[_austinStore],
+        allProducts: <Product>[],
+        userBundlesResponse: <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 70,
+            'user_id': 42,
+            'name': 'My Bundle',
+            'created_at': '2026-03-13T10:00:00',
+            'product_count': 0,
+            'product_ids': <int>[],
+          },
+        ],
+        bundleDetails: <int, Map<String, dynamic>>{
+          70: _bundleDetail(bundleId: 70, name: 'My Bundle', products: []),
+        },
+      );
+      final appState = _seededState(api);
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          home: const BundlePlanPage(initialUserId: 42),
+          api: api,
+          appState: appState,
+        ),
+      );
+      await _pumpUi(tester, frames: 8);
+
+      expect(find.text('My Bundle'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await _pumpUi(tester);
+      expect(find.text('Delete bundle?'), findsOneWidget);
+
+      // Cancel — bundle should still be there.
+      await tester.tap(find.text('Cancel'));
+      await _pumpUi(tester);
+
+      expect(api.deleteBundleCalls, isEmpty);
+      expect(find.text('My Bundle'), findsOneWidget);
     });
 
     testWidgets('bundle planner loads detail and adds a product', (

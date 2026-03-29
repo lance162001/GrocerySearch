@@ -38,6 +38,10 @@ class GroceryApi {
         .timeout(_timeout);
   }
 
+  Future<http.Response> delete(Uri uri, {Map<String, String>? headers}) {
+    return _client.delete(uri, headers: headers ?? jsonHeaders).timeout(_timeout);
+  }
+
   Future<Map<String, dynamic>?> getObject(
     String path, {
     Map<String, String>? queryParameters,
@@ -270,6 +274,20 @@ class GroceryApi {
     );
     if (response.statusCode != 200) {
       throw Exception('Failed to add product $productId (${response.statusCode})');
+    }
+  }
+
+  Future<void> deleteBundle(int bundleId) async {
+    final response = await delete(buildUri('/bundles/$bundleId'));
+    if (response.statusCode != 204) {
+      throw Exception('Failed to delete bundle $bundleId (${response.statusCode})');
+    }
+  }
+
+  Future<void> removeProductFromBundle(int bundleId, int productId) async {
+    final response = await delete(buildUri('/bundles/$bundleId/products/$productId'));
+    if (response.statusCode != 204) {
+      throw Exception('Failed to remove product $productId from bundle $bundleId (${response.statusCode})');
     }
   }
 
