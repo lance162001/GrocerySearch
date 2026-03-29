@@ -26,8 +26,8 @@ class StoreCardSkeleton extends StatelessWidget {
               children: [
                 // Logo placeholder
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: 58,
+                  height: 58,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
@@ -38,6 +38,16 @@ class StoreCardSkeleton extends StatelessWidget {
                 Container(
                   width: 56,
                   height: 10,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                // State line
+                Container(
+                  width: 32,
+                  height: 9,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(4),
