@@ -9,6 +9,7 @@ import 'package:flutter_front_end/widgets/app_bar_user_menu.dart';
 import 'package:flutter_front_end/widgets/hint_banner.dart';
 import 'package:flutter_front_end/widgets/overflow_menu_nudge.dart';
 import 'package:flutter_front_end/widgets/product_image.dart';
+import 'package:flutter_front_end/widgets/store_card_skeleton.dart';
 import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:provider/provider.dart';
 
@@ -75,10 +76,11 @@ class _StoreSearchState extends State<StoreSearch> {
     final appState = context.read<AppState>();
     final messenger = ScaffoldMessenger.of(context);
 
-    if (destination == AppTopLevelDestination.staples &&
+    if ((destination == AppTopLevelDestination.search ||
+            destination == AppTopLevelDestination.staples) &&
         appState.userStores.isEmpty) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Pick at least one store to browse staples.')),
+        const SnackBar(content: Text('Pick at least one store to continue.')),
       );
       return;
     }
@@ -378,7 +380,26 @@ class _StoreSearchState extends State<StoreSearch> {
                 if (snapshot.hasError) {
                   return Center(child: Text('${snapshot.error}'));
                 }
-                return const Center(child: CircularProgressIndicator());
+                const skeletonOpacities = [
+                  1.0, 1.0, 1.0, 0.7, 0.7, 0.7, 0.4, 0.4,
+                ];
+                return GridView.builder(
+                  itemCount: skeletonOpacities.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    childAspectRatio: 1.35,
+                    crossAxisSpacing: 6,
+                    mainAxisSpacing: 6,
+                  ),
+                  shrinkWrap: true,
+                  primary: false,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 4,
+                  ),
+                  itemBuilder: (context, index) =>
+                      StoreCardSkeleton(opacity: skeletonOpacities[index]),
+                );
               },
             ),
           ),
@@ -416,7 +437,7 @@ class _StoreSearchState extends State<StoreSearch> {
                   ),
                   onPressed: selectedStores.isEmpty || _savingStores
                       ? null
-                      : () => _openDestination(AppTopLevelDestination.staples),
+                      : () => _openDestination(AppTopLevelDestination.search),
                   icon: _savingStores
                       ? const SizedBox(
                           width: 16,
@@ -424,7 +445,7 @@ class _StoreSearchState extends State<StoreSearch> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.arrow_forward, size: 18),
-                  label: const Text('Continue to Staples'),
+                  label: const Text('Continue to Search'),
                 ),
               ),
             ),
