@@ -89,8 +89,8 @@ class ProductCardSkeleton extends StatelessWidget {
     return Opacity(
       opacity: opacity,
       child: Shimmer.fromColors(
-        baseColor: const Color(0xFFf0f0f0),
-        highlightColor: const Color(0xFFe0e0e0),
+        baseColor: const Color(0xFFe0e0e0),
+        highlightColor: const Color(0xFFf0f0f0),
         child: Card(
           color: Colors.white,
           child: Padding(
@@ -209,8 +209,8 @@ class StoreCardSkeleton extends StatelessWidget {
     return Opacity(
       opacity: opacity,
       child: Shimmer.fromColors(
-        baseColor: const Color(0xFFf0f0f0),
-        highlightColor: const Color(0xFFe0e0e0),
+        baseColor: const Color(0xFFe0e0e0),
+        highlightColor: const Color(0xFFf0f0f0),
         child: Card(
           color: Colors.white,
           shape: RoundedRectangleBorder(
