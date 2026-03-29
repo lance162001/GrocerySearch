@@ -867,9 +867,16 @@ class _SearchPageState extends State<SearchPage> {
 
             return ListView.builder(
               controller: scrollController,
-              itemCount: groupedProducts.length,
+              itemCount: groupedProducts.length + (_isLoadingMore ? 3 : 0),
               padding: const EdgeInsets.all(1),
               itemBuilder: (context, index) {
+                if (index >= groupedProducts.length) {
+                  const opacities = [1.0, 0.65, 0.35];
+                  final skeletonIndex = index - groupedProducts.length;
+                  return ProductCardSkeleton(
+                    opacity: opacities[skeletonIndex],
+                  );
+                }
                 final group = groupedProducts[index];
                 final product = group.primaryProduct;
                 final groupQuantity = _groupCartQuantity(group, appState);
