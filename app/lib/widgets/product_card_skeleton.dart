@@ -11,8 +11,8 @@ class ProductCardSkeleton extends StatelessWidget {
     return Opacity(
       opacity: opacity,
       child: Shimmer.fromColors(
-        baseColor: const Color(0xFFf0f0f0),
-        highlightColor: const Color(0xFFe0e0e0),
+        baseColor: const Color(0xFFe0e0e0),
+        highlightColor: const Color(0xFFf0f0f0),
         child: Card(
           color: Colors.white,
           child: Padding(
@@ -69,7 +69,7 @@ class ProductCardSkeleton extends StatelessWidget {
     );
   }
 
-  Widget _line(double width, double height) => Container(
+  static Widget _line(double width, double height) => Container(
         width: width,
         height: height,
         decoration: BoxDecoration(
@@ -78,7 +78,7 @@ class ProductCardSkeleton extends StatelessWidget {
         ),
       );
 
-  Widget _chip(double width) => Container(
+  static Widget _chip(double width) => Container(
         width: width,
         height: 22,
         decoration: BoxDecoration(
