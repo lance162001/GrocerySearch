@@ -22,11 +22,6 @@ _price_pattern = re.compile(r"-?\d+(?:\.\d+)?")
 @user_router.get("/users/unsubscribe", response_class=HTMLResponse, include_in_schema=False)
 async def unsubscribe_newsletter(token: str, sess: Session = Depends(get_db)):
     """Unsubscribe a user from newsletters using a one-click token link."""
-    if token == "test-do-not-unsubscribe":
-        return HTMLResponse(
-            content="<h2>Test unsubscribe — no action taken.</h2>",
-            status_code=200,
-        )
     user = sess.query(models.User).filter(models.User.unsubscribe_token == token).first()
     if user is None:
         return HTMLResponse(
@@ -151,6 +146,8 @@ async def create_bundle(
     name = payload.name.strip()
     if not name:
         raise HTTPException(400, detail="Bundle name is required")
+    if len(name) > 100:
+        raise HTTPException(400, detail="Bundle name must be 100 characters or fewer")
 
     _get_or_create_user(user_id, sess)
     bundle = models.Product_Bundle(user_id=user_id, name=name)

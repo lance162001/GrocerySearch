@@ -40,7 +40,7 @@ async def health():
     except Exception as exc:
         return JSONResponse(
             status_code=503,
-            content={"status": "degraded", "detail": str(exc)},
+            content={"status": "degraded"},
         )
 
 

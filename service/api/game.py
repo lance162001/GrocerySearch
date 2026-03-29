@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
-from . import get_db
+from . import get_db, escape_like
 import models
 
 # ---------------------------------------------------------------------------
@@ -531,25 +531,26 @@ def game_search(
     db: Session = Depends(get_db),
 ):
     """Autocomplete search for guesses — lightweight, name+brand match."""
+    q_esc = escape_like(q)
     query = (
         db.query(models.Product, models.Company)
         .join(models.Company, models.Company.id == models.Product.company_id)
         .filter(
             or_(
-                models.Product.name.ilike(f'%{q}%'),
-                models.Product.brand.ilike(f'%{q}%'),
+                models.Product.name.ilike(f'%{q_esc}%', escape="\\"),
+                models.Product.brand.ilike(f'%{q_esc}%', escape="\\"),
             ),
             models.Product.picture_url.isnot(None),
             models.Product.picture_url != '',
         )
     )
     if company:
-        query = query.filter(models.Company.name.ilike(company))
+        query = query.filter(models.Company.name.ilike(escape_like(company), escape="\\"))
     products = (
         query
         .order_by(
             # Names that start with the query appear first
-            case((models.Product.name.ilike(f'{q}%'), 0), else_=1),
+            case((models.Product.name.ilike(f'{q_esc}%', escape="\\"), 0), else_=1),
             func.length(models.Product.name),
         )
         .limit(limit)

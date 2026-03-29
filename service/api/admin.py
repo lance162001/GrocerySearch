@@ -4,18 +4,36 @@ from __future__ import annotations
 
 import os
 import re
+import secrets
 from pathlib import Path
 
 import psutil
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel as PydanticBase
 from sqlalchemy import inspect, text
 
 from models.base import engine, Base
 
-admin_router = APIRouter(prefix="/admin", tags=["admin"])
+_ADMIN_SECRET = os.getenv("ADMIN_SECRET", "")
+
+
+def _require_admin(x_admin_key: str = Header(default="")) -> None:
+    """Reject requests that don't carry the correct admin API key.
+
+    If ADMIN_SECRET is not configured the endpoint is always blocked so that
+    an unconfigured deployment doesn't accidentally expose the admin panel.
+    """
+    if not _ADMIN_SECRET or not secrets.compare_digest(x_admin_key, _ADMIN_SECRET):
+        raise HTTPException(403, "Forbidden")
+
+
+admin_router = APIRouter(
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=[Depends(_require_admin)],
+)
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 _DB_PATH = Path(__file__).resolve().parent.parent / "app.db"
@@ -176,16 +194,29 @@ _FORBIDDEN = re.compile(
 )
 
 
+def _strip_sql_comments(sql: str) -> str:
+    """Remove SQL comments so they cannot be used to bypass the forbidden-keyword check."""
+    # Remove -- line comments
+    sql = re.sub(r"--[^\n]*", " ", sql)
+    # Remove /* */ block comments (including multiline)
+    sql = re.sub(r"/\*.*?\*/", " ", sql, flags=re.DOTALL)
+    return sql
+
+
 @admin_router.post("/sql")
 async def run_sql(body: _SQLQuery):
     sql = body.sql.strip().rstrip(";")
     if not sql:
         raise HTTPException(400, "Empty query")
-    if _FORBIDDEN.search(sql):
+    # Strip comments before checking for forbidden keywords to prevent bypass
+    # via comment injection (e.g. "SEL/**/ECT" or "-- DROP\nSELECT …").
+    sql_for_check = _strip_sql_comments(sql)
+    if _FORBIDDEN.search(sql_for_check):
         raise HTTPException(
             403, "Only SELECT / read-only queries are allowed."
         )
-    if not sql.upper().lstrip().startswith("SELECT") and not sql.upper().lstrip().startswith("WITH"):
+    first_token = sql_for_check.upper().lstrip()
+    if not first_token.startswith("SELECT") and not first_token.startswith("WITH"):
         raise HTTPException(403, "Only SELECT queries are allowed.")
 
     try:
@@ -193,7 +224,7 @@ async def run_sql(body: _SQLQuery):
             result = conn.execute(text(sql))
             columns = list(result.keys()) if result.returns_rows else []
             rows = [dict(r) for r in result.mappings().all()] if columns else []
-    except Exception as exc:
-        raise HTTPException(400, str(exc))
+    except Exception:
+        raise HTTPException(400, "Query failed. Check your SQL syntax and try again.")
 
     return {"columns": columns, "rows": rows[:5000]}

@@ -17,6 +17,16 @@ def get_db():
         database.close()
 
 
+def escape_like(value: str) -> str:
+    """Escape LIKE/ILIKE metacharacters so user input is treated as a literal string.
+
+    Prevents users from injecting ``%`` or ``_`` wildcards into search patterns,
+    which could match unintended rows or degrade query performance.
+    Pass ``escape="\\\\"`` to the SQLAlchemy ``.like()`` / ``.ilike()`` call.
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 router = APIRouter()
 
 

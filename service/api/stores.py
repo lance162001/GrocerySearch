@@ -10,7 +10,7 @@ from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import func
 
-from . import get_db
+from . import get_db, escape_like
 import models
 import schemas
 
@@ -46,14 +46,15 @@ async def get_products_from_store(id: int, sess: Session = Depends(get_db)):
 async def store_search(search: str | None = "", sess: Session = Depends(get_db)):
     if search == "":
         return paginate(sess, select(models.Store))
+    escaped = escape_like(search)
     return paginate(
         sess,
         select(models.Store).where(
             or_(
-                models.Store.address.like(f"%{search}%"),
-                models.Store.zipcode.like(f"%{search}%"),
-                models.Store.state.like(f"%{search}%"),
-                models.Store.town.like(f"%{search}%"),
+                models.Store.address.like(f"%{escaped}%", escape="\\"),
+                models.Store.zipcode.like(f"%{escaped}%", escape="\\"),
+                models.Store.state.like(f"%{escaped}%", escape="\\"),
+                models.Store.town.like(f"%{escaped}%", escape="\\"),
             )
         ),
     )
@@ -91,14 +92,15 @@ async def full_product_search(
     tags = tags or []
 
     if search:
+        escaped = escape_like(search)
         s = s.where(
             or_(
-                models.Product.name.ilike(f"%{search}%"),
-                models.Product.brand.ilike(f"%{search}%"),
+                models.Product.name.ilike(f"%{escaped}%", escape="\\"),
+                models.Product.brand.ilike(f"%{escaped}%", escape="\\"),
                 models.Product.tags.any(
                     models.Tag_Instance.tag_id.in_(
                         select(models.Tag.id).where(
-                            models.Tag.name.ilike(f"%{search}%")
+                            models.Tag.name.ilike(f"%{escaped}%", escape="\\")
                         )
                     )
                 ),
