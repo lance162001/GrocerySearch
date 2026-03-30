@@ -4,36 +4,18 @@ from __future__ import annotations
 
 import os
 import re
-import secrets
 from pathlib import Path
 
 import psutil
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel as PydanticBase
 from sqlalchemy import inspect, text
 
 from models.base import engine, Base
 
-_ADMIN_SECRET = os.getenv("ADMIN_SECRET", "")
-
-
-def _require_admin(x_admin_key: str = Header(default="")) -> None:
-    """Reject requests that don't carry the correct admin API key.
-
-    If ADMIN_SECRET is not configured the endpoint is always blocked so that
-    an unconfigured deployment doesn't accidentally expose the admin panel.
-    """
-    if not _ADMIN_SECRET or not secrets.compare_digest(x_admin_key, _ADMIN_SECRET):
-        raise HTTPException(403, "Forbidden")
-
-
-admin_router = APIRouter(
-    prefix="/admin",
-    tags=["admin"],
-    dependencies=[Depends(_require_admin)],
-)
+admin_router = APIRouter(prefix="/admin", tags=["admin"])
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 _DB_PATH = Path(__file__).resolve().parent.parent / "app.db"
