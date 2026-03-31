@@ -1,7 +1,7 @@
 import re
 import secrets
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends
@@ -37,8 +37,8 @@ async def unsubscribe_newsletter(token: str, sess: Session = Depends(get_db)):
             status_code=404,
         )
 
-    setattr(user, "newsletter_opt_in", False)
-    setattr(user, "newsletter_unsubscribed_at", datetime.now())
+    user.newsletter_opt_in = False
+    user.newsletter_unsubscribed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     sess.commit()
 
     return HTMLResponse(
@@ -84,7 +84,7 @@ async def get_newsletter_status(user_id: int, sess: Session = Depends(get_db)):
     user = _get_or_create_user(user_id, sess)
     return schemas.NewsletterStatus(
         opted_in=bool(user.newsletter_opt_in),
-        frequency=str(getattr(user, 'newsletter_frequency', None) or 'weekly'),
+        frequency=user.newsletter_frequency or 'weekly',
     )
 
 
@@ -96,17 +96,17 @@ async def update_newsletter_status(
 ):
     """Subscribe or unsubscribe a user from the newsletter, and optionally set frequency."""
     user = _get_or_create_user(user_id, sess)
-    setattr(user, "newsletter_opt_in", payload.opt_in)
+    user.newsletter_opt_in = payload.opt_in
     if not payload.opt_in:
-        setattr(user, "newsletter_unsubscribed_at", datetime.now())
+        user.newsletter_unsubscribed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     if payload.frequency is not None:
         if payload.frequency not in ('daily', 'weekly'):
             raise HTTPException(400, detail="frequency must be 'daily' or 'weekly'")
-        setattr(user, "newsletter_frequency", payload.frequency)
+        user.newsletter_frequency = payload.frequency
     sess.commit()
     return schemas.NewsletterStatus(
         opted_in=payload.opt_in,
-        frequency=str(getattr(user, 'newsletter_frequency', None) or 'weekly'),
+        frequency=user.newsletter_frequency or 'weekly',
     )
 
 
@@ -440,7 +440,8 @@ async def get_bundle_detail(bundle_id: int, sess: Session = Depends(get_db)):
     bundle = (
         sess.query(models.Product_Bundle)
         .options(joinedload(models.Product_Bundle.products))
-        .get(bundle_id)
+        .filter(models.Product_Bundle.id == bundle_id)
+        .first()
     )
     if not bundle:
         raise HTTPException(404, detail=f"Bundle with id {bundle_id} not found")

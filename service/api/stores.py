@@ -1,7 +1,6 @@
 import os
 from typing import List
 
-import Levenshtein
 from fastapi import APIRouter, Depends
 from fastapi.exceptions import HTTPException
 from fastapi_pagination import Page, add_pagination
@@ -21,10 +20,6 @@ def _logo_url(company: models.Company) -> str:
     name = f"company_{company.id}.png"
     path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'logos', name)
     return f"/static/logos/{name}" if os.path.exists(path) else str(company.logo_url)
-
-
-def similar(a: str, b: str) -> float:
-    return Levenshtein.ratio(a.lower(), b.lower())
 
 
 @store_router.get("/stores", response_model=List[schemas.Store])

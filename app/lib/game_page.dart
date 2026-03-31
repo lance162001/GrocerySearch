@@ -238,13 +238,23 @@ class _GamePageState extends State<GamePage> {
     } catch (_) {}
   }
 
+  List<String> _knownAttributeKeys() {
+    final known = <String>{};
+    for (final g in _guesses) {
+      for (final attr in g.attributes) {
+        if (attr.match == AttributeMatch.exact) known.add(attr.key);
+      }
+    }
+    return known.toList();
+  }
+
   Future<void> _useHint() async {
     if (_hintUsed || _fetchingHint) return;
     setState(() => _fetchingHint = true);
     try {
       final hint = await context
           .read<GroceryApi>()
-          .getGameHint(_gameDate, round: _infiniteRound);
+          .getGameHint(_gameDate, round: _infiniteRound, skipKeys: _knownAttributeKeys());
       if (!mounted) return;
       if (kIsWeb && _infiniteRound == 0) {
         html.window.localStorage[_hintStorageKey] =

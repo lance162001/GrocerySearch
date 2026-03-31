@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 
 enum AppTopLevelDestination {
   stores,
-  staples,
   search,
+  staples,
   cart,
 }
 
@@ -47,9 +47,9 @@ class TopLevelNavigationBar extends StatelessWidget {
     switch (currentDestination) {
       case AppTopLevelDestination.stores:
         return 0;
-      case AppTopLevelDestination.staples:
-        return 1;
       case AppTopLevelDestination.search:
+        return 1;
+      case AppTopLevelDestination.staples:
         return 2;
       case AppTopLevelDestination.cart:
         return 3;
@@ -61,9 +61,9 @@ class TopLevelNavigationBar extends StatelessWidget {
       case 0:
         return AppTopLevelDestination.stores;
       case 1:
-        return AppTopLevelDestination.staples;
-      case 2:
         return AppTopLevelDestination.search;
+      case 2:
+        return AppTopLevelDestination.staples;
       case 3:
       default:
         return AppTopLevelDestination.cart;
@@ -106,14 +106,14 @@ class TopLevelNavigationBar extends StatelessWidget {
           label: 'Stores',
         ),
         const NavigationDestination(
-          icon: Icon(Icons.breakfast_dining_outlined),
-          selectedIcon: Icon(Icons.breakfast_dining),
-          label: 'Staples',
-        ),
-        const NavigationDestination(
           icon: Icon(Icons.search_outlined),
           selectedIcon: Icon(Icons.search),
           label: 'Search',
+        ),
+        const NavigationDestination(
+          icon: Icon(Icons.breakfast_dining_outlined),
+          selectedIcon: Icon(Icons.breakfast_dining),
+          label: 'Staples',
         ),
         NavigationDestination(
           icon: cartIcon(false),

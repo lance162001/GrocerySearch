@@ -187,11 +187,10 @@ def _compute_store_staple_candidates(
         .distinct(models.Product.id)
         .all()
     )
-    staple_judgements = judgements  # already scoped to this staple by caller
     candidates = []
     for p in rows:
         pid = int(p.id)
-        j = staple_judgements.get(pid)
+        j = judgements.get(pid)
         if j is not None and j < 0:
             continue  # user community denied this product for this staple
         conf = _staple_confidence_py(p.name or "", staple_name)
@@ -296,7 +295,7 @@ async def _bg_refresh_store_staple(store_id: int, staple_name: str) -> None:
         return
     _refresh_in_flight.add(key)
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _refresh_store_staple_sync, store_id, staple_name)
     except Exception:
         _logger.exception("Background staple cache refresh failed for store=%s staple=%s", store_id, staple_name)
@@ -312,7 +311,8 @@ def _all_store_ids_sync() -> List[int]:
 def _schedule_full_refresh() -> None:
     """Fire-and-forget: refresh every (store, staple) pair in the background."""
     async def _run_all():
-        store_ids = await asyncio.get_event_loop().run_in_executor(None, _all_store_ids_sync)
+        loop = asyncio.get_running_loop()
+        store_ids = await loop.run_in_executor(None, _all_store_ids_sync)
         tasks = [
             _bg_refresh_store_staple(sid, sname)
             for sid in store_ids
@@ -321,11 +321,7 @@ def _schedule_full_refresh() -> None:
         await asyncio.gather(*tasks)
 
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.ensure_future(_run_all())
-        else:
-            loop.run_until_complete(_run_all())
+        asyncio.ensure_future(_run_all())
     except RuntimeError:
         pass  # no event loop yet (e.g. during import) — skip
 
@@ -345,13 +341,12 @@ async def get_all_product_instances(sess: Session = Depends(get_db)):
 
 @product_router.get("/products/multiple", response_model=List[schemas.Product])
 async def get_products_by_ids(ids: List[int], sess: Session = Depends(get_db)):
-    products = []
-    for product_id in ids:
-        product = sess.get(models.Product, product_id)
-        if product is None:
-            raise HTTPException(404, detail=f"Product with id {product_id} not found")
-        products.append(product)
-    return products
+    found = sess.query(models.Product).filter(models.Product.id.in_(ids)).all()
+    by_id = {p.id: p for p in found}
+    missing = [i for i in ids if i not in by_id]
+    if missing:
+        raise HTTPException(404, detail=f"Product(s) with id(s) {missing} not found")
+    return [by_id[i] for i in ids]
 
 
 @product_router.get("/products/tags", response_model=List[schemas.Tag])

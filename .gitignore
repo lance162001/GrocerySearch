@@ -157,3 +157,6 @@ service/lib64
 service/bin/uvicorn
 service/include/site/python3.11/greenlet/greenlet.h
 service/bin/normalizer
+
+# Superpowers session artifacts
+.superpowers/

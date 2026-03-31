@@ -659,16 +659,11 @@ void main() {
 
         expect(find.text('Dallas'), findsNothing);
 
-        await tester.tap(find.text('Continue to Staples'));
-        await _pumpUi(tester, frames: 8);
-
-        expect(find.byType(StaplesOverview), findsOneWidget);
-        expect(api.savedStoreCalls.single['storeId'], _austinStore.id);
-
-        await tester.tap(find.text('Search'));
+        await tester.tap(find.text('Continue to Search'));
         await _pumpUi(tester, frames: 8);
 
         expect(find.byType(SearchPage), findsOneWidget);
+        expect(api.savedStoreCalls.single['storeId'], _austinStore.id);
 
         await tester.tap(find.byType(TextField).first);
         await tester.enterText(find.byType(TextField).first, 'App');
@@ -751,6 +746,7 @@ void main() {
       final appState = _seededState(
         api,
         userStores: const <Store>[_austinStore, _dallasStore],
+        searchTerm: 'App',
       );
 
       await tester.pumpWidget(
@@ -818,6 +814,7 @@ void main() {
       final appState = _seededState(
         api,
         userStores: const <Store>[_austinStore, _dallasStore, houstonStore],
+        searchTerm: 'milk',
       );
 
       await tester.pumpWidget(
@@ -997,7 +994,7 @@ void main() {
             frozenPeas.id: <int>{_frozenTag.id},
           },
         );
-        final appState = _seededState(api);
+        final appState = _seededState(api, searchTerm: 'Ap');
 
         await tester.pumpWidget(
           _buildTestApp(
@@ -1011,12 +1008,7 @@ void main() {
         await tester.tap(find.text('Austin').first);
         await _pumpUi(tester);
 
-        await tester.tap(find.text('Continue to Staples'));
-        await _pumpUi(tester, frames: 8);
-
-        expect(find.byType(StaplesOverview), findsOneWidget);
-
-        await tester.tap(find.text('Search'));
+        await tester.tap(find.text('Continue to Search'));
         await _pumpUi(tester, frames: 8);
 
         expect(find.byType(SearchPage), findsOneWidget);
@@ -1168,6 +1160,11 @@ void main() {
       await _pumpUi(tester, frames: 8);
 
       expect(find.byType(SearchPage), findsOneWidget);
+
+      await tester.tap(find.byType(TextField).first);
+      await tester.enterText(find.byType(TextField).first, 'Ol');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await _pumpUi(tester);
 
       await tester.tap(find.text('Olive Oil').first);
       await _pumpUi(tester, frames: 4);

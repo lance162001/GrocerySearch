@@ -181,12 +181,11 @@ async def run_sql(body: _SQLQuery):
     sql = body.sql.strip().rstrip(";")
     if not sql:
         raise HTTPException(400, "Empty query")
+    sql_upper = sql.upper().lstrip()
+    if not sql_upper.startswith("SELECT") and not sql_upper.startswith("WITH"):
+        raise HTTPException(403, "Only SELECT / read-only queries are allowed.")
     if _FORBIDDEN.search(sql):
-        raise HTTPException(
-            403, "Only SELECT / read-only queries are allowed."
-        )
-    if not sql.upper().lstrip().startswith("SELECT") and not sql.upper().lstrip().startswith("WITH"):
-        raise HTTPException(403, "Only SELECT queries are allowed.")
+        raise HTTPException(403, "Only SELECT / read-only queries are allowed.")
 
     try:
         with engine.connect() as conn:
