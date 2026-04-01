@@ -240,9 +240,8 @@ class _StoreSearchState extends State<StoreSearch> {
           const HintBanner(
             hintKey: 'stores',
             message:
-                'Search by zip code, city, or address to find nearby stores. '
-                'Tap a card to select it — pick as many as you like. '
-                'Your selections are saved to your account.',
+                'Search by zip code or address to find nearby stores. '
+                'Select two or more to compare prices — your selections are saved automatically.',
             icon: Icons.store_outlined,
           ),
           Expanded(
@@ -411,6 +410,7 @@ class _StoreSearchState extends State<StoreSearch> {
             child: OverflowMenuNudge(
               nudgeKey: 'stores_overflow',
               message: 'Tap ⋮ for bundles & more',
+              waitForHintKey: 'stores',
             ),
           ),
         ],

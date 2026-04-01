@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_front_end/state/app_state.dart';
+import 'package:flutter_front_end/widgets/hint_banner.dart';
 import 'package:provider/provider.dart';
 
 /// A tiny speech-bubble callout that floats near the top-right of the screen
@@ -11,10 +12,15 @@ class OverflowMenuNudge extends StatefulWidget {
     super.key,
     required this.nudgeKey,
     required this.message,
+    this.waitForHintKey,
   });
 
   final String nudgeKey;
   final String message;
+
+  /// If set, the nudge stays hidden until the HintBanner with this key has
+  /// been dismissed. Prevents the two banners from overlapping on first load.
+  final String? waitForHintKey;
 
   /// Session-wide set of dismissed nudge keys. Clear this when hints are
   /// re-enabled in Preferences to let nudges reappear.
@@ -31,7 +37,20 @@ class _OverflowMenuNudgeState extends State<OverflowMenuNudge> {
   void initState() {
     super.initState();
     _visible = !OverflowMenuNudge.dismissed.contains(widget.nudgeKey);
+    if (widget.waitForHintKey != null) {
+      HintBanner.dismissCount.addListener(_onHintDismissed);
+    }
   }
+
+  @override
+  void dispose() {
+    if (widget.waitForHintKey != null) {
+      HintBanner.dismissCount.removeListener(_onHintDismissed);
+    }
+    super.dispose();
+  }
+
+  void _onHintDismissed() => setState(() {});
 
   void _dismiss() {
     OverflowMenuNudge.dismissed.add(widget.nudgeKey);
@@ -41,7 +60,9 @@ class _OverflowMenuNudgeState extends State<OverflowMenuNudge> {
   @override
   Widget build(BuildContext context) {
     final hidden = context.watch<AppState>().hideHints;
-    if (hidden || !_visible) return const SizedBox.shrink();
+    final waitingForHint = widget.waitForHintKey != null &&
+        !HintBanner.dismissed.contains(widget.waitForHintKey!);
+    if (hidden || !_visible || waitingForHint) return const SizedBox.shrink();
 
     return Column(
       mainAxisSize: MainAxisSize.min,

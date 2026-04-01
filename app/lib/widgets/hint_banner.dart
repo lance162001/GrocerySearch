@@ -21,6 +21,10 @@ class HintBanner extends StatefulWidget {
   // Session-wide dismissal tracking — cleared on next app launch.
   static final Set<String> dismissed = {};
 
+  // Notifies listeners whenever any hint is dismissed, so other widgets
+  // (e.g. OverflowMenuNudge) can reactively re-evaluate their visibility.
+  static final ValueNotifier<int> dismissCount = ValueNotifier(0);
+
   @override
   State<HintBanner> createState() => _HintBannerState();
 }
@@ -45,6 +49,7 @@ class _HintBannerState extends State<HintBanner> {
 
   void _dismiss() {
     HintBanner.dismissed.add(widget.hintKey);
+    HintBanner.dismissCount.value++;
     setState(() => _visible = false);
   }
 

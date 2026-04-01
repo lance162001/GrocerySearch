@@ -309,9 +309,8 @@ class _StaplesOverviewState extends State<StaplesOverview> {
               const HintBanner(
                 hintKey: 'staples',
                 message:
-                    'Everyday staples compared across your selected stores. '
-                    'Tap a card to add it to your cart. '
-                    'Long-press for other flavors, and prices at other stores.',
+                    'Common grocery items tracked daily across your stores. '
+                    'Tap to add to cart, or long-press to browse sizes and see all store prices.',
                 icon: Icons.local_grocery_store_outlined,
               ),
               Expanded(
@@ -369,6 +368,7 @@ class _StaplesOverviewState extends State<StaplesOverview> {
             child: OverflowMenuNudge(
               nudgeKey: 'staples_overflow',
               message: 'Tap ⋮ for bundles & more',
+              waitForHintKey: 'staples',
             ),
           ),
         ],

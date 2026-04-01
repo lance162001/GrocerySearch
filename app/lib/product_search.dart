@@ -805,8 +805,7 @@ class _SearchPageState extends State<SearchPage> {
             hintKey: 'search',
             message:
                 'Type a product name and press enter to search. '
-                'Green "Save" badges mark the best price across your stores. '
-                'Tap to add to cart, long-press for details and alternate stores.',
+                'Tap to add to cart, or long-press for price history and details.',
             icon: Icons.search,
           ),
           _buildFilterBar(appState),
