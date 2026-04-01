@@ -45,6 +45,14 @@
 </head>
 <body>
   <script>
+    // Force-unregister any stale service workers so clients pick up new builds.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (var r of registrations) { r.update(); }
+      });
+    }
+  </script>
+  <script>
     window.addEventListener('load', function(ev) {
       // Download main.dart.js
       _flutter.loader.loadEntrypoint({
