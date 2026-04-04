@@ -1,4 +1,4 @@
-# Basket: GrocerySearch UX Redesign
+# Markup: GrocerySearch UX Redesign
 
 **Date:** 2026-04-03
 **Status:** Approved
@@ -9,7 +9,7 @@ GrocerySearch's core value — revealing that the same product costs significant
 
 ## Solution
 
-Rebrand to **Basket** and rebuild the frontend around a 4-tab architecture (Feed, Search, Tracking, Play) with zero gates. The app opens directly to a curated price comparison feed that delivers the aha moment in 3 seconds. Authentication and location are opt-in, triggered only when the user wants to save something.
+Rebrand to **Markup** and rebuild the frontend around a 4-tab architecture (Feed, Search, Tracking, Play) with zero gates. The app opens directly to a curated price comparison feed that delivers the aha moment in 3 seconds. Authentication and location are opt-in, triggered only when the user wants to save something.
 
 ## Target Users
 
@@ -18,7 +18,7 @@ Rebrand to **Basket** and rebuild the frontend around a 4-tab architecture (Feed
 
 ## Branding
 
-- **Name:** Basket (short, memorable, implies comparison via "basket of goods," works as a verb: "Basket it")
+- **Name:** Markup (short, memorable, directly references price markups — the core insight the app reveals. Has personality and a slightly cheeky "we're exposing the truth" tone.)
 - **Color palette:** Keep existing dark green (#1b4332) primary, medium green (#2D6A4F), light green (#95D5B2). Add orange (#c45200) as accent for price-up/sale states.
 - **Text contrast:** All body text #111 (near-black) minimum. Secondary text #555. Must pass WCAG AA.
 
@@ -30,7 +30,7 @@ The default landing screen. No sign-in, no store selection, no setup required.
 
 ### Layout
 
-- **Top bar:** "Basket" wordmark (left), search bar (center, tappable — navigates to Search tab), profile icon (right)
+- **Top bar:** "Markup" wordmark (left), search bar (center, tappable — navigates to Search tab), profile icon (right)
 - **Location banner:** "Showing prices from all regions" with "Set your area" link. Dismissible but persistent until location is set.
 - **Infinite-scrolling card feed** with paginated backend loading
 
