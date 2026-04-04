@@ -118,6 +118,15 @@ _BOOTSTRAP_EXEMPT: set[tuple[str, str]] = {
     ("store_suggestions", "zipcode"),
     ("stores", "state"),
     ("stores", "town"),
+    # tracking tables (new, created by create_all)
+    ("tracked_items", "id"),
+    ("tracked_items", "user_id"),
+    ("tracked_items", "product_id"),
+    ("tracked_items", "created_at"),
+    ("user_points", "id"),
+    ("user_points", "user_id"),
+    ("user_points", "points"),
+    ("user_points", "updated_at"),
 }
 
 

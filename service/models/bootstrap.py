@@ -4,6 +4,7 @@ import logging
 
 from sqlalchemy import inspect, text
 
+import models.tracking  # noqa: F401 – register tracking ORM models with Base
 from .base import Base, engine
 
 logger = logging.getLogger(__name__)
@@ -193,5 +194,8 @@ def ensure_runtime_schema() -> None:
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_companies_slug_idx ON companies (slug)",
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_tags_name_idx ON tags (name)",
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_products_company_raw_name_idx ON products (company_id, raw_name) WHERE raw_name IS NOT NULL AND raw_name <> ''",
+        # tracking indexes
+        "CREATE INDEX IF NOT EXISTS ix_tracked_items_user_id ON tracked_items (user_id)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_tracked_items_user_product ON tracked_items (user_id, product_id)",
     ]
     _run_ddl_statements(perf_indexes)
