@@ -160,3 +160,6 @@ service/bin/normalizer
 
 # Superpowers session artifacts
 .superpowers/
+
+# Git worktrees
+.worktrees/
