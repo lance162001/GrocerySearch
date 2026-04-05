@@ -8,18 +8,16 @@ class MarkupState extends ChangeNotifier {
 
   // Auth
   int? currentUserId;
-  bool isSignedIn = false;
 
   // Location
   String? zipcode;
-  bool locationSet = false;
 
   // Tags & companies (metadata)
   List<Tag> tags = [];
   List<Company> companies = [];
 
   // Feed
-  List<dynamic> feedItems = [];
+  List<Map<String, dynamic>> feedItems = [];
   int feedPage = 1;
   bool feedHasMore = true;
   bool feedLoading = false;
@@ -37,31 +35,67 @@ class MarkupState extends ChangeNotifier {
   // Points
   int points = 0;
 
+  bool initializing = false;
+  String? initError;
+
   MarkupState({required this.api});
 
+  bool get isSignedIn => currentUserId != null;
+  bool get locationSet => zipcode != null && zipcode!.isNotEmpty;
+
   Future<void> initialize() async {
-    tags = await api.fetchTags();
-    companies = await api.fetchCompanies();
+    initializing = true;
+    initError = null;
     notifyListeners();
+    try {
+      tags = await api.fetchTags();
+      companies = await api.fetchCompanies();
+    } catch (e) {
+      initError = '$e';
+    } finally {
+      initializing = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadFeed({bool refresh = false}) async {
+    if (feedLoading) return;
+    if (refresh) {
+      feedItems = [];
+      feedPage = 1;
+      feedHasMore = true;
+    }
+    if (!feedHasMore) return;
+    feedLoading = true;
+    notifyListeners();
+    try {
+      final page = await api.fetchFeed(page: feedPage, zipcode: zipcode);
+      feedItems = refresh ? page : [...feedItems, ...page];
+      feedPage += 1;
+      feedHasMore = page.isNotEmpty;
+    } catch (e) {
+      // swallow — feed screen will show stale content
+    } finally {
+      feedLoading = false;
+      notifyListeners();
+    }
   }
 
   void setZipcode(String? zip) {
     zipcode = zip;
-    locationSet = zip != null && zip.isNotEmpty;
     notifyListeners();
   }
 
   void setUserId(int id) {
     currentUserId = id;
-    isSignedIn = true;
     notifyListeners();
   }
 
   void toggleTag(int tagId) {
     if (activeTagIds.contains(tagId)) {
-      activeTagIds.remove(tagId);
+      activeTagIds = activeTagIds.where((id) => id != tagId).toList();
     } else {
-      activeTagIds.add(tagId);
+      activeTagIds = [...activeTagIds, tagId];
     }
     notifyListeners();
   }

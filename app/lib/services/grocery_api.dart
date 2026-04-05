@@ -547,4 +547,9 @@ class GroceryApi {
     }
     return GameHint.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
+
+  Future<List<Map<String, dynamic>>> fetchFeed({int page = 1, String? zipcode}) async {
+    // stub — implemented in Task 7
+    return [];
+  }
 }
