@@ -565,6 +565,18 @@ async def submit_judgement(
     sess.commit()
     sess.refresh(judgement)
 
+    # Award points for community contribution
+    from models.tracking import User_Points
+
+    pts = 5 if payload.judgement_type == "grouping" else 3
+    user_pts = sess.query(User_Points).filter_by(user_id=payload.user_id).first()
+    if user_pts:
+        user_pts.points += pts
+    else:
+        user_pts = User_Points(user_id=payload.user_id, points=pts)
+        sess.add(user_pts)
+    sess.commit()
+
     # Invalidate heuristics cache and pre-emptively refresh all per-store staple
     # caches in the background so no user request pays the recompute cost.
     global _heuristics_cache

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from fastapi.exceptions import HTTPException
 from fastapi_pagination import Page, add_pagination
 from fastapi_pagination.ext.sqlalchemy import paginate
+from pydantic import BaseModel
 from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import func
@@ -14,6 +15,15 @@ import models
 import schemas
 
 store_router = APIRouter()
+
+
+class ProductSearchBody(BaseModel):
+    ids: List[int] = []
+    company_ids: List[int] = []
+    tags: List[int] = []
+    search: str = ""
+    on_sale: bool = False
+    has_spread: bool = False
 
 
 def _logo_url(company: models.Company) -> str:
@@ -70,20 +80,31 @@ async def get_all_companies(sess: Session = Depends(get_db)):
 
 @store_router.post("/stores/product_search", response_model=Page[schemas.Product_Details])
 async def full_product_search(
-    ids: List[int],
-    tags: List[int] | None = None,
-    search: str | None = "",
-    on_sale: bool = False,
-    has_spread: bool = False,
+    body: ProductSearchBody,
     sess: Session = Depends(get_db),
 ):
+    ids = body.ids
+    company_ids = body.company_ids
+    tags = body.tags
+    search = body.search
+    on_sale = body.on_sale
+    has_spread = body.has_spread
+
     s = (
         select(models.Product, models.Product_Instance)
         .where(models.Product.id == models.Product_Instance.product_id)
-        .where(models.Product_Instance.store_id.in_(ids))
     )
 
-    tags = tags or []
+    if ids:
+        s = s.where(models.Product_Instance.store_id.in_(ids))
+    elif company_ids:
+        store_ids_subq = (
+            select(models.Store.id)
+            .where(models.Store.company_id.in_(company_ids))
+            .scalar_subquery()
+        )
+        s = s.where(models.Product_Instance.store_id.in_(store_ids_subq))
+    # else: no store filter — search all stores
 
     if search:
         s = s.where(
@@ -124,15 +145,27 @@ async def full_product_search(
 
     if has_spread:
         # Find product names (case-insensitive) that appear in stores from more
-        # than one company among the selected store IDs.  These are the products
+        # than one company among the effective store filter.  These are the products
         # most likely to form cross-store price-spread pairs on the Flutter side.
-        multi_company_names = (
+        spread_base = (
             select(func.lower(models.Product.name).label("nm"))
             .join(
                 models.Product_Instance,
                 models.Product_Instance.product_id == models.Product.id,
             )
-            .where(models.Product_Instance.store_id.in_(ids))
+        )
+        if ids:
+            spread_base = spread_base.where(models.Product_Instance.store_id.in_(ids))
+        elif company_ids:
+            spread_base = spread_base.where(
+                models.Product_Instance.store_id.in_(
+                    select(models.Store.id)
+                    .where(models.Store.company_id.in_(company_ids))
+                    .scalar_subquery()
+                )
+            )
+        multi_company_names = (
+            spread_base
             .group_by(func.lower(models.Product.name))
             .having(func.count(func.distinct(models.Product.company_id)) > 1)
         )
