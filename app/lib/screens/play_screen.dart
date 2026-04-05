@@ -93,10 +93,13 @@ class _PlayScreenState extends State<PlayScreen> {
         targetProductId: challenge.targetProductId,
         approved: approved,
       );
+      if (!mounted) return;
       state.addPoints(5);
       setState(() => _answeredCount++);
-    } catch (_) {}
-    if (mounted) _loadMatchChallenge();
+    } catch (_) {
+      if (!mounted) return;
+    }
+    _loadMatchChallenge();
   }
 
   Future<void> _submitStapleJudgement(bool approved) async {
@@ -111,10 +114,13 @@ class _PlayScreenState extends State<PlayScreen> {
         stapleName: challenge.stapleName,
         approved: approved,
       );
+      if (!mounted) return;
       state.addPoints(3);
       setState(() => _answeredCount++);
-    } catch (_) {}
-    if (mounted) _loadStapleChallenge();
+    } catch (_) {
+      if (!mounted) return;
+    }
+    _loadStapleChallenge();
   }
 
   @override
