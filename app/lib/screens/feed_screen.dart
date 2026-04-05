@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_front_end/state/markup_state.dart';
+import 'package:flutter_front_end/screens/profile_sheet.dart';
 import 'package:flutter_front_end/widgets/location_banner.dart';
 import 'package:flutter_front_end/widgets/feed_price_reveal_card.dart';
 import 'package:flutter_front_end/widgets/feed_savings_card.dart';
@@ -175,7 +176,7 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   void _showProfile(BuildContext context) {
-    // Profile sheet — implemented in Task 13
+    showProfileSheet(context);
   }
 
   @override

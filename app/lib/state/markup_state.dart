@@ -94,6 +94,11 @@ class MarkupState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearUserId() {
+    currentUserId = null;
+    notifyListeners();
+  }
+
   void toggleTag(int tagId) {
     if (activeTagIds.contains(tagId)) {
       activeTagIds = activeTagIds.where((id) => id != tagId).toList();
