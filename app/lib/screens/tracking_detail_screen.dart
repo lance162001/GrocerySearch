@@ -19,7 +19,7 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   Future<void> _load() async {
@@ -69,28 +69,25 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
         const Text('Current prices', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: MarkupColors.textSecondary)),
         const SizedBox(height: 8),
         ...detail.allStorePrices.map((p) {
-          final price = (p['price'] as num?)?.toDouble() ?? 0.0;
-          final chain = p['chain'] as String? ?? '';
-          final isBest = p['is_best'] == true;
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: isBest ? MarkupColors.bgGreen : Colors.white,
+              color: p.isBest ? MarkupColors.bgGreen : Colors.white,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: isBest ? MarkupColors.lightGreen : const Color(0xFFEEEEEE)),
+              border: Border.all(color: p.isBest ? MarkupColors.lightGreen : const Color(0xFFEEEEEE)),
             ),
             child: Row(
               children: [
-                Expanded(child: Text(chain, style: TextStyle(fontSize: 14, fontWeight: isBest ? FontWeight.w700 : FontWeight.w500, color: MarkupColors.textPrimary))),
-                if (isBest)
+                Expanded(child: Text(p.chain, style: TextStyle(fontSize: 14, fontWeight: p.isBest ? FontWeight.w700 : FontWeight.w500, color: MarkupColors.textPrimary))),
+                if (p.isBest)
                   Container(
                     margin: const EdgeInsets.only(right: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(color: MarkupColors.darkGreen, borderRadius: BorderRadius.circular(4)),
                     child: const Text('BEST', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
                   ),
-                Text('\$${price.toStringAsFixed(2)}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: isBest ? MarkupColors.darkGreen : MarkupColors.textPrimary)),
+                Text('\$${p.price.toStringAsFixed(2)}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: p.isBest ? MarkupColors.darkGreen : MarkupColors.textPrimary)),
               ],
             ),
           );

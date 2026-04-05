@@ -42,6 +42,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
     if (state.currentUserId != null) {
       try { await state.api.untrackProduct(state.currentUserId!, productId); } catch (_) {}
     }
+    if (!mounted) return;
     setState(() => _items.removeWhere((i) => i.productId == productId));
   }
 

@@ -435,7 +435,7 @@ class TrackedItem {
 }
 
 class TrackedItemDetail extends TrackedItem {
-  final List<Map<String, dynamic>> allStorePrices;
+  final List<StorePriceInfo> allStorePrices;
   final List<Map<String, dynamic>> priceHistory;
 
   TrackedItemDetail({
@@ -473,8 +473,26 @@ class TrackedItemDetail extends TrackedItem {
       stableWeeks: json['stable_weeks'],
       cheapestChain: json['cheapest_chain'],
       cheapestPrice: json['cheapest_price']?.toDouble(),
-      allStorePrices: List<Map<String, dynamic>>.from(json['all_store_prices'] ?? []),
+      allStorePrices: (json['all_store_prices'] as List? ?? [])
+          .map((e) => StorePriceInfo.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
       priceHistory: List<Map<String, dynamic>>.from(json['price_history'] ?? []),
+    );
+  }
+}
+
+class StorePriceInfo {
+  final String chain;
+  final double price;
+  final bool isBest;
+
+  StorePriceInfo({required this.chain, required this.price, required this.isBest});
+
+  factory StorePriceInfo.fromJson(Map<String, dynamic> json) {
+    return StorePriceInfo(
+      chain: json['chain'] as String? ?? '',
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      isBest: json['is_best'] == true,
     );
   }
 }
