@@ -415,8 +415,8 @@ class TrackedItem {
 
   factory TrackedItem.fromJson(Map<String, dynamic> json) {
     return TrackedItem(
-      id: json['id'],
-      productId: json['product_id'],
+      id: json['id'] as int,
+      productId: json['product_id'] as int,
       productName: json['product_name'] ?? '',
       brand: json['brand'] ?? '',
       pictureUrl: json['picture_url'],
@@ -458,8 +458,8 @@ class TrackedItemDetail extends TrackedItem {
 
   factory TrackedItemDetail.fromJson(Map<String, dynamic> json) {
     return TrackedItemDetail(
-      id: json['id'],
-      productId: json['product_id'],
+      id: json['id'] as int,
+      productId: json['product_id'] as int,
       productName: json['product_name'] ?? '',
       brand: json['brand'] ?? '',
       pictureUrl: json['picture_url'],

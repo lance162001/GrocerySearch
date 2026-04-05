@@ -71,7 +71,7 @@ class MarkupState extends ChangeNotifier {
     try {
       final resp = await api.fetchFeed(page: feedPage, zipcode: zipcode);
       final newItems = (resp['items'] as List? ?? [])
-          .map<FeedItem>((j) => FeedItem.fromJson(j as Map<String, dynamic>))
+          .map<FeedItem>((j) => FeedItem.fromJson(Map<String, dynamic>.from(j as Map)))
           .toList();
       feedItems = refresh ? newItems : [...feedItems, ...newItems];
       feedPage += 1;
