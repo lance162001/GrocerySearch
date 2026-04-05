@@ -102,7 +102,13 @@ class _FeedScreenState extends State<FeedScreen> {
             child: RefreshIndicator(
               onRefresh: _loadFeed,
               child: _items.isEmpty && !_loading
-                  ? const Center(child: Text('No feed items yet.', style: TextStyle(color: MarkupColors.textSecondary)))
+                  ? SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.6,
+                        child: const Center(child: Text('No feed items yet.', style: TextStyle(color: MarkupColors.textSecondary))),
+                      ),
+                    )
                   : ListView.builder(
                       controller: _scrollController,
                       itemCount: _items.length + (_loading ? 1 : 0),
