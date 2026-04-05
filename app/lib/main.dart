@@ -6,6 +6,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_front_end/config/app_environment.dart';
 import 'package:flutter_front_end/config/app_routes.dart';
+import 'package:flutter_front_end/config/markup_theme.dart';
+import 'package:flutter_front_end/state/markup_state.dart';
+import 'package:flutter_front_end/screens/feed_screen.dart';
+import 'package:flutter_front_end/screens/search_screen.dart';
+import 'package:flutter_front_end/screens/tracking_screen.dart';
+import 'package:flutter_front_end/screens/play_screen.dart';
 import 'package:flutter_front_end/firebase_options.dart';
 import 'package:flutter_front_end/main_search.dart';
 import 'package:flutter_front_end/services/auth_service.dart';
@@ -506,7 +512,26 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(MyApp());
+  const environment = AppEnvironment.current;
+  final api = GroceryApi(environment: environment);
+  runApp(
+    MultiProvider(
+      providers: [
+        Provider<AppEnvironment>.value(value: environment),
+        Provider<GroceryApi>.value(value: api),
+        ChangeNotifierProvider<AuthService>(
+          create: (_) => AuthService(),
+        ),
+        ChangeNotifierProvider<AppState>(
+          create: (_) => AppState(api: api)..initialize(),
+        ),
+        ChangeNotifierProvider<MarkupState>(
+          create: (_) => MarkupState(api: api)..initialize(),
+        ),
+      ],
+      child: const MarkupApp(),
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {
@@ -613,63 +638,38 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    const environment = AppEnvironment.current;
-    return MultiProvider(
-      providers: [
-        Provider<AppEnvironment>.value(value: environment),
-        Provider<GroceryApi>(
-          create: (_) => GroceryApi(environment: environment),
-        ),
-        ChangeNotifierProvider<AuthService>(
-          create: (_) => AuthService(),
-        ),
-        ChangeNotifierProvider<AppState>(
-          create: (context) =>
-              AppState(api: context.read<GroceryApi>())..initialize(),
-        ),
-      ],
-      child: Builder(
-        builder: (context) {
-          // Standalone flows that must not depend on AppState
-          // (AppState rebuilds reset the Navigator back to home:).
-          if (kIsWeb && (
-            Uri.base.path == AppRoutes.unsubscribe ||
-            Uri.base.path == AppRoutes.sharedBundle ||
-            Uri.base.path == AppRoutes.game
-          )) {
-            // Game needs GroceryApi; wrap with explicit providers so the page
-            // can make API calls without depending on AppState.
-            if (Uri.base.path == AppRoutes.game) {
-              return MultiProvider(
-                providers: [
-                  Provider<AppEnvironment>.value(value: environment),
-                  Provider<GroceryApi>(
-                    create: (_) => GroceryApi(environment: environment),
-                  ),
-                ],
-                child: MaterialApp(
-                  debugShowCheckedModeBanner: false,
-                  title: 'GrocerySearch',
-                  initialRoute: AppRoutes.game,
-                  routes: {
-                    AppRoutes.game: (context) => const GamePage(),
-                  },
-                ),
-              );
-            }
-            final home = Uri.base.path == AppRoutes.sharedBundle
-                ? const SharedBundlePage()
-                : const UnsubscribePage();
+    return Builder(
+      builder: (context) {
+        // Standalone flows that must not depend on AppState
+        // (AppState rebuilds reset the Navigator back to home:).
+        if (kIsWeb && (
+          Uri.base.path == AppRoutes.unsubscribe ||
+          Uri.base.path == AppRoutes.sharedBundle ||
+          Uri.base.path == AppRoutes.game
+        )) {
+          if (Uri.base.path == AppRoutes.game) {
             return MaterialApp(
               debugShowCheckedModeBanner: false,
               title: 'GrocerySearch',
-              home: home,
+              initialRoute: AppRoutes.game,
+              routes: {
+                AppRoutes.game: (context) => const GamePage(),
+              },
             );
           }
-          final appState = context.watch<AppState>();
-          final plannerUserId = appState.currentUserId ?? 1;
-          final homePage = _buildHomePage(context, appState);
+          final home = Uri.base.path == AppRoutes.sharedBundle
+              ? const SharedBundlePage()
+              : const UnsubscribePage();
           return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'GrocerySearch',
+            home: home,
+          );
+        }
+        final appState = context.watch<AppState>();
+        final plannerUserId = appState.currentUserId ?? 1;
+        final homePage = _buildHomePage(context, appState);
+        return MaterialApp(
             home: homePage,
             routes: {
               AppRoutes.storeSearch: (context) => const StoreSearch(),
@@ -811,8 +811,7 @@ class _MyAppState extends State<MyApp> {
             ),
           );
         },
-      ),
-    );
+      );
   }
 }
 
@@ -1245,6 +1244,64 @@ class StoreRow extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Markup redesign — new app shell
+// ---------------------------------------------------------------------------
+
+class MarkupApp extends StatelessWidget {
+  const MarkupApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Markup',
+      theme: markupTheme(),
+      home: const MarkupShell(),
+      routes: {
+        AppRoutes.game: (_) => const GamePage(),
+        AppRoutes.unsubscribe: (_) => const UnsubscribePage(),
+        AppRoutes.suggestStore: (_) => const SuggestStorePage(),
+        AppRoutes.preferences: (_) => const PreferencesPage(),
+      },
+    );
+  }
+}
+
+class MarkupShell extends StatefulWidget {
+  const MarkupShell({super.key});
+
+  @override
+  State<MarkupShell> createState() => _MarkupShellState();
+}
+
+class _MarkupShellState extends State<MarkupShell> {
+  int _currentIndex = 0;
+
+  final _screens = const [
+    FeedScreen(),
+    SearchScreen(),
+    TrackingScreen(),
+    PlayScreen(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(index: _currentIndex, children: _screens),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (i) => setState(() => _currentIndex = i),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Feed'),
+          NavigationDestination(icon: Icon(Icons.search), selectedIcon: Icon(Icons.search), label: 'Search'),
+          NavigationDestination(icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications), label: 'Tracking'),
+          NavigationDestination(icon: Icon(Icons.sports_esports_outlined), selectedIcon: Icon(Icons.sports_esports), label: 'Play'),
         ],
       ),
     );
