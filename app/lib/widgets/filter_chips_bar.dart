@@ -5,16 +5,18 @@ class FilterChipsBar extends StatelessWidget {
   final bool onSaleActive;
   final bool biggestSpreadsActive;
   final List<String> tagNames;
+  final List<int> tagIds; // actual DB IDs parallel to tagNames
   final List<int> activeTagIds;
   final VoidCallback onToggleOnSale;
   final VoidCallback onToggleSpreads;
-  final Function(int) onToggleTag;
+  final Function(int) onToggleTag; // receives tag ID (not index)
 
   const FilterChipsBar({
     super.key,
     required this.onSaleActive,
     required this.biggestSpreadsActive,
     required this.tagNames,
+    required this.tagIds,
     required this.activeTagIds,
     required this.onToggleOnSale,
     required this.onToggleSpreads,
@@ -35,9 +37,10 @@ class FilterChipsBar extends StatelessWidget {
           ...tagNames.asMap().entries.map((e) {
             final idx = e.key;
             final name = e.value;
+            final id = idx < tagIds.length ? tagIds[idx] : idx;
             return Padding(
               padding: const EdgeInsets.only(left: 6),
-              child: _chip(name, activeTagIds.contains(idx), () => onToggleTag(idx)),
+              child: _chip(name, activeTagIds.contains(id), () => onToggleTag(id)),
             );
           }),
         ],

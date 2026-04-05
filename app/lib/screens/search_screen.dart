@@ -112,6 +112,7 @@ class _SearchScreenState extends State<SearchScreen> {
             onSaleActive: state.onSaleOnly,
             biggestSpreadsActive: state.biggestSpreadsOnly,
             tagNames: state.tags.map((t) => t.name).toList(),
+            tagIds: state.tags.map((t) => t.id).toList(),
             activeTagIds: state.activeTagIds,
             onToggleOnSale: () {
               state.toggleOnSale();
@@ -121,8 +122,8 @@ class _SearchScreenState extends State<SearchScreen> {
               state.toggleBiggestSpreads();
               _search(reset: true);
             },
-            onToggleTag: (i) {
-              state.toggleTag(state.tags[i].id);
+            onToggleTag: (tagId) {
+              state.toggleTag(tagId);
               _search(reset: true);
             },
           ),
@@ -201,7 +202,9 @@ class _SearchScreenState extends State<SearchScreen> {
       size: product.size,
       pictureUrl: product.pictureUrl.isNotEmpty ? product.pictureUrl : null,
       bestPrice: bestPrice,
-      bestChain: '',  // Product model has companyId but not company name; chain name not available here
+      bestChain: state.companies.where((c) => c.id == product.companyId).isNotEmpty
+          ? state.companies.firstWhere((c) => c.id == product.companyId).name
+          : '',
       otherPrices: const [],
       maxSavings: (isOnSale && originalPrice != null && originalPrice > bestPrice)
           ? originalPrice - bestPrice
