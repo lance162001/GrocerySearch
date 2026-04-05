@@ -32,6 +32,7 @@ from .users import user_router  # noqa: E402
 from .admin import admin_router  # noqa: E402
 from .game import game_router  # noqa: E402
 from .tracking import tracking_router  # noqa: E402
+from .feed import feed_router  # noqa: E402
 
 router.include_router(product_router)
 router.include_router(store_router)
@@ -39,3 +40,4 @@ router.include_router(user_router)
 router.include_router(admin_router)
 router.include_router(game_router)
 router.include_router(tracking_router)
+router.include_router(feed_router)
