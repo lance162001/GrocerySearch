@@ -344,3 +344,137 @@ class StapleHeuristic {
     );
   }
 }
+
+class FeedPriceComparison {
+  final String chain;
+  final int companyId;
+  final double price;
+  final bool isBest;
+  final double? diffFromBest;
+
+  FeedPriceComparison({
+    required this.chain,
+    required this.companyId,
+    required this.price,
+    required this.isBest,
+    this.diffFromBest,
+  });
+
+  factory FeedPriceComparison.fromJson(Map<String, dynamic> json) {
+    return FeedPriceComparison(
+      chain: json['chain'] ?? '',
+      companyId: json['company_id'] ?? 0,
+      price: (json['price'] ?? 0).toDouble(),
+      isBest: json['is_best'] ?? false,
+      diffFromBest: json['diff_from_best']?.toDouble(),
+    );
+  }
+}
+
+class FeedItem {
+  final String type;
+  final Map<String, dynamic> data;
+
+  FeedItem({required this.type, required this.data});
+
+  factory FeedItem.fromJson(Map<String, dynamic> json) {
+    return FeedItem(type: json['type'] ?? '', data: json);
+  }
+}
+
+class TrackedItem {
+  final int id;
+  final int productId;
+  final String productName;
+  final String brand;
+  final String? pictureUrl;
+  final String companyName;
+  final double? currentPrice;
+  final double? previousPrice;
+  final String? priceChange; // "drop", "up", null
+  final DateTime? priceChangeAt;
+  final int? stableWeeks;
+  final String? cheapestChain;
+  final double? cheapestPrice;
+
+  TrackedItem({
+    required this.id,
+    required this.productId,
+    required this.productName,
+    required this.brand,
+    this.pictureUrl,
+    required this.companyName,
+    this.currentPrice,
+    this.previousPrice,
+    this.priceChange,
+    this.priceChangeAt,
+    this.stableWeeks,
+    this.cheapestChain,
+    this.cheapestPrice,
+  });
+
+  factory TrackedItem.fromJson(Map<String, dynamic> json) {
+    return TrackedItem(
+      id: json['id'],
+      productId: json['product_id'],
+      productName: json['product_name'] ?? '',
+      brand: json['brand'] ?? '',
+      pictureUrl: json['picture_url'],
+      companyName: json['company_name'] ?? '',
+      currentPrice: json['current_price']?.toDouble(),
+      previousPrice: json['previous_price']?.toDouble(),
+      priceChange: json['price_change'],
+      priceChangeAt: json['price_change_at'] != null
+          ? DateTime.tryParse(json['price_change_at'])
+          : null,
+      stableWeeks: json['stable_weeks'],
+      cheapestChain: json['cheapest_chain'],
+      cheapestPrice: json['cheapest_price']?.toDouble(),
+    );
+  }
+}
+
+class TrackedItemDetail extends TrackedItem {
+  final List<Map<String, dynamic>> allStorePrices;
+  final List<Map<String, dynamic>> priceHistory;
+
+  TrackedItemDetail({
+    required super.id,
+    required super.productId,
+    required super.productName,
+    required super.brand,
+    super.pictureUrl,
+    required super.companyName,
+    super.currentPrice,
+    super.previousPrice,
+    super.priceChange,
+    super.priceChangeAt,
+    super.stableWeeks,
+    super.cheapestChain,
+    super.cheapestPrice,
+    required this.allStorePrices,
+    required this.priceHistory,
+  });
+
+  factory TrackedItemDetail.fromJson(Map<String, dynamic> json) {
+    return TrackedItemDetail(
+      id: json['id'],
+      productId: json['product_id'],
+      productName: json['product_name'] ?? '',
+      brand: json['brand'] ?? '',
+      pictureUrl: json['picture_url'],
+      companyName: json['company_name'] ?? '',
+      currentPrice: json['current_price']?.toDouble(),
+      previousPrice: json['previous_price']?.toDouble(),
+      priceChange: json['price_change'],
+      priceChangeAt: json['price_change_at'] != null
+          ? DateTime.tryParse(json['price_change_at'])
+          : null,
+      stableWeeks: json['stable_weeks'],
+      cheapestChain: json['cheapest_chain'],
+      cheapestPrice: json['cheapest_price']?.toDouble(),
+      allStorePrices: List<Map<String, dynamic>>.from(json['all_store_prices'] ?? []),
+      priceHistory: List<Map<String, dynamic>>.from(json['price_history'] ?? []),
+    );
+  }
+}

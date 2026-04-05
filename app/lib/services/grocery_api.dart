@@ -548,8 +548,92 @@ class GroceryApi {
     return GameHint.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  Future<List<Map<String, dynamic>>> fetchFeed({int page = 1, String? zipcode}) async {
-    // stub — implemented in Task 7
-    return [];
+  // ── Feed ──
+
+  Future<Map<String, dynamic>> fetchFeed({int page = 1, int size = 10, String? zipcode}) async {
+    final params = <String, String>{'page': '$page', 'size': '$size'};
+    if (zipcode != null) params['zipcode'] = zipcode;
+    final response = await get(buildUri('/feed', params));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load feed: ${response.statusCode}');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  // ── Tracking ──
+
+  Future<Map<String, dynamic>> trackProduct(int userId, int productId) async {
+    final response = await post(
+      buildUri('/tracking/track'),
+      body: jsonEncode({'user_id': userId, 'product_id': productId}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to track product: ${response.statusCode}');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<void> untrackProduct(int userId, int productId) async {
+    final uri = buildUri('/tracking/track/$productId', {'user_id': '$userId'});
+    final response = await _client.delete(uri).timeout(_timeout);
+    if (response.statusCode != 200) {
+      throw Exception('Failed to untrack product');
+    }
+  }
+
+  Future<List<TrackedItem>> fetchTrackedItems(int userId) async {
+    final response = await get(buildUri('/tracking/tracked', {'user_id': '$userId'}));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load tracked items: ${response.statusCode}');
+    }
+    final decoded = jsonDecode(response.body);
+    final list = decoded is List ? decoded : (decoded['items'] ?? []);
+    return (list as List).map<TrackedItem>((j) => TrackedItem.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+  }
+
+  Future<TrackedItemDetail> fetchTrackedDetail(int userId, int productId) async {
+    final response = await get(buildUri('/tracking/tracked/$productId', {'user_id': '$userId'}));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load tracked detail: ${response.statusCode}');
+    }
+    return TrackedItemDetail.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<Map<String, dynamic>> fetchPoints(int userId) async {
+    final response = await get(buildUri('/tracking/points', {'user_id': '$userId'}));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load points: ${response.statusCode}');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  // ── Product search (store_ids now optional) ──
+
+  Future<List<Product>> searchProducts({
+    String search = '',
+    List<int> storeIds = const [],
+    List<int> tagIds = const [],
+    List<int> companyIds = const [],
+    bool onSaleOnly = false,
+    bool hasSpread = false,
+    int page = 1,
+    int size = 20,
+  }) async {
+    final response = await post(
+      buildUri('/stores/product_search', {'page': '$page', 'size': '$size'}),
+      body: jsonEncode({
+        'ids': storeIds,
+        'tags': tagIds,
+        'search': search,
+        'on_sale': onSaleOnly,
+        'has_spread': hasSpread,
+        'company_ids': companyIds,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to search products: ${response.statusCode}');
+    }
+    final items = _extractItemsPage(jsonDecode(response.body));
+    return items.map<Product>((j) => Product.fromJson(Map<String, dynamic>.from(j as Map))).toList();
   }
 }

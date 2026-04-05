@@ -17,7 +17,7 @@ class MarkupState extends ChangeNotifier {
   List<Company> companies = [];
 
   // Feed
-  List<Map<String, dynamic>> feedItems = [];
+  List<FeedItem> feedItems = [];
   int feedPage = 1;
   bool feedHasMore = true;
   bool feedLoading = false;
@@ -69,10 +69,13 @@ class MarkupState extends ChangeNotifier {
     feedLoading = true;
     notifyListeners();
     try {
-      final page = await api.fetchFeed(page: feedPage, zipcode: zipcode);
-      feedItems = refresh ? page : [...feedItems, ...page];
+      final resp = await api.fetchFeed(page: feedPage, zipcode: zipcode);
+      final newItems = (resp['items'] as List? ?? [])
+          .map<FeedItem>((j) => FeedItem.fromJson(j as Map<String, dynamic>))
+          .toList();
+      feedItems = refresh ? newItems : [...feedItems, ...newItems];
       feedPage += 1;
-      feedHasMore = page.isNotEmpty;
+      feedHasMore = newItems.isNotEmpty;
     } catch (e) {
       // swallow — feed screen will show stale content
     } finally {
