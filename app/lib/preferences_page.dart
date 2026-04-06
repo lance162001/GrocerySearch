@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
 import 'package:flutter_front_end/state/app_state.dart';
 import 'package:flutter_front_end/widgets/app_bar_user_menu.dart';
-import 'package:flutter_front_end/widgets/hint_banner.dart';
-import 'package:flutter_front_end/widgets/overflow_menu_nudge.dart';
-import 'package:flutter_front_end/widgets/top_level_navigation.dart';
 import 'package:provider/provider.dart';
 
 class PreferencesPage extends StatefulWidget {
@@ -117,9 +114,6 @@ class _PreferencesPageState extends State<PreferencesPage> {
         title: const Text('Preferences'),
         actions: const [AppBarUserMenu(showPreferences: false)],
       ),
-      bottomNavigationBar: const TopLevelNavigationBar(
-        currentDestination: AppTopLevelDestination.stores,
-      ),
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8),
         children: [
@@ -151,12 +145,6 @@ class _PreferencesPageState extends State<PreferencesPage> {
       value: !hideHints,
       onChanged: (value) {
         context.read<AppState>().setHideHints(!value);
-        if (value) {
-          // Re-allow dismissed hints so they re-appear when hints are turned
-          // back on next time the user visits each screen.
-          HintBanner.dismissed.clear();
-          OverflowMenuNudge.dismissed.clear();
-        }
       },
     );
   }

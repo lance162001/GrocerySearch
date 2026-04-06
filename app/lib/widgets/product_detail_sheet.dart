@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_front_end/chart.dart';
 import 'package:flutter_front_end/models/grocery_models.dart';
 import 'package:flutter_front_end/utils/price_utils.dart';
 import 'package:flutter_front_end/utils/product_grouping.dart';
@@ -522,10 +521,8 @@ class _ProductDetailContent extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            SizedBox(
-              height: 200,
-              child: PriceHistoryChart(pricepoints: historyProduct.priceHistory),
-            ),
+            // Price history chart removed with legacy chart.dart.
+            const SizedBox(height: 200, child: Center(child: Text('Price history coming soon'))),
             const SizedBox(height: 16),
 
             // ── Store options ──────────────────────────────────────────

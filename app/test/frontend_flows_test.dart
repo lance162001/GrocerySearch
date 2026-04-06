@@ -2,16 +2,10 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_front_end/bundle_plan.dart';
-import 'package:flutter_front_end/check_out.dart';
 import 'package:flutter_front_end/config/app_environment.dart';
 import 'package:flutter_front_end/config/app_routes.dart';
-import 'package:flutter_front_end/label_judgement.dart';
-import 'package:flutter_front_end/main_search.dart';
 import 'package:flutter_front_end/models/grocery_models.dart';
 import 'package:flutter_front_end/product_box.dart';
-import 'package:flutter_front_end/product_search.dart';
-import 'package:flutter_front_end/staples_overview.dart';
 import 'package:flutter_front_end/suggest_store.dart';
 import 'package:flutter_front_end/services/auth_service.dart';
 import 'package:flutter_front_end/services/grocery_api.dart';
@@ -449,13 +443,6 @@ Widget _buildTestApp({
     child: MaterialApp(
       home: home,
       routes: {
-        AppRoutes.storeSearch: (context) => const StoreSearch(),
-        AppRoutes.staplesOverview: (context) => const StaplesOverview(),
-        AppRoutes.search: (context) => const SearchPage(),
-        AppRoutes.checkout: (context) => const CheckOut(),
-        AppRoutes.bundlePlan: (context) =>
-            BundlePlanPage(initialUserId: appState.currentUserId ?? 42),
-        AppRoutes.labelJudgement: (context) => const LabelJudgementPage(),
         AppRoutes.suggestStore: (context) => const SuggestStorePage(),
       },
     ),
@@ -519,659 +506,57 @@ Map<String, dynamic> _bundleProductJson({
   };
 }
 
+// All legacy screen tests have been removed as part of the Markup redesign.
+// The screens they tested (StoreSearch, SearchPage, StaplesOverview, CheckOut,
+// BundlePlanPage, LabelJudgementPage) have been deleted.
 void main() {
   group('frontend widget flows', () {
     testWidgets(
       'staples overview shows progressive card loading before grouped content renders',
-      (tester) async {
-        final wholeMilkAustin = _product(
-          id: 1,
-          instanceId: 101,
-          storeId: _austinStore.id,
-          name: 'Whole Milk',
-          basePrice: '3.19',
-        );
-        final wholeMilkDallas = _product(
-          id: 1,
-          instanceId: 102,
-          storeId: _dallasStore.id,
-          name: 'Whole Milk',
-          basePrice: '3.49',
-        );
-        final breadAustin = _product(
-          id: 2,
-          instanceId: 201,
-          storeId: _austinStore.id,
-          name: 'Bread Loaf',
-          basePrice: '2.99',
-        );
-
-        final api = DelayedStaplesApi(
-          allStores: <Store>[_austinStore, _dallasStore],
-          allProducts: <Product>[
-            wholeMilkAustin,
-            wholeMilkDallas,
-            breadAustin,
-          ],
-          staplesResult: <String, List<Product>>{
-            'milk': <Product>[wholeMilkAustin, wholeMilkDallas],
-            'bread': <Product>[breadAustin],
-          },
-        );
-        final appState = _seededState(
-          api,
-          userStores: const <Store>[_austinStore, _dallasStore],
-        );
-
-        await tester.pumpWidget(
-          _buildTestApp(
-            home: const StaplesOverview(),
-            api: api,
-            appState: appState,
-          ),
-        );
-
-        expect(find.byType(CircularProgressIndicator), findsOneWidget);
-
-        api.completeStaplesLoad();
-        await tester.pump();
-        await tester.pump();
-        await tester.pump();
-
-        expect(find.byType(GridView), findsOneWidget);
-        expect(find.text('Milk'), findsOneWidget);
-        expect(find.text('Bread'), findsOneWidget);
-        expect(
-          find.byKey(const ValueKey<String>('staple-card-loading-milk')),
-          findsOneWidget,
-        );
-        expect(
-          find.byKey(const ValueKey<String>('staple-card-loading-bread')),
-          findsOneWidget,
-        );
-
-        await _pumpUi(tester, frames: 8);
-
-        expect(find.text('Whole Milk'), findsOneWidget);
-        expect(find.text('Bread Loaf'), findsOneWidget);
-        expect(
-          find.byKey(const ValueKey<String>('staple-card-loading-milk')),
-          findsNothing,
-        );
-        expect(
-          find.byKey(const ValueKey<String>('staple-card-loading-bread')),
-          findsNothing,
-        );
-      },
+      (tester) async {},
+      skip: true, // legacy screen removed
     );
 
     testWidgets(
       'store selection, search, sale filter, checkout, and save bundle flow',
-      (tester) async {
-        final apples = _product(
-          id: 1,
-          instanceId: 101,
-          storeId: _austinStore.id,
-          name: 'Apples',
-          salePrice: '1.99',
-          basePrice: '2.49',
-        );
-        final bread = _product(
-          id: 2,
-          instanceId: 201,
-          storeId: _austinStore.id,
-          name: 'Bread',
-          basePrice: '3.49',
-        );
-        final dallasApples = _product(
-          id: 1,
-          instanceId: 102,
-          storeId: _dallasStore.id,
-          name: 'Apples',
-          basePrice: '2.99',
-        );
-
-        final api = TestGroceryApi(
-          allStores: <Store>[_austinStore, _dallasStore],
-          allProducts: <Product>[apples, bread, dallasApples],
-          bundleDetails: <int, Map<String, dynamic>>{},
-        );
-        final appState = _seededState(api);
-
-        await tester.pumpWidget(
-          _buildTestApp(
-              home: const StoreSearch(), api: api, appState: appState),
-        );
-        await _pumpUi(tester);
-
-        expect(find.text('0 selected'), findsOneWidget);
-        expect(find.text('Austin'), findsOneWidget);
-        expect(find.text('Dallas'), findsOneWidget);
-
-        await tester.tap(find.text('Austin').first);
-        await _pumpUi(tester);
-
-        expect(find.text('1 selected'), findsOneWidget);
-        expect(appState.userStores, <Store>[_austinStore]);
-
-        await tester.tap(find.text('Selected only'));
-        await _pumpUi(tester);
-
-        expect(find.text('Dallas'), findsNothing);
-
-        await tester.tap(find.text('Continue to Search'));
-        await _pumpUi(tester, frames: 8);
-
-        expect(find.byType(SearchPage), findsOneWidget);
-        expect(api.savedStoreCalls.single['storeId'], _austinStore.id);
-
-        await tester.tap(find.byType(TextField).first);
-        await tester.enterText(find.byType(TextField).first, 'App');
-        await tester.testTextInput.receiveAction(TextInputAction.done);
-        await _pumpUi(tester);
-
-        expect(find.text('Apples'), findsOneWidget);
-        expect(
-          api.fetchProductsRequests.any(
-            (request) => request['search'] == 'App',
-          ),
-          isTrue,
-        );
-
-        await tester.tap(find.byIcon(Icons.more_vert));
-        await _pumpUi(tester);
-        await tester.tap(_switchForLabel('Show only items on sale'));
-        await _pumpUi(tester);
-        await tester.tapAt(const Offset(20, 20));
-        await _pumpUi(tester);
-
-        expect(find.text('Bread'), findsNothing);
-        expect(find.text('Apples'), findsOneWidget);
-
-        final applesCard = find
-            .ancestor(
-                of: find.text('Apples').first, matching: find.byType(Card))
-            .first;
-        await tester.ensureVisible(applesCard);
-        await tester.tap(applesCard);
-        await _pumpUi(tester);
-
-        expect(appState.cartTotalItems, 1);
-        expect(appState.cart.single.name, 'Apples');
-
-        await tester.tap(find.text('Cart'));
-        await _pumpUi(tester, frames: 8);
-
-        expect(find.byType(CheckOut), findsOneWidget);
-        expect(find.text('Total Items: 1'), findsOneWidget);
-
-        await tester.tap(find.text('Save Bundle'));
-        await _pumpUi(tester, frames: 10);
-
-        expect(find.byType(BundlePlanPage), findsOneWidget);
-        expect(find.text('Bundle Planner'), findsOneWidget);
-        expect(api.createBundleCalls, hasLength(1));
-        expect(api.addProductCalls, hasLength(1));
-        expect(api.addProductCalls.single['productId'], apples.id);
-      },
+      (tester) async {},
+      skip: true, // legacy screen removed
     );
 
-    testWidgets('search page tag filters request tagged products', (
-      tester,
-    ) async {
-      final apples = _product(
-        id: 1,
-        instanceId: 101,
-        storeId: _austinStore.id,
-        name: 'Apples',
-        salePrice: '1.99',
-        basePrice: '2.49',
-      );
-      final frozenPeas = _product(
-        id: 2,
-        instanceId: 202,
-        storeId: _dallasStore.id,
-        name: 'Frozen Peas',
-        basePrice: '4.29',
-      );
-
-      final api = TestGroceryApi(
-        allStores: <Store>[_austinStore, _dallasStore],
-        allProducts: <Product>[apples, frozenPeas],
-        productTags: <int, Set<int>>{
-          apples.id: <int>{_bakeryTag.id},
-          frozenPeas.id: <int>{_frozenTag.id},
-        },
-      );
-      final appState = _seededState(
-        api,
-        userStores: const <Store>[_austinStore, _dallasStore],
-        searchTerm: 'App',
-      );
-
-      await tester.pumpWidget(
-        _buildTestApp(home: const SearchPage(), api: api, appState: appState),
-      );
-      await _pumpUi(tester);
-
-      expect(find.text('Apples'), findsOneWidget);
-      expect(find.text('Frozen Peas'), findsOneWidget);
-
-      await tester.tap(find.byIcon(Icons.more_vert));
-      await _pumpUi(tester);
-      await tester.tap(find.text('Frozen'));
-      await _pumpUi(tester);
-
-      expect(find.text('Frozen Peas'), findsOneWidget);
-      expect(find.text('Apples'), findsNothing);
-      expect(appState.userTags, <Tag>[_frozenTag]);
-      expect(api.fetchProductsRequests.last['tagIds'], <int>[_frozenTag.id]);
-    });
+    testWidgets(
+      'search page tag filters request tagged products',
+      (tester) async {},
+      skip: true, // legacy screen removed
+    );
 
     testWidgets(
       'search page groups duplicate store matches and details can add a higher-priced option',
-      (tester) async {
-      const houstonStore = Store(
-        id: 9,
-        companyId: 1,
-        scraperId: 9,
-        town: 'Houston',
-        state: 'TX',
-        address: '789 Grocery Rd',
-        zipcode: '77001',
-      );
+      (tester) async {},
+      skip: true, // legacy screen removed
+    );
 
-      final bestPriceMilk = _product(
-        id: 10,
-        instanceId: 1001,
-        storeId: _austinStore.id,
-        name: 'Organic Milk',
-        basePrice: '2.00',
-      );
-      final middlePriceMilk = _product(
-        id: 10,
-        instanceId: 1002,
-        storeId: _dallasStore.id,
-        name: 'Organic Milk',
-        basePrice: '3.00',
-      );
-      final highestPriceMilk = _product(
-        id: 10,
-        instanceId: 1003,
-        storeId: houstonStore.id,
-        name: 'Organic Milk',
-        basePrice: '4.00',
-      );
-
-      final api = TestGroceryApi(
-        allStores: <Store>[_austinStore, _dallasStore, houstonStore],
-        allProducts: <Product>[
-          bestPriceMilk,
-          middlePriceMilk,
-          highestPriceMilk,
-        ],
-      );
-      final appState = _seededState(
-        api,
-        userStores: const <Store>[_austinStore, _dallasStore, houstonStore],
-        searchTerm: 'milk',
-      );
-
-      await tester.pumpWidget(
-        _buildTestApp(home: const SearchPage(), api: api, appState: appState),
-      );
-      await _pumpUi(tester);
-
-      expect(find.text('Organic Milk'), findsOneWidget);
-      expect(find.text('Save \$2.00'), findsOneWidget);
-      expect(find.text('2 more stores from \$3.00'), findsOneWidget);
-      expect(find.byIcon(Icons.savings_outlined), findsOneWidget);
-
-      final milkResult = find.ancestor(
-        of: find.text('Organic Milk').first,
-        matching: find.byType(InkWell),
-      );
-
-      await tester.tap(milkResult.first);
-      await _pumpUi(tester);
-
-      expect(appState.quantityFor(bestPriceMilk), 1);
-      expect(
-        appState.cart.map((product) => product.instanceId).toList(),
-        <int>[bestPriceMilk.instanceId],
-      );
-
-      await tester.longPress(milkResult.first);
-      await tester.pumpAndSettle();
-
-      expect(find.text('Available at 3 selected stores'), findsOneWidget);
-      // Scroll down so the remaining store option cards enter the viewport.
-      await tester.drag(find.byType(ListView).last, const Offset(0, -300));
-      await tester.pumpAndSettle();
-      expect(find.text('+\$1.00 vs lowest'), findsOneWidget);
-      expect(find.text('+\$2.00 vs lowest'), findsOneWidget);
-
-      await tester.tap(
-        find.byKey(
-          const ValueKey<String>('product-option-action-1002'),
-        ),
-      );
-      await _pumpUi(tester);
-
-      expect(appState.quantityFor(middlePriceMilk), 1);
-      expect(
-        appState.cart.map((product) => product.instanceId).toList(),
-        <int>[bestPriceMilk.instanceId, middlePriceMilk.instanceId],
-      );
-    });
-
-    testWidgets('search page defaults to recommended order for milk', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(1440, 2200);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final chocolateMilk = _product(
-        id: 1,
-        instanceId: 101,
-        storeId: _austinStore.id,
-        name: 'Chocolate Milk',
-        basePrice: '3.49',
-      );
-      final oatMilk = _product(
-        id: 2,
-        instanceId: 102,
-        storeId: _austinStore.id,
-        name: 'Oat Milk',
-        basePrice: '4.29',
-      );
-      final wholeMilk = _product(
-        id: 3,
-        instanceId: 103,
-        storeId: _austinStore.id,
-        name: 'Whole Milk',
-        basePrice: '3.19',
-      );
-      final twoPercentMilk = _product(
-        id: 4,
-        instanceId: 104,
-        storeId: _austinStore.id,
-        name: '2% Reduced Fat Milk',
-        basePrice: '3.19',
-      );
-      final onePercentMilk = _product(
-        id: 5,
-        instanceId: 105,
-        storeId: _austinStore.id,
-        name: '1% Low Fat Milk',
-        basePrice: '3.19',
-      );
-      final skimMilk = _product(
-        id: 6,
-        instanceId: 106,
-        storeId: _austinStore.id,
-        name: 'Skim Milk',
-        basePrice: '3.19',
-      );
-      final organicWholeMilk = _product(
-        id: 7,
-        instanceId: 107,
-        storeId: _austinStore.id,
-        name: 'Organic Whole Milk',
-        basePrice: '4.19',
-      );
-
-      final api = TestGroceryApi(
-        allStores: <Store>[_austinStore],
-        allProducts: <Product>[
-          chocolateMilk,
-          oatMilk,
-          wholeMilk,
-          twoPercentMilk,
-          onePercentMilk,
-          skimMilk,
-          organicWholeMilk,
-        ],
-      );
-      final appState = _seededState(
-        api,
-        userStores: const <Store>[_austinStore],
-        searchTerm: 'milk',
-      );
-
-      await tester.pumpWidget(
-        _buildTestApp(home: const SearchPage(), api: api, appState: appState),
-      );
-      await _pumpUi(tester);
-
-      final matchingTexts = tester.widgetList<Text>(
-        find.descendant(
-            of: find.byType(ProductBox), matching: find.byType(Text)),
-      );
-      final orderedNames = matchingTexts
-          .map((widget) => widget.data)
-          .whereType<String>()
-          .where((text) => text.toLowerCase().contains('milk'))
-          .toList();
-
-      expect(
-        orderedNames.take(4),
-        <String>[
-          'Whole Milk',
-          '2% Reduced Fat Milk',
-          '1% Low Fat Milk',
-          'Skim Milk',
-        ],
-      );
-    });
+    testWidgets(
+      'search page defaults to recommended order for milk',
+      (tester) async {},
+      skip: true, // legacy screen removed
+    );
 
     testWidgets(
       'store search can reopen product search after filtered search is dismissed',
-      (tester) async {
-        final apples = _product(
-          id: 1,
-          instanceId: 101,
-          storeId: _austinStore.id,
-          name: 'Apples',
-          basePrice: '2.49',
-        );
-        final frozenPeas = _product(
-          id: 2,
-          instanceId: 202,
-          storeId: _austinStore.id,
-          name: 'Frozen Peas',
-          salePrice: '3.99',
-          basePrice: '4.29',
-        );
-
-        final api = TestGroceryApi(
-          allStores: <Store>[_austinStore],
-          allProducts: <Product>[apples, frozenPeas],
-          productTags: <int, Set<int>>{
-            apples.id: <int>{_bakeryTag.id},
-            frozenPeas.id: <int>{_frozenTag.id},
-          },
-        );
-        final appState = _seededState(api, searchTerm: 'Ap');
-
-        await tester.pumpWidget(
-          _buildTestApp(
-            home: const StoreSearch(),
-            api: api,
-            appState: appState,
-          ),
-        );
-        await _pumpUi(tester);
-
-        await tester.tap(find.text('Austin').first);
-        await _pumpUi(tester);
-
-        await tester.tap(find.text('Continue to Search'));
-        await _pumpUi(tester, frames: 8);
-
-        expect(find.byType(SearchPage), findsOneWidget);
-
-        await tester.tap(find.byIcon(Icons.more_vert));
-        await _pumpUi(tester);
-        await tester.tap(_switchForLabel('Show only items on sale'));
-        await _pumpUi(tester);
-        await tester.tap(find.text('Frozen'));
-        await _pumpUi(tester);
-        await tester.tapAt(const Offset(20, 20));
-        await _pumpUi(tester);
-
-        expect(appState.userTags, <Tag>[_frozenTag]);
-        expect(find.text('Frozen Peas'), findsOneWidget);
-
-        await tester.pageBack();
-        await _pumpUi(tester, frames: 8);
-
-        expect(find.byType(StoreSearch), findsOneWidget);
-
-        await tester.tap(find.text('Search'));
-        await _pumpUi(tester, frames: 8);
-
-        expect(find.byType(SearchPage), findsOneWidget);
-        expect(find.text('Frozen Peas'), findsOneWidget);
-
-        final reopenedCard = find
-            .ancestor(
-              of: find.text('Frozen Peas').first,
-              matching: find.byType(Card),
-            )
-            .first;
-        await tester.tap(reopenedCard);
-        await _pumpUi(tester);
-
-        expect(appState.cartTotalItems, 1);
-      },
+      (tester) async {},
+      skip: true, // legacy screen removed
     );
 
-    testWidgets('checkout moves items between todo and done columns', (
-      tester,
-    ) async {
-      final apples = _product(
-        id: 1,
-        instanceId: 101,
-        storeId: _austinStore.id,
-        name: 'Apples',
-        basePrice: '2.00',
-      );
-      final api = TestGroceryApi(
-        allStores: <Store>[_austinStore],
-        allProducts: <Product>[apples],
-      );
-      final appState = _seededState(
-        api,
-        userStores: const <Store>[_austinStore],
-        cart: <Product>[apples],
-        cartQuantities: <int, int>{apples.instanceId: 2},
-      );
+    testWidgets(
+      'checkout moves items between todo and done columns',
+      (tester) async {},
+      skip: true, // legacy screen removed
+    );
 
-      await tester.pumpWidget(
-        _buildTestApp(home: const CheckOut(), api: api, appState: appState),
-      );
-      await _pumpUi(tester);
-
-      expect(find.text('Total Items: 2'), findsOneWidget);
-      expect(appState.cart, <Product>[apples]);
-      expect(appState.cartFinished, isEmpty);
-
-      await tester.tap(find.text('Apples').first);
-      await _pumpUi(tester);
-
-      expect(appState.cart, isEmpty);
-      expect(appState.cartFinished, <Product>[apples]);
-
-      await tester.tap(find.text('Apples').first);
-      await _pumpUi(tester);
-
-      expect(appState.cart, <Product>[apples]);
-      expect(appState.cartFinished, isEmpty);
-    });
-
-    testWidgets('bundle planner loads detail and adds a product', (
-      tester,
-    ) async {
-      final api = TestGroceryApi(
-        allStores: <Store>[_austinStore, _dallasStore],
-        allProducts: <Product>[
-          _product(
-            id: 9,
-            instanceId: 900,
-            storeId: _austinStore.id,
-            name: 'Olive Oil',
-            basePrice: '7.49',
-          ),
-        ],
-        dashboardResponse: <String, dynamic>{
-          'bundle_count': 1,
-          'saved_store_count': 1,
-          'visit_count': 2,
-          'recent_zipcode': '78701',
-        },
-        userBundlesResponse: <Map<String, dynamic>>[
-          <String, dynamic>{
-            'id': 900,
-            'user_id': 42,
-            'name': 'Weekly Plan',
-            'created_at': '2026-03-13T10:00:00',
-            'product_count': 1,
-            'product_ids': <int>[9],
-          },
-        ],
-        userSavedStoresResponse: <Map<String, dynamic>>[
-          <String, dynamic>{'store_id': _austinStore.id, 'member': true},
-        ],
-        bundleDetails: <int, Map<String, dynamic>>{
-          900: _bundleDetail(
-            bundleId: 900,
-            name: 'Weekly Plan',
-            products: <Map<String, dynamic>>[
-              _bundleProductJson(
-                productId: 9,
-                name: 'Olive Oil',
-                basePrice: '7.49',
-              ),
-            ],
-          ),
-        },
-      );
-      final appState = _seededState(api, userStores: const <Store>[_austinStore]);
-
-      await tester.pumpWidget(
-        _buildTestApp(
-          home: const BundlePlanPage(initialUserId: 42, initialBundleId: 900),
-          api: api,
-          appState: appState,
-        ),
-      );
-      await _pumpUi(tester, frames: 8);
-
-      expect(find.text('Weekly Plan'), findsOneWidget);
-      expect(find.text('Olive Oil'), findsOneWidget);
-      expect(find.text('Price Points by Store'), findsOneWidget);
-      expect(find.text('Austin, TX'), findsOneWidget);
-      expect(find.text('Add items to bundle'), findsOneWidget);
-
-      await tester.tap(find.text('Add items to bundle'));
-      await _pumpUi(tester, frames: 8);
-
-      expect(find.byType(SearchPage), findsOneWidget);
-
-      await tester.tap(find.byType(TextField).first);
-      await tester.enterText(find.byType(TextField).first, 'Ol');
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await _pumpUi(tester);
-
-      await tester.tap(find.text('Olive Oil').first);
-      await _pumpUi(tester, frames: 4);
-
-      expect(api.addProductCalls, hasLength(1));
-      expect(api.addProductCalls.last['bundleId'], 900);
-      expect(api.addProductCalls.last['productId'], 9);
-    });
+    testWidgets(
+      'bundle planner loads detail and adds a product',
+      (tester) async {},
+      skip: true, // legacy screen removed
+    );
   });
 }
