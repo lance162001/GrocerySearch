@@ -57,7 +57,7 @@ def _seed_multi_chain_product():
             name="Organic Whole Milk",
             brand="Happy Farms",
             company_id=co_a.id,
-            picture_url=None,
+            picture_url="",
         )
         sess.add(product)
         sess.flush()
